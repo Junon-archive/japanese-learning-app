@@ -2,8 +2,11 @@
 
 PostgreSQL-backed queue + Python worker. Redis/Celery 없음.
 
-Jobs: sentence batch, review context, missing explanation, pool
-replenishment, maintenance/cleanup as needed.
+`generation_jobs.job_type`의 허용값은 `GENERATE_SENTENCE_BATCH`,
+`GENERATE_REVIEW_CONTEXT`, `EXPLAIN_ITEM` 3개뿐이다. **허용값 집합의
+canonical 정의는 `04_DB_SPEC.md`의 `generation_jobs`에 있다.** pool
+replenishment는 별도 job_type이 아니라 `GENERATE_SENTENCE_BATCH`를
+enqueue하는 트리거이고, maintenance/cleanup은 MVP job_type에 없다.
 
 State: `queued → running → validated → completed`; 실패는 제한 retry 후
 failed/dead-letter. 무한 retry 금지. daily token/request ceiling 적용
@@ -58,8 +61,9 @@ job queue 구현 시점에 확정한다.** 확정 전까지 health는 `unknown`�
 ## Ready Pool
 
 Learning Engine은 다음 학습에 필요한 Ready candidate가 충분한지
-확인한다. 부족하면 background replenishment job을 만든다
-(`06_LEARNING_ENGINE.md`).
+확인한다. 부족하면 replenishment로 `GENERATE_SENTENCE_BATCH` job을
+enqueue한다(`06_LEARNING_ENGINE.md`). replenishment 자체는 job_type이
+아니다(위).
 
 ## Cost Guard
 

@@ -16,6 +16,9 @@ FSRS wrapper, validation, duplicate, auth.
 -   exposure 중복 집계 금지 (같은 presentation + 같은 item = 1회)
 -   span code point offset 검증과 overlap 거부
 -   job idempotency key 중복 삽입 방지
+-   password 하한 미만이면 계정 생성이 실패하고, 하한 이상이면
+    성공한다 (`spec/04_SECURITY_AND_DATA.md`의
+    `Password 요구사항 (MVP 확정)`)
 
 ## Integration
 
@@ -28,6 +31,8 @@ Alembic from empty DB.
     `ready`가 되지 않는다.
 -   API request handler 경로에서 provider client가 호출되지 않는다.
 -   flag → quarantine → 이후 selection 제외.
+-   login 실패 응답이 사유와 무관하게 동일하다 (없는 `login_id` /
+    틀린 password / 비활성 계정 → 같은 401, 본문 구분 없음).
 -   seed 상태의 신규 사용자가 첫 세션을 시작할 수 있다.
 -   Demo isolation: demo API endpoint가 존재하지 않고, demo frontend
     fixture가 backend로 네트워크 요청을 하지 않는다.

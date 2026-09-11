@@ -3,6 +3,9 @@
 MVP tasks: - `GENERATE_SENTENCE_BATCH` - `EXPLAIN_ITEM` (background
 repair job 전용) - `GENERATE_REVIEW_CONTEXT`
 
+이 세 이름은 `generation_jobs.job_type` 값과 그대로 같다. 허용값 집합의
+canonical 정의는 `04_DB_SPEC.md`의 `generation_jobs`에 있다.
+
 `ANALYZE_SENTENCE`는 **MVP에서 호출자가 없으므로 MVP task 목록에서
 제외하고 Future로 이동한다**(`spec/future/CONTENT_SYSTEM.md`). MVP
 콘텐츠는 전부 generation 결과이므로 기존 문장을 다시 구조화할 경로가

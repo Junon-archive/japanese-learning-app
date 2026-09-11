@@ -16,7 +16,7 @@
 ## users
 
 -   id
--   email / login identifier
+-   login_id (로그인 식별자. 아래 규칙이 canonical)
 -   password_hash (Argon2id 등 안전한 password hash)
 -   timezone (default `Asia/Seoul`)
 -   starting_level (default `beginner`)
@@ -25,6 +25,38 @@
 
 Public signup은 없다. 계정은 seed/admin CLI 또는 초기 setup 절차로
 생성한다.
+
+password 요구사항(최소 길이 등)의 canonical 정의는
+`spec/04_SECURITY_AND_DATA.md`의 `Password 요구사항 (MVP 확정)`이며 계정
+생성 경로에서 검증한다. **`users`와 `auth_sessions` 어느 쪽에도 로그인 실패
+카운터·잠금 시각 컬럼을 두지 않는다**(같은 문서의
+`온라인 무차별 대입 방어 (MVP 확정)`).
+
+### login_id
+
+로그인 식별자는 **컬럼 하나**이며 이름은 `login_id`다. 별도 `email`
+컬럼을 두지 않는다. API 요청/응답의 필드명도 같다(`05_API_SPEC.md`).
+
+``` text
+컬럼        login_id
+제약        NOT NULL, UNIQUE
+정규화      앞뒤 공백 제거 후 ASCII lowercase
+허용 형식   ^[a-z0-9._+@-]{3,64}$   (정규화 결과 기준, CHECK)
+```
+
+-   **대소문자를 구분하지 않는다.** 구분하지 않기로 한 이상 **저장
+    시점에 정규화한 값만 저장**하고 조회도 정규화한 값으로 한다. 원본
+    대소문자를 저장하고 조회할 때만 `lower()`로 비교하는 방식은 쓰지
+    않는다. 그러면 UNIQUE가 정규화 전 값에 걸려 대소문자만 다른 중복
+    계정이 만들어진다. `citext` extension도 쓰지 않는다(설치 의존성을
+    늘리지 않는다).
+-   허용 문자를 ASCII로 제한하는 이유는 lowercase 변환 결과를 하나로
+    고정하기 위해서다. Unicode casefold는 locale에 따라 결과가 달라진다.
+    정규화 결과가 이 형식을 벗어나면 계정 생성이 실패한다.
+-   **이메일 형식을 강제하지 않는다.** public signup이 없고 실사용자가
+    한 명이며, 앱이 이 값으로 메일을 보내는 기능도 없다. 형식 검증은
+    오탈자를 잡아주지 못하면서 식별자 선택만 제한한다. 이메일을 쓰고
+    싶으면 `user@example.com`도 위 형식에 그대로 들어간다.
 
 ## auth_sessions
 
@@ -335,7 +367,7 @@ audio 관련 event는 MVP에 없다(`00_SCOPE.md` 참조).
 ## generation_jobs
 
 -   id
--   job_type
+-   job_type (허용값은 아래 목록이 canonical)
 -   status: `queued | running | validated | completed | retry | failed | dead_letter`
 -   payload_json
 -   result_ref nullable (생성된 sentence/explanation id 집합)
@@ -350,6 +382,33 @@ audio 관련 event는 MVP에 없다(`00_SCOPE.md` 참조).
 
 Worker 실행은 at-least-once를 전제로 하고 **DB persistence는
 idempotent**해야 한다(`09_BACKGROUND_JOBS.md` 참조).
+
+### job_type 허용값
+
+MVP의 `job_type` 허용값은 다음 **3개뿐**이며 이 목록이 canonical이다.
+migration이 거는 제약(CHECK든 enum type이든)에 이 집합이 그대로 들어간다.
+제약의 구현 수단은 다른 열거 컬럼과 같은 방식을 따르면 된다.
+
+``` text
+GENERATE_SENTENCE_BATCH
+GENERATE_REVIEW_CONTEXT
+EXPLAIN_ITEM
+```
+
+`08_LLM_SPEC.md`의 MVP task 이름과 1:1로 같다. job이 실제로 하는 일이
+provider task이므로 축을 하나로 유지한다.
+
+-   **pool replenishment는 job_type이 아니다.** Ready Pool이 부족할 때
+    `GENERATE_SENTENCE_BATCH`(필요하면 `GENERATE_REVIEW_CONTEXT`)를
+    enqueue하는 **트리거**이며, 그렇게 만들어진 job의 `job_type`은 위 값
+    중 하나다. 별도 값을 두면 같은 생성 작업이 두 이름으로 존재하게 되고
+    "어느 쪽으로 enqueue해야 하는가"라는 질문이 계속 생긴다. 트리거
+    조건은 `06_LEARNING_ENGINE.md`와 `09_BACKGROUND_JOBS.md`에 있다.
+-   **missing explanation repair job의 job_type은 `EXPLAIN_ITEM`이다.**
+-   **maintenance/cleanup은 MVP job_type에 넣지 않는다.** MVP에 이 job을
+    만드는 호출자가 없다. 호출자가 없는 task를 목록에서 빼는 기준은
+    `ANALYZE_SENTENCE`를 Future로 보낸 기준과 같다(`08_LLM_SPEC.md`).
+    필요해지면 이 목록을 먼저 고치고 migration으로 값을 추가한다.
 
 ## content_flags
 
@@ -383,8 +442,9 @@ starter seed set**을 둔다.
 -   everyday high-frequency word / grammar / expression
 -   `learning_items.origin = seed`
 -   빈도 정보는 새 컬럼 없이 `learning_items.metadata_json`의
-    `frequency_rank`로 싣는다. canonical 정의와 fallback(적재 순서)은
-    `06_LEARNING_ENGINE.md`의 `Exploration Item 선정`에 있다
+    `frequency_rank`로 싣고, seed loader가 같은 `metadata_json`에
+    `seed_order`(적재 순서)를 채운다. 두 값의 canonical 정의와 loader
+    규약은 `06_LEARNING_ENGINE.md`의 `Exploration Item 선정`에 있다
 -   seed 문장을 함께 두어 첫 세션의 new/exploration pool을 확보한다
 -   정확한 개수는 제품 명세에 고정하지 않는다
 

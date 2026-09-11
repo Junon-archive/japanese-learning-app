@@ -91,3 +91,12 @@ backlog 모드의 비율 키(`backlog_review_ratio`, `backlog_new_ratio`,
 
 `srs`, `session`, `user`, `content`, `jobs`, `llm` 섹션의 키는 비율 합
 검증 대상이 아니다.
+
+인증 session cookie의 이름·속성·수명은 **이 파일에 두지 않는다.** 학습
+정책이 아니라 배포·보안 설정이므로 `APP_ENV`와 같은 취급이다. canonical
+정의는 `spec/04_SECURITY_AND_DATA.md`의 `Session Cookie (MVP 확정)`이고,
+수명은 환경변수 `AUTH_SESSION_TTL_DAYS`(양의 정수, 기본 30)다.
+
+password 최소 길이도 **이 파일에 두지 않는다.** 환경변수도 아니며 코드에
+고정한다(낮추는 스위치를 만들지 않는다). canonical 정의는
+`spec/04_SECURITY_AND_DATA.md`의 `Password 요구사항 (MVP 확정)`이다.

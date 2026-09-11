@@ -18,15 +18,62 @@ audio 관련 endpoint와 event는 MVP에 없다(`00_SCOPE.md`).
 ## 공통 규칙
 
 -   모든 학습 API는 인증 필요. 미인증 요청은 401.
--   인증 없이 접근 가능한 endpoint는 `GET /api/health` **하나뿐**이다.
-    FastAPI 자동 문서 경로(`/docs`, `/redoc`, `/openapi.json`)의 노출
-    규칙과 `APP_ENV`는 `spec/04_SECURITY_AND_DATA.md`를 따른다.
+-   익명 접근 허용 목록은 아래 `익명 접근 허용 목록`이 canonical이다.
 -   요청/응답의 timestamp는 UTC ISO-8601.
 -   상태 변경 event POST는 client가 생성한 `client_event_id`(UUID)를
     포함한다. 서버는 `(user_id, client_event_id)` unique로 중복 저장을
     막고, 재전송 시 동일 결과를 반환한다.
 -   모든 학습 API handler는 **외부 provider를 호출하지 않는다**
     (`08_LLM_SPEC.md`).
+-   응답에 실리는 id는 DB 정수 PK를 **JSON number(정수)** 로 그대로
+    낸다. 아래 `ID 표현`이 canonical이다.
+
+### 익명 접근 허용 목록
+
+유효한 auth session cookie 없이 호출할 수 있는 endpoint는 **정확히 다음
+둘**이다.
+
+``` text
+GET  /api/health        상태 점검. 사용자 데이터와 설정값을 반환하지 않는다.
+POST /api/auth/login    인증을 생성하는 endpoint이므로 호출 시점에 세션이 없다.
+```
+
+그 밖의 **모든** endpoint는 유효한 auth session cookie를 요구하고, 없거나
+만료·폐기됐으면 401을 반환한다. `POST /api/auth/logout`과
+`GET /api/auth/me`도 여기에 포함된다(로그아웃은 파기할 세션이 있어야
+의미가 있으므로 미인증 호출은 401이다).
+
+`POST /api/auth/login`은 "인증이 필요 없는" endpoint가 아니라 **인증을
+만드는** endpoint다. 그래서 인증 요구 규칙의 예외가 아니라 그 규칙이
+성립하기 위한 진입점이다.
+
+**학습 데이터를 읽거나 쓰는 endpoint 중 익명 접근이 가능한 것은 하나도
+없다.** `GET /api/health`는 학습 데이터를 다루지 않고,
+`POST /api/auth/login`은 인증에 성공해야만 학습 데이터 경로가 열린다.
+
+이 목록에 endpoint를 추가하려면 **이 절을 먼저 고친다.** 여기에 없는
+경로가 익명 접근을 허용하면 명세 위반이다(**fail-closed**).
+
+FastAPI 자동 문서 경로(`/docs`, `/redoc`, `/openapi.json`,
+`/docs/oauth2-redirect`)는 이 목록과 별개이며 `APP_ENV`로 제어한다
+(`spec/04_SECURITY_AND_DATA.md`).
+
+### ID 표현
+
+API가 노출하는 id는 DB 정수 PK이며 **JSON number(정수)** 로 낸다. 문자열로
+감싸지 않는다.
+
+``` text
+정수   user_id, presentation_id, sentence_id, sentence_item_id,
+       learning_item_id, session_id, probe_id 등 모든 DB PK 참조
+문자열 client_event_id (client가 생성하는 UUID) 만 예외
+```
+
+-   문자열로 감싸면 backend·frontend 양쪽에 변환 지점이 생기고, 같은
+    값이 `"1"`과 `1`로 갈리는 버그를 만든다. 근거와 한계는
+    `docs/decisions/ADR-005-api-id-representation.md`.
+-   `probe_id`의 발급·저장 방식은 Wave 2에서 확정하지만, 확정 이후에도
+    이 표현 규칙을 따른다.
 
 ## Authentication
 
@@ -35,6 +82,16 @@ POST /api/auth/login      {login_id, password} -> set-cookie, {user}
 POST /api/auth/logout     -> 204
 GET  /api/auth/me         -> {user_id, login_id, timezone, starting_level}
 ```
+
+`POST /api/auth/login`의 실패 응답은 사유와 무관하게 **동일한 401**이다.
+없는 `login_id`, 틀린 password, 비활성 계정을 구분하지 않는다.
+
+-   MVP는 시도 횟수 제한·계정 잠금·실패 지연을 두지 않으므로 이 endpoint는
+    **429를 반환하지 않는다.** 방어 구성과 버린 대안은
+    `spec/04_SECURITY_AND_DATA.md`의
+    `온라인 무차별 대입 방어 (MVP 확정)`가 canonical이다.
+-   password 요구사항은 **계정 생성 경로에서만** 검증한다. login은
+    검증하지 않는다(같은 문서의 `Password 요구사항 (MVP 확정)`).
 
 ## Study Session
 
@@ -56,13 +113,13 @@ POST /api/study/session/{id}/extend    +5분 연장
 
 ``` json
 {
-  "presentation_id": "...",
-  "sentence_id": "...",
+  "presentation_id": 4821,
+  "sentence_id": 1907,
   "japanese": "今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。",
   "render_segments": [
     {"text": "今日は", "sentence_item_id": null},
-    {"text": "なんとなく", "sentence_item_id": "si_1"},
-    {"text": "気が乗らなくて", "sentence_item_id": "si_2"},
+    {"text": "なんとなく", "sentence_item_id": 5511},
+    {"text": "気が乗らなくて", "sentence_item_id": 5512},
     {"text": "家にいた。", "sentence_item_id": null}
   ],
   "presentation_role": "review",
@@ -70,8 +127,8 @@ POST /api/study/session/{id}/extend    +5분 연장
   "context_stage": "near_original",
   "translation_revealed": false,
   "tappable_items": [
-    {"sentence_item_id": "si_1", "learning_item_id": "li_1"},
-    {"sentence_item_id": "si_2", "learning_item_id": "li_2"}
+    {"sentence_item_id": 5511, "learning_item_id": 771},
+    {"sentence_item_id": 5512, "learning_item_id": 772}
   ],
   "probe": null
 }
@@ -86,8 +143,8 @@ POST /api/study/session/{id}/extend    +5분 연장
 
 ``` json
 "probe": {
-  "probe_id": "...",
-  "learning_item_id": "li_3",
+  "probe_id": 318,
+  "learning_item_id": 773,
   "prompt": "이 표현을 알고 계세요?",
   "expression": "気が乗らない",
   "options": ["known", "uncertain", "unknown", "skip"]
@@ -118,8 +175,8 @@ Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
 
 ``` json
 {
-  "sentence_item_id": "si_2",
-  "learning_item_id": "li_2",
+  "sentence_item_id": 5512,
+  "learning_item_id": 772,
   "canonical_form": "気が乗らない",
   "reading": "き が のらない",
   "item_type": "expression",
@@ -148,8 +205,8 @@ GET /api/history/items           기본 learned/reviewed item summary
 GET /api/health                  FastAPI/DB/worker heartbeat 상태
 ```
 
-인증 없이 호출할 수 있다. 대신 **사용자 데이터와 설정값을 노출하지
-않는다.**
+인증 없이 호출할 수 있다(위 `익명 접근 허용 목록`). 대신 **사용자
+데이터와 설정값을 노출하지 않는다.**
 
 health는 의존성 상태와 무관하게 **항상 HTTP 200**을 반환하고, 판정은
 body의 `status`로 표현한다. 모니터링이 "앱이 응답은 한다"와 "의존성이

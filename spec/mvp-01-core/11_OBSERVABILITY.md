@@ -42,3 +42,8 @@ minute` 같은 고급 지표는 **장기 지표**다. "learned item"의 정의�
 
 대시보드, 고급 analytics, admin UI는 Future다
 (`spec/future/ADMIN_AND_DATA.md`).
+
+**로그인 실패 시도 로그와 알림도 Future다.** MVP는 실패마다 로그를 남기지
+않는다. 온라인 추측 공격 상황에서는 초당 수십 건이 들어와 로그 자체가 디스크
+압박이 되기 때문이다. 근거는 `spec/04_SECURITY_AND_DATA.md`의
+`온라인 무차별 대입 방어 (MVP 확정)`.

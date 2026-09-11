@@ -250,13 +250,44 @@ frequency 컬럼을 추가하지 않는다.**
 
 ``` text
 1. learning_items.metadata_json.frequency_rank (정수, 작을수록 고빈도)
-2. 없으면 seed 적재 순서 (version-controlled seed 파일의 행 순서)
+2. 없으면 learning_items.metadata_json.seed_order (정수, seed 적재 순서)
 3. 둘 다 없으면 없음으로 취급하고 정렬 맨 뒤
 ```
 
-`frequency_rank`는 seed 파일이 함께 들고 오는 값이며 기존
-`learning_items.metadata_json`에 담는다. 스키마 변경이 아니다
-(`04_DB_SPEC.md`). seed는 Git으로 관리되므로 적재 순서도 재현 가능하다.
+두 값은 의미가 다르므로 같은 숫자 공간에서 섞어 비교하지 않는다. 정렬은
+다음 tuple을 ASC로 비교한다.
+
+``` text
+frequency_key =
+    (0, metadata_json.frequency_rank)  frequency_rank가 정수면
+    (1, metadata_json.seed_order)      아니고 seed_order가 정수면
+    (2, 0)                             둘 다 없으면
+```
+
+`frequency_rank`와 `seed_order`는 모두 기존 `learning_items.metadata_json`에
+담는다. **`learning_items`에 컬럼을 추가하지 않는다**(`04_DB_SPEC.md`).
+
+### seed_order (seed loader 규약)
+
+`seed_order`는 seed loader가 적재 시점에 채운다.
+
+``` text
+값     1부터 1씩 증가하는 정수
+순서   seed 파일명 오름차순 -> 파일 내 행 순서
+대상   origin = seed 로 적재되는 learning_item 전부
+```
+
+-   seed 파일이 `frequency_rank`를 들고 오면 그대로
+    `metadata_json.frequency_rank`에 싣는다. 없더라도 **`seed_order`를
+    `frequency_rank`로 승격시키지 않는다.** 하나는 언어 빈도이고 다른
+    하나는 파일 위치다. 둘을 한 키에 섞으면 명시적 빈도값과 줄 번호가
+    같은 척도에서 비교된다.
+-   seed는 Git으로 관리되므로 같은 파일 집합은 항상 같은 `seed_order`를
+    만든다. 재적재해도 값이 바뀌지 않는다.
+-   **`learning_items.id`를 이 자리에 쓰지 않는다.** 쓰면 2단계가 3단계
+    tie-break(`learning_item_id ASC`)와 같은 기준이 되어 3단 규칙이 2단으로
+    붕괴한다. 게다가 generated item이 사이사이에 id를 받으므로 id 순서는
+    "seed 파일 순서"가 아니다.
 
 **한계:** `origin = generated` item에는 frequency 정보가 없다. 따라서
 빈도 정렬은 사실상 seed item에만 적용되고, generated item은 같은

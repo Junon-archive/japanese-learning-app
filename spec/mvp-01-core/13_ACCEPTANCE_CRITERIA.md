@@ -24,6 +24,7 @@
 -   DB migration 재현 가능
 -   Postgres 직접 인터넷 노출 없음
 -   secret frontend/Git 노출 없음
+-   명세 하한 미만 password로는 계정을 만들 수 없음
 -   restart 후 state 유지
 -   retry 무한루프 없음 (max attempts + dead-letter)
 -   backup/restore 최소 1회 검증

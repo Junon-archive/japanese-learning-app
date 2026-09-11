@@ -124,3 +124,105 @@ Wave 2 착수 전 미해결이던 명세 공백 2건을 권장안대로 확정�
 -   **seed frequency 참조**: `04_DB_SPEC.md`의 Seed Data 절에
     `metadata_json.frequency_rank` cross-reference를 1줄 추가했다.
     canonical 정의는 `06_LEARNING_ENGINE.md`에 둔다.
+
+Wave 1(스키마 + 인증) 착수 중 드러난 명세 공백 6건을 같은 방식으로
+확정했다. 새 버전 번호를 만들지 않는다.
+
+-   **익명 접근 endpoint 서술의 자기모순 해소** (`05_API_SPEC.md`,
+    `익명 접근 허용 목록`): "인증 없이 접근 가능한 endpoint는
+    `GET /api/health` 하나뿐"이라는 문장이 같은 문서의
+    `POST /api/auth/login`과 직접 모순이었다. 익명 호출 가능 endpoint는
+    `GET /api/health`와 `POST /api/auth/login` **둘**이며, login은 인증의
+    예외가 아니라 인증을 **생성하는** 진입점임을 명시했다. 그 밖의 모든
+    endpoint(`logout`, `me` 포함)는 미인증 시 401이다. "학습 데이터를
+    읽거나 쓰는 endpoint 중 익명 접근 가능한 것은 없다"를 별도 문장으로
+    분리해 판정 기준을 해석 여지 없이 만들었다. 목록에 없는 경로가 익명
+    접근을 허용하면 명세 위반(fail-closed). 자동 문서 경로는 이 목록과
+    별개이며 `APP_ENV`로 제어한다.
+-   **session cookie 규격 확정** (`spec/04_SECURITY_AND_DATA.md`,
+    `Session Cookie (MVP 확정)`, ADR-004): `__Host-nc_session` /
+    `HttpOnly; Secure; SameSite=Strict; Path=/` / `Domain` 미지정
+    (host-only) / `Max-Age = AUTH_SESSION_TTL_DAYS`(env, 기본 30일).
+    만료 판정의 canonical source는 `auth_sessions.expires_at`이고 cookie
+    `Max-Age`는 브라우저 힌트다. absolute expiry만 쓰고 sliding session은
+    두지 않는다. **수명 값은 `14_CONFIGURATION.md`의 학습 정책 YAML이
+    아니라 `.env` 계열 환경변수다**(`APP_ENV`와 같은 취급). 이름·
+    `SameSite`·`Secure`·`Domain`은 설정값이 아니며 환경별 스위치를 두지
+    않는다. `Secure`는 항상 켠다(브라우저가 `http://localhost`를 secure
+    context로 취급하므로 로컬 개발용 off 스위치가 불필요하고, `APP_ENV`를
+    보안 하향에 쓰면 배포 표면 제어 전용 규칙과 충돌한다).
+    `14_CONFIGURATION.md`에는 "여기 두지 않는다"는 참조 1건만 추가했다.
+-   **exploration frequency fallback의 저장 위치 확정**
+    (`06_LEARNING_ENGINE.md`, `seed_order (seed loader 규약)`): 2순위
+    "seed 적재 순서"는 `learning_items.metadata_json.seed_order`(정수)다.
+    seed loader가 `seed 파일명 오름차순 → 파일 내 행 순서`로 1부터 채운다.
+    정렬은 `(0, frequency_rank) / (1, seed_order) / (2, 0)` tuple ASC로
+    비교해 두 값을 같은 숫자 공간에서 섞지 않는다. **`learning_items.id`를
+    쓰지 않는다** --- 쓰면 2단계가 3단계 tie-break와 같은 기준이 되어 3단
+    규칙이 2단으로 붕괴하고, generated item이 사이에 id를 받으므로 id
+    순서는 seed 파일 순서도 아니다. `seed_order`를 `frequency_rank`로
+    승격시키지 않는다. 새 컬럼은 만들지 않았다.
+-   **로그인 식별자 확정** (`04_DB_SPEC.md`, `users` / `login_id`):
+    컬럼은 **하나**이고 이름은 `login_id`다(`email / login identifier`
+    병기 제거, 별도 `email` 컬럼 없음). `NOT NULL` + `UNIQUE`,
+    정규화는 앞뒤 공백 제거 후 ASCII lowercase, CHECK는
+    `^[a-z0-9._+@-]{3,64}$`. **대소문자를 구분하지 않으며 정규화한 값만
+    저장**한다(조회 시점 `lower()` 비교나 `citext`를 쓰지 않는다 --- UNIQUE가
+    정규화 전 값에 걸리면 중복 계정이 생긴다). **이메일 형식은 강제하지
+    않는다**: public signup이 없고 사용자가 1명이며 메일 발송 기능도 없어
+    실익이 없다. 이메일을 쓰고 싶으면 위 형식에 그대로 들어간다.
+-   **`generation_jobs.job_type` 허용값 확정** (`04_DB_SPEC.md`,
+    `job_type 허용값`): `GENERATE_SENTENCE_BATCH` /
+    `GENERATE_REVIEW_CONTEXT` / `EXPLAIN_ITEM` **3개뿐**이며 그대로
+    migration CHECK에 들어간다. `08_LLM_SPEC.md`의 MVP task와 1:1이다.
+    **pool replenishment는 job_type이 아니라** `GENERATE_SENTENCE_BATCH`를
+    enqueue하는 트리거다. maintenance/cleanup은 MVP에 호출자가 없으므로
+    넣지 않는다(`ANALYZE_SENTENCE`를 Future로 보낸 기준과 동일).
+    `09_BACKGROUND_JOBS.md`의 5종 나열 문장을 canonical 참조로 교체했다.
+-   **API id 표현 확정** (`05_API_SPEC.md` `ID 표현`, ADR-005): DB 정수
+    PK는 **JSON number(정수)** 로 낸다. 예외는 client 생성
+    `client_event_id`(UUID 문자열)뿐이다. `05_API_SPEC.md`의 JSON 예시
+    (`presentation_id`, `sentence_id`, `sentence_item_id`,
+    `learning_item_id`, `probe_id`)를 문자열 placeholder에서 정수로 모두
+    교체했다. 한계(JS `Number.MAX_SAFE_INTEGER`)는 ADR-005에 기록했다.
+    `probe_id`의 발급·저장 방식은 Wave 2에서 확정하되 같은 표현 규칙을
+    따른다.
+
+Wave 1 보안 검토에서 드러난 명세 공백 1건을 확정했다. 새 버전 번호를 만들지
+않는다.
+
+-   **온라인 무차별 대입 방어 확정** (`spec/04_SECURITY_AND_DATA.md`의
+    `Password 요구사항 (MVP 확정)` / `온라인 무차별 대입 방어 (MVP 확정)`,
+    ADR-006): `POST /api/auth/login`에 시도 횟수 제한·계정 잠금·실패 지연이
+    전혀 없었고, 명세에도 그 요구가 없었다(구현이 명세를 어긴 것이 아니라
+    명세가 비어 있었다). 방어를 **password 엔트로피 하한**으로 확정한다.
+    최소 **16 code point**이며 **계정 생성 경로에서만** 검증하고
+    `POST /api/auth/login`은 검증하지 않는다(하한 미만 password는 DB에
+    존재할 수 없고, login에서 길이를 먼저 보면 실패 응답 시간이 갈린다).
+    복잡도 혼용 규칙·금지어 목록·유출 password 조회·최대 길이는 두지 않는다.
+    최소 길이는 학습 정책 YAML에도 `.env`에도 두지 않고 **코드에
+    고정**한다(보안 하한을 낮추는 스위치를 만들지 않는다 --- `Secure`
+    플래그와 같은 판단, ADR-004). **애플리케이션 레벨 rate limit·계정
+    잠금·실패 지연은 MVP에 두지 않는다**: 계정이 하나뿐이라 잠금은 곧 주인에
+    대한 DoS이고, DB 실패 카운터는 인증 전 write 경로를 열며, in-process
+    카운터는 worker 수에 따라 한도가 달라지고, Redis는 MVP에서 쓰지
+    않는다(ADR-001). 부족한 것은 시도 속도(Argon2id 약 39ms → 약 25회/초)가
+    아니라 탐색 공간이기 때문이다. 배포 계층(Cloudflare) rate limit은
+    권장하되 **운영자 책임**이며 이 명세는 켜져 있다고 가정하지 않는다 ---
+    설정하지 않으면 남는 방어가 password 하한과 Argon2id 비용뿐이라는 사실을
+    명세에 명시했다. `require_trusted_origin`은 브라우저 CSRF만 막으므로 이
+    방어에 포함되지 않는다는 문장을 추가했다. 로그인 실패 로그·알림은
+    Future다(실패마다 로그를 남기면 공격 중 로그가 디스크 압박이 된다).
+    교차 참조만 추가한 문서: `04_DB_SPEC.md`(실패 카운터 컬럼 금지),
+    `05_API_SPEC.md`(실패 시 동일 401, **429 없음**),
+    `14_CONFIGURATION.md`(여기 두지 않는다), `11_OBSERVABILITY.md`(실패 로그
+    Future), `13_ACCEPTANCE_CRITERIA.md`(수치 없는 기준 1줄),
+    `12_TEST_PLAN.md`(unit 1건 + integration 1건).
+-   **수용된 위험 기록** (`spec/04_SECURITY_AND_DATA.md`의
+    `수용된 위험 --- login endpoint의 메모리 비용`): 익명
+    `POST /api/auth/login`이 요청당 Argon2id 메모리(기본 `m=65536` =
+    64MiB)를 잡아 동시 요청만으로 자원 고갈을 유발할 수 있다. 사용자
+    1명이고 피해가 가용성에 한정되므로 MVP는 방어하지 않고 받아들인다.
+    **Argon2 파라미터를 낮추는 방식으로 대응하지 않는다**(password hash
+    강도는 1차 방어의 축이다). 완화가 필요해지면 배포 계층이 먼저다. 기록일
+    뿐 새 요구사항·테이블·설정 키를 만들지 않았다.
