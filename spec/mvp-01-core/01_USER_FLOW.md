@@ -1,44 +1,12 @@
 # User Flow
 
-## Private Learning
+`Open → auth → create/resume session → sentence → item tap/translation/probe/next → event → mastery/SRS update → next → ~12분 → 완료 → optional +5분`
 
-``` text
-App Open
-→ Authentication check
-→ Today session create/resume
-→ Sentence selected
-→ Sentence displayed
-→ User reads Japanese first
-   ├─ item tap → explanation + reading
-   │             └─ optional known/uncertain/unknown feedback
-   ├─ translation reveal
-   ├─ audio action if audio exists
-   ├─ occasional mastery probe
-   └─ next sentence
-→ LearningEvent saved
-→ mastery/review state updated
-→ next sentence selected
-→ ~12 min reached
-→ session complete
-→ optional +5 min
-```
+-   self-report는 진행에 필수 아님.
+-   no-click을 Known으로 처리하지 않음.
+-   번역 기본 hidden.
+-   reading은 item 설명에서 reveal.
+-   probe는 간헐적이고 skip 가능.
 
-## Public Demo
-
-``` text
-Visitor opens app
-→ Demo mode available immediately
-→ prebuilt sentence fixture
-→ item tap / explanation / probe / contextual review 체험
-→ no private DB access
-→ no paid LLM call
-```
-
-## UX Rules
-
--   다음 문장으로 가기 위해 self-report를 강제하지 않는다.
--   표현을 클릭하지 않았다는 사실만으로 Known 처리하지 않는다.
--   번역은 기본 hidden.
--   reading은 표현 설명을 열 때 노출.
--   mastery probe는 학습 흐름을 과도하게 방해하지 않도록 드물게
-    삽입한다.
+Public Demo는 prebuilt fixture로 동일한 핵심 UX를 체험하되 private DB와
+paid LLM에 접근하지 않는다.
