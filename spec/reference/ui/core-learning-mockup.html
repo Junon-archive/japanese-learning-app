@@ -263,7 +263,10 @@
         <div class="actions">
           <div class="left">
             <button class="btn" id="translateBtn">문장 뜻 보기</button>
-            <button class="btn ghost">🔊 듣기</button>
+            <!-- MVP-01 범위 밖(audio 없음). Future milestone 표시용 비활성 요소. -->
+            <button class="btn ghost" disabled
+                    style="opacity:.45;cursor:not-allowed"
+                    title="Future milestone — MVP-01에는 audio가 없습니다">🔊 듣기 (Future)</button>
           </div>
           <button class="btn primary">다음 문장 →</button>
         </div>

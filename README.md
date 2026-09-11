@@ -15,11 +15,29 @@ JLPT가 아니라 일본어 YouTube 이해와 일상 회화 능력이다.
 
 ## 우선순위
 
-1.  현재 milestone의 승인 명세
-2.  Global principles
-3.  Future 문서 중 현재 milestone이 명시적으로 채택한 내용
-4.  UI reference
-5.  구현 편의
+``` text
+MVP 구현 source of truth:
+    spec/mvp-01-core/*
 
-Future 문서는 MVP 범위를 넓히는 구현 지시가 아니다. MVP는 폐기용
-prototype이 아니라 완성 제품의 첫 번째 작고 안정적인 조각이다.
+Global 문서 (spec/00~06):
+    제품/기술 제약을 제공하지만 MVP Scope를 확대하지 않는다.
+
+Future (spec/future/*):
+    절대 구현 지시가 아니다.
+```
+
+충돌 시 다음 순서를 따른다.
+
+1.  `spec/mvp-01-core/*`의 승인된 기능/상태 규칙
+2.  Global principles (`spec/00~06`)
+3.  UI reference (`spec/reference/ui/`)
+4.  구현 편의
+
+Future 문서는 MVP 범위를 넓히는 구현 지시가 아니다. Global/Future 문서에
+숫자나 아이디어가 존재한다는 이유만으로 구현하지 않는다.
+
+구현자가 명세 충돌을 발견하면 임의로 해석해 기능을 추가하지 않고, 충돌을
+기록하고 최소 변경으로 해결한다.
+
+MVP는 폐기용 prototype이 아니라 완성 제품의 첫 번째 작고 안정적인
+조각이다.
