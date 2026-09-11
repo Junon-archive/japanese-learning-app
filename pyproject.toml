@@ -1,0 +1,68 @@
+[project]
+name = "nihongo-context"
+version = "0.1.0"
+description = "Nihongo Context — contextual Japanese learning backend"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]",
+    "pydantic>=2",
+    "pydantic-settings",
+    "pyyaml",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "httpx2",
+    "ruff",
+    "mypy",
+    "types-PyYAML",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["backend"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "C4",
+    "SIM",
+    "ANN",
+    "S",
+    "T20",
+    "DTZ",
+    "RUF",
+    "PTH",
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/**" = ["S101", "ANN201", "ANN001"]
+
+[tool.mypy]
+strict = true
+files = ["backend"]
+mypy_path = ["backend"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+addopts = "-q --strict-markers --strict-config"
+markers = ["integration: requires a running PostgreSQL"]
+filterwarnings = [
+    "error",
+    # starlette 1.6이 import 시점에 띄우는 서드파티 alias 경고. 우리 코드로는 못 고친다.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]

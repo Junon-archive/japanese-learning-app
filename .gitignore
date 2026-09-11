@@ -23,8 +23,10 @@ build/
 !.env.example
 
 # Data (spec/04_SECURITY_AND_DATA.md: Git 제외)
-data/postgres/
-data/backups/
+data/postgres/*
+!data/postgres/.gitkeep
+data/backups/*
+!data/backups/.gitkeep
 data/pgdata/
 
 # Working notes (구현 지시서 §9)

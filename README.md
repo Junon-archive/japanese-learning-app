@@ -41,3 +41,32 @@ Future 문서는 MVP 범위를 넓히는 구현 지시가 아니다. Global/Futu
 
 MVP는 폐기용 prototype이 아니라 완성 제품의 첫 번째 작고 안정적인
 조각이다.
+
+## 개발 셋업
+
+``` bash
+cp .env.example .env     # 값을 채운다. .env는 Git에 넣지 않는다.
+make install             # uv sync
+make lint                # ruff check + ruff format --check
+make typecheck           # mypy (strict)
+make test                # pytest
+make run                 # uvicorn, http://127.0.0.1:8000/api/health
+make frontend-build      # frontend/ 에서 npm ci && npm run build
+```
+
+`lint` / `typecheck` / `test`는 **DB 없이 전부 통과한다.** 데이터베이스가
+필요한 테스트는 아직 없다.
+
+`/docs`, `/redoc`, `/openapi.json`은 `APP_ENV=development`일 때만 열린다.
+기본값에서는 404다.
+
+로컬 PostgreSQL:
+
+-   docker가 있으면 `make db-up`이 `infra/docker-compose.yml`의
+    `postgres:16`을 띄운다. 루트 `.env`가 있어야 한다.
+-   docker가 없는 개발 머신의 로컬 DB는
+    `docs/decisions/ADR-002-local-dev-database.md`(pgserver)를 따른다.
+
+`make db-reset`과 `make seed`는 아직 동작하지 않는다. Alembic migration과
+seed 적재가 들어오는 Wave 1에서 구현한다. 지금 실행하면 안내 메시지와 함께
+실패한다.

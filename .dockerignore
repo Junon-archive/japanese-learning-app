@@ -1,0 +1,38 @@
+# build context는 repo 루트다. secret과 데이터가 image layer/build cache에
+# 들어가지 않게 한다 (spec/04_SECURITY_AND_DATA.md).
+# .env.example도 제외한다. 어느 Dockerfile도 COPY하지 않으므로 context에
+# 있을 이유가 없다.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# DB 클러스터 파일, pg_dump 산출물, pgserver data
+data/
+
+# 테스트는 호스트에서 돈다. 런타임 이미지에 넣지 않는다.
+backend/tests
+
+.git
+.gitignore
+.venv
+venv
+**/node_modules
+frontend/dist
+frontend/.vite
+dist
+build
+
+temp/
+docs/
+spec/
+.claude/
+
+__pycache__/
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+*.log

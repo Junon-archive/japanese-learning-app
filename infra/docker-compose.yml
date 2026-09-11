@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # PostgreSQL은 인터넷에 직접 노출하지 않는다 (spec/02, spec/04).
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ../data/postgres:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      APP_ENV: ${APP_ENV}
+      DATABASE_URL: ${DATABASE_URL}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      APP_ENV: ${APP_ENV}
+      DATABASE_URL: ${DATABASE_URL}

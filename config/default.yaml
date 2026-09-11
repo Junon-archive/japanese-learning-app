@@ -1,0 +1,68 @@
+# Nihongo Context 학습 정책 설정 (spec/mvp-01-core/14_CONFIGURATION.md).
+# 여기에는 학습 정책값만 둔다. credential/인프라 값은 환경변수로 주입한다.
+learning:
+  default_session_minutes: 12
+  extra_session_minutes: 5
+  review_ratio: 0.70
+  new_ratio: 0.20
+  exploration_ratio: 0.10
+  preferred_new_items_per_sentence: 1
+  max_new_items_per_sentence: 2
+  minimum_meaningful_exposures: 5
+  mastery_probe_target_per_session_min: 2
+  mastery_probe_target_per_session_max: 4
+
+  # mastery 갱신 (02_LEARNING_POLICY.md)
+  mastery_ema_alpha: 0.4
+
+  # 무신호 passive review 후 단기 재노출 방지 (07_SRS_SPEC.md)
+  passive_review_deferral_hours: 12
+
+  # probe 대상 선정 (02_LEARNING_POLICY.md)
+  passive_exposures_before_probe: 3
+  probe_skip_cooldown_days: 7
+
+  # backlog 제어 (06_LEARNING_ENGINE.md)
+  backlog_threshold: 50
+  backlog_review_ratio: 0.85
+  backlog_new_ratio: 0.05
+  backlog_exploration_ratio: 0.10
+
+  # review 슬롯 내부 reason 선택 (06_LEARNING_ENGINE.md)
+  reinforcement_min_share_of_review: 0.2
+
+  # exploration 대상 선정 (06_LEARNING_ENGINE.md)
+  exploration_recent_days: 14
+
+srs:
+  # FSRS 결정론 (ADR-003, 07_SRS_SPEC.md)
+  # 대규모 덱용 jitter이므로 MVP에서는 끄고 테스트 재현성을 택한다.
+  fsrs_enable_fuzzing: false
+
+session:
+  # 23_ 결정
+  study_session_idle_timeout_minutes: 30
+  active_time_idle_gap_seconds: 120
+
+user:
+  user_timezone: "Asia/Seoul"
+
+content:
+  translation_default_visible: false
+  reading_default_visible: false
+  # deterministic validation (08_LLM_SPEC.md)
+  max_sentence_length_chars: 60
+  duplicate_similarity_threshold: 0.90
+
+jobs:
+  # 22_ 결정
+  max_job_attempts: 3
+  retry_backoff_base_seconds: 60
+
+llm:
+  # Public Demo는 static frontend fixture이므로 API/worker를 사용하지
+  # 않는다. 이 flag는 구조적 분리에 더한 안전장치이며 true로 바꾸지 않는다.
+  public_demo_generation_enabled: false
+  # null = limit disabled. production에서 필요 시 integer를 설정한다.
+  daily_request_limit: null
+  daily_token_limit: null
