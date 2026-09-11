@@ -19,6 +19,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
+from app.clock import utc_now  # noqa: E402
 from app.db import new_session  # noqa: E402
 from app.services.seed_loader import SeedError, load_seed  # noqa: E402
 
@@ -54,7 +55,8 @@ def main(argv: list[str] | None = None) -> int:
 
     with session:
         try:
-            summary = load_seed(session, args.seed_dir)
+            # 진입점이 시각을 한 번 읽고 값으로 넘긴다 (ADR-007).
+            summary = load_seed(session, args.seed_dir, now=utc_now())
         except SeedError as exc:
             # 적재는 한 트랜잭션이다. 실패하면 DB에 아무것도 남기지 않는다.
             session.rollback()

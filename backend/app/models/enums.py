@@ -80,6 +80,22 @@ class ExposureModality(enum.StrEnum):
     READING = "reading"
 
 
+class ExplicitSignal(enum.StrEnum):
+    """mastery와 FSRS rating을 만드는 **유일한** 증거 3값 (ADR-007).
+
+    self-report 3종과 probe 응답 3종이 여기로 모인다. click / reveal / probe skip /
+    no-click은 이 타입으로 **표현할 수 없다** --- 불변식 #2("no-click을 Known으로
+    추론하지 않는다")를 타입으로 막는 자리다. DB 컬럼이 아니라 signal enum이다.
+
+    signal -> Rating 매핑은 `app/srs/`가, signal -> observation 매핑은
+    `app/learning/mastery.py`가 각각 갖는다(ADR-007).
+    """
+
+    KNOWN = "known"
+    UNCERTAIN = "uncertain"
+    UNKNOWN = "unknown"
+
+
 class EventType(enum.StrEnum):
     SESSION_STARTED = "session_started"
     SENTENCE_VIEWED = "sentence_viewed"

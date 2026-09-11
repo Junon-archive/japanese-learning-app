@@ -14,7 +14,8 @@ replenishment 필요 여부.
 
 No-click만으로 mastery 상승 금지. Exploration은 희귀어 랜덤 공급이
 아니라 mastery 정보가 부족한 적절한 item을 탐색하는 것. 다음 문장은
-Ready Pool 우선, 부족하면 background job.
+Ready Pool 우선, 비어 있으면 먼저 `Candidate Materialization`으로 채우고,
+그래도 만들 것이 없으면 background job.
 
 구체 선정 기준은 아래 `Exploration Item 선정` 절에 둔다.
 
@@ -37,6 +38,263 @@ status            : queued | ready | shown | consumed | quarantined | expired
 
 target item은 `user_sentence_candidate_targets` join table로 연결하며
 문장당 1\~2개를 지원한다. 스키마는 `04_DB_SPEC.md`를 따른다.
+
+## Candidate Materialization
+
+**`user_sentence_candidates` row를 누가 언제 만드는지의 canonical
+정의는 이 절이다.** 다른 문서는 여기를 참조한다.
+
+Ready Pool은 사용자별 테이블인데 seed 적재는 global content
+(`learning_items` / `sentences` / `sentence_items` /
+`sentence_item_spans` / `sentence_item_explanations`)만 만든다. 따라서
+누군가 global content를 사용자·역할·stage에 투영해야 Ready Pool이
+생긴다. 그 일은 **Wave 2의 Learning Engine이 request 경로에서 직접
+한다.** background worker가 아니다.
+
+근거:
+
+-   materialization은 LLM 호출이 아니라 **결정론적 DB 연산**이다. 이미
+    `validated`인 문장을 사용자에게 매핑할 뿐이므로 `08_LLM_SPEC.md`의
+    `LLM 호출 경계`가 금지하는 provider 호출이 아니고, 같은 문서가
+    request handler에 허용한
+    `DB 읽기 / event 저장 / candidate 선택 / 필요 시 job enqueue`
+    범위 안이다.
+-   worker에 맡기면 seed만 적재된 신규 사용자의 Ready Pool이 worker가
+    돌 때까지 비어 있다. 그러면 `12_TEST_PLAN.md`의 "seed 상태의 신규
+    사용자가 첫 세션을 시작할 수 있다"와 `13_ACCEPTANCE_CRITERIA.md`의
+    "신규 사용자가 seed 기반으로 첫 세션을 시작 가능"을 Wave 2에서 검증할
+    수 없다.
+-   **seed loader는 candidate를 만들지 않는다.** seed는 global content고
+    candidate는 사용자별이다. 적재 시점에 사용자가 없을 수 있고, 나중에
+    만들어진 사용자는 아무것도 받지 못한다.
+-   **계정 생성 시점에도 만들지 않는다.** 같은 문제의 거울상이다. 계정
+    생성 뒤에 적재·생성된 콘텐츠가 영원히 반영되지 않고, 계정 생성
+    CLI가 Learning Engine에 의존하게 된다.
+
+이 결정으로 **새 테이블은 만들지 않는다**
+(`docs/decisions/ADR-010-candidate-materialization.md`).
+
+### 실행 시점과 대상
+
+``` text
+POST /api/study/session            세션 생성/resume 직후 1회
+POST /api/study/session/{id}/next  선택된 category에 ready candidate가 없을 때
+                                   Pool Fallback 0단계로 1회
+```
+
+**한 요청에서 최대 1회** 실행한다. `/next` 한 번이 여러 category를 훑어도
+그 사이에 materialization은 한 번만 일어난다. 순서의 canonical 정의는 이
+문서의 `Pool Fallback`이다.
+
+대상은 **요청을 보낸 인증 사용자 한 명**이다. 전체 사용자를 순회하지
+않는다. 한 번의 실행에서 `presentation_role`별로 최대
+`candidate_materialization_batch_size`개까지 만든다
+(`14_CONFIGURATION.md`). 상한이 없으면 첫 세션 한 번에 seed 전체가
+candidate로 복제된다.
+
+같은 조합의 candidate를 중복 생성하지 않는다. 재실행은 idempotent해야
+한다(`04_DB_SPEC.md`의 `user_sentence_candidates` 유일성 규칙).
+
+### 공통 필드
+
+``` text
+status       ready
+created_at   현재 시각
+updated_at   현재 시각
+targets      user_sentence_candidate_targets에 target item 1~2개.
+             그 사용자에게 review_states 행이 없으면 is_new_item = true.
+```
+
+`status`를 곧바로 `ready`로 쓰는 이유는 materialization이 이미 검증된
+콘텐츠만 대상으로 하기 때문이다. `queued`는 **아직 콘텐츠가 없어
+worker가 생성 중인 candidate**를 위한 값이며 Wave 3에서 쓴다. 두 값의
+경계를 이렇게 고정한다.
+
+``` text
+queued  콘텐츠가 아직 없다. worker가 채운다.
+ready   지금 그대로 제시할 수 있다.
+```
+
+**Ready invariant**(`08_LLM_SPEC.md`): 대상 문장은
+`sentences.status = validated`여야 하고, 그 문장의 `is_tappable = true`인
+모든 `sentence_items`가 `status = validated`인
+`sentence_item_explanations`를 가져야 한다. 하나라도 없으면 candidate를
+만들지 않는다.
+
+### role별 규칙
+
+`new`와 `exploration`은 `user_item_learning_state.is_active_learning_target`
+으로 **서로 배타적으로** 갈린다. 겹치면 같은 item이 두 category에서
+동시에 뽑혀 Category Mix가 무의미해진다.
+
+``` text
+exploration
+  target item   Exploration Item 선정 절의 후보 조건·정렬을 그대로 따른다
+                (mastery NULL + is_active_learning_target = false + 최근 미노출)
+  role          exploration
+  review_reason NULL
+  context_stage anchor
+  sentence      해당 item을 포함한 validated 문장 중 그 사용자에게 아직
+                노출되지 않은 것, sentences.id ASC
+
+new
+  target item   is_active_learning_target = true 이면서
+                아직 review_states 행이 없는 item
+                (incidental click 승격 경로. 02_LEARNING_POLICY.md)
+  role          new
+  review_reason NULL
+  context_stage anchor
+  sentence      exploration과 같은 규칙
+
+review
+  target item   review_states 행이 있는 item
+  role          review
+  review_reason 아래 표
+  context_stage 아래 표
+  sentence      아래 `stage → sentence` 표
+```
+
+문장당 target item 수는 `max_new_items_per_sentence` 이하여야 한다
+(`14_CONFIGURATION.md`). 한 문장에 붙일 대상이 상한보다 많으면 **상한까지만
+붙이고 나머지 item을 그 문장에 싣지 않는다. 문장 자체를 버리지 않는다.**
+
+-   붙는 순서는 위 role별 대상 item 선정 순서이므로 결정론적이다. 이미
+    붙은 target을 유지하고 초과분만 버린다.
+-   실리지 못한 item은 같은 실행의 다른 문장이나 다음 실행에서 자기
+    candidate를 얻는다. 문장을 버리면 이미 만든 candidate를 되돌려야
+    하고, 그 item 때문에 멀쩡한 문장 하나가 통째로 사라진다.
+-   `08_LLM_SPEC.md`의 `Deterministic Content Validation` 10번은 **생성
+    시점**의 검사다. 이 규칙은 이미 validated인 문장에 target을 붙이는
+    **materialization 시점**에 적용된다. 둘은 같은 config 키를 쓰지만
+    적용 지점이 다르다.
+
+Cold start에서는 `user_item_learning_state` 행이 없으므로 new와 review
+pool이 비고 **exploration만 생긴다.** 이는 Cold Start 절의 "Category
+pool이 없으면 available category만 사용한다"와 일치하며, 사용자가 첫
+`몰랐음`/`애매함`을 누르는 순간 그 item이 active learning target이 되고
+review_states가 생겨 review/new pool이 자라기 시작한다. 신규 사용자에게
+review 70%를 강제로 만들지 않는다.
+
+### review candidate: reason 판정
+
+review candidate도 **Wave 2의 materialization이 만든다.** Wave 3 job이
+아니다. 이것이 없으면 `12_TEST_PLAN.md`의 Core E2E 9~12단계(due 시점
+이동 → review 문장 노출 → exposure 누적 → 새 문맥 재노출)와 Regression
+Scenario A~D를 Wave 2에서 재현할 수 없다.
+
+한 item에 대해 **동시에 두 개 이상의 review candidate를 만들지
+않는다.** 아래를 위에서부터 평가해 처음 만족하는 reason 하나로 정한다.
+평가 순서는 `Review Reason 선택`의 우선순위와 같다.
+
+``` text
+1. context_repair
+   a. 해당 item의 가장 최근 explicit `몰랐음` event
+      (self_report_unknown | mastery_probe_unknown)가 붙은 presentation의
+      context_stage를 S_fail이라 한다
+   b. user_item_learning_state.context_stage < S_fail  (실패 후 한 단계 내려감)
+   c. 그 이후로 현재 stage의 invalidated_at IS NULL 인 item_exposures row가
+      아직 없다                                        (되돌린 노출이 아직 안 일어남)
+
+2. fsrs_due
+   review_states.next_review_at <= now
+   AND (deferred_until IS NULL OR deferred_until <= now)
+
+3. reinforcement
+   review_states 행이 있고
+   해당 item의 invalidated_at IS NULL 인 item_exposures 건수
+     < minimum_meaningful_exposures
+
+위 셋 중 어느 것도 만족하지 않으면 그 item의 review candidate를 만들지 않는다.
+```
+
+reason을 하나로 좁히는 이유는 `04_DB_SPEC.md`의 유일성 규칙이
+`(user_id, sentence_id, presentation_role, context_stage)`이기 때문이다.
+같은 item·같은 stage에 두 reason의 candidate를 만들면 대개 같은 문장을
+고르게 되어 두 번째가 충돌한다. **어느 reason을 실제로 보여줄지를
+정하는 것은 `Review Reason 선택`이고**, materialization은 그 선택이
+작동할 재료를 만들 뿐이다. `reinforcement_min_share_of_review`는 그
+선택 단계에서 적용된다.
+
+stage 비교는 `anchor < near_original < varied < new_context` ladder를
+쓴다. 조건 1-c와 조건 3을 포함해 **이 엔진의 모든 노출 판정 소스는
+`item_exposures`의 `invalidated_at IS NULL` 건수**이며, denormalized
+cache인 `review_states.meaningful_exposure_count`를 판정에 쓰지 않는다.
+cache를 읽어도 되는 조건은 `07_SRS_SPEC.md`의 `Meaningful Exposure
+정의`가 canonical이다. content flag로 무효화된 노출이 cache에 언제
+반영되는지는 재계산 시점에 달렸고, 그 시차가 그대로 reinforcement 판정을
+흔든다.
+
+`context_repair`는 **새 상태 컬럼 없이** 위 세 조건으로 판정한다. 되돌린
+문맥의 노출이 실제로 일어나면 조건 1-c가 자동으로 거짓이 되므로
+"repair를 아직 했는가"를 따로 저장할 필요가 없다.
+
+### review candidate: stage → sentence
+
+``` text
+context_stage = user_item_learning_state.context_stage
+                (context_repair면 그 값이 이미 한 단계 낮아져 있다)
+```
+
+``` text
+anchor         user_item_learning_state.anchor_sentence_id
+               NULL이면 그 item을 포함한 validated 문장 중 sentences.id ASC
+               첫 번째를 고르고 anchor_sentence_id에 기록한다
+               기록된 anchor를 더는 쓸 수 없으면 아래 규칙을 따른다
+near_original  anchor sentence 자신, 또는 parent_sentence_id = anchor 인
+               validated 문장
+varied         anchor가 아니고 그 사용자에게 아직 노출되지 않은 validated 문장
+new_context    varied와 같은 조건
+```
+
+**한계:** MVP에는 문장 단위의 "anchor로부터의 거리" 지표가 없다. 따라서
+`varied`와 `new_context`의 문장 선택 규칙이 같다. 두 stage의 구분은
+문장이 아니라 `user_item_learning_state.context_stage`의 progression
+(`07_SRS_SPEC.md`)이 담당한다. 목적에 맞는 문맥을 실제로 **생성**하는
+것은 Wave 3의 `GENERATE_REVIEW_CONTEXT`이며, 조건에 맞는 문장이 하나도
+없으면 그 stage의 candidate를 만들지 않고 `Pool Fallback`으로 넘어간다.
+
+### anchor 문장을 더는 쓸 수 없을 때
+
+`anchor_sentence_id`가 가리키는 문장이 Ready invariant를 만족하지 않으면
+**원인에 따라 다르게 처리한다.** 둘을 같게 다루면 quarantine된 anchor를 가진
+item이 `anchor`/`near_original` stage에서 영영 candidate를 얻지 못하고 학습
+대상에서 조용히 빠진다.
+
+``` text
+sentences.status = quarantined 인 경우
+    anchor_sentence_id = NULL 로 되돌리고 위 anchor 규칙으로 재지정한다
+
+그 밖의 이유로 Ready invariant를 만족하지 않는 경우
+    재지정하지 않고 그 stage의 candidate를 만들지 않는다
+```
+
+quarantine일 때 재지정하는 것이 "몰래 다른 문장으로 바꾸는" 것이 아닌
+이유는, flag/quarantine 시점에 **그 문장에서 나온 `item_exposures`가 이미
+`invalidated_at`으로 무효화되기 때문이다**(`10_ERROR_HANDLING.md`). 최초
+학습 문맥으로서의 기록 자체가 남아 있지 않으므로 보존할 anchor가 없다.
+
+반대로 explanation repair(`EXPLAIN_ITEM`) 대기처럼 **일시적**으로 invariant를
+만족하지 못하는 경우에는 재지정하지 않는다. 곧 복구될 문장 때문에 anchor를
+바꾸면 같은 item의 학습 문맥이 흔들린다. 이때는 이번 실행에서 그 stage를
+건너뛰고 `Pool Fallback`으로 넘어간다.
+
+### Wave 3이 추가하는 것
+
+Wave 3의 worker는 이 절차를 대체하지 않는다. **콘텐츠가 없어서
+materialization이 만들 candidate를 못 찾을 때** 새 문장을 생성해
+`sentences`를 채우는 것이 worker의 일이다. 생성된 문장은 다음
+materialization 실행에서 candidate가 된다. 즉 "누가 candidate를
+만드는가"의 답은 Wave 2·3 모두에서 Learning Engine 하나이고, worker는
+그 재료를 공급한다.
+
+### 테스트에서의 candidate 구성
+
+integration test와 Regression Scenario A~H는 candidate row를 손으로
+INSERT하지 말고 **이 절의 materialization을 실제로 호출해서** Ready
+Pool을 만든다. 손으로 넣으면 materialization 규칙이 틀려도 테스트가
+통과한다. 선택 함수(Category Mix / Review Reason / Review Ordering)
+자체의 unit test는 예외이며 candidate를 직접 구성해도 된다. 검증 대상이
+pool 생성이 아니라 pool이 주어졌을 때의 선택이기 때문이다.
 
 ## Category Mix 계산
 
@@ -66,6 +324,12 @@ Pool이 없는 category는 건너뛰고 사용 가능한 category 중 deficit이
 
 동률일 때는 stable deterministic tie-break를 사용한다
 (`review → new → exploration` 순).
+
+deficit은 **비교 전에 반올림한다.** `target_ratio * total_presented`는
+부동소수점 연산이라 수학적으로 같은 두 deficit이 1e-16만큼 다르게 나온다.
+반올림하지 않으면 위 tie-break가 사실상 한 번도 실행되지 않고 category
+순서를 부동소수점 오차가 정한다. 반올림 자릿수는 구현 상수이며 학습 정책
+값이 아니므로 config에 두지 않는다.
 
 초기 기본값(review 0.70 / new 0.20 / exploration 0.10)의 **canonical
 정의는 `14_CONFIGURATION.md`에 둔다.** 다른 문서의 수치 표기는 설명용이며
@@ -164,6 +428,66 @@ Due review 정렬 기본 순서:
 -   lapse 처리하지 않는다.
 -   실패 처리하지 않는다.
 -   그대로 due 상태를 유지한다.
+
+## Probe Pacing
+
+**세션 안에서 probe를 언제 제시하는지의 canonical 정의는 이 절이다.**
+probe UI 문구와 대상 우선순위는 `02_LEARNING_POLICY.md`,
+budget 수치는 `14_CONFIGURATION.md`를 따른다.
+
+`mastery_probe_target_per_session_min/max`는 세션당 **개수**만 정하고
+배치를 정하지 않는다. 상한만 구현하면 세션 앞쪽 네 문장에 probe가
+연속으로 붙을 수 있고, 이는 `03_UI_UX_SPEC.md`의 "probe는 세션의 중심
+UI가 되어서는 안 된다", `02_LEARNING_POLICY.md`의 "간헐적"과 충돌한다.
+
+`/next`가 presentation을 만들 때 다음을 **모두** 만족하면 그
+presentation에 probe를 함께 싣는다. 하나라도 어긋나면 `probe = null`이다.
+
+``` text
+1. 이번 세션에서 표시한 probe 수 < mastery_probe_target_per_session_max
+2. 간격 조건
+     세션에 probe가 아직 없으면
+       이번 presentation을 포함해 세션의 presentation 수
+         >= probe_min_gap_presentations + 1
+     이미 있으면
+       마지막 probe 이후 제시된 presentation 수
+         >= probe_min_gap_presentations
+3. 02_LEARNING_POLICY.md의 `Probe 대상 우선순위`를 만족하고
+   cooldown 중이 아닌 후보 item이 이번 presentation의 target 중에 있다
+```
+
+결정론적이며 세션 event만으로 재현할 수 있다. 조건 2는 세션의 첫 probe도
+`probe_min_gap_presentations`개 뒤로 미루므로 첫 문장부터 probe가 나오지
+않는다.
+
+**같은 입력에 같은 답을 주지만 idempotent하지는 않다.** probe를 하나 실으면
+`mastery_probe_shown` event가 세션에 남아 다음 호출의 pacing과 제외 집합이
+달라진다. 따라서 `열린 presentation 불변식`으로 같은 presentation을 다시
+반환하는 경로에서는 **probe를 다시 고르지 않는다.** `05_API_SPEC.md`의
+`Mastery Probe`가 정한 `uuid5` 자연키로 기존 event를 조회해 같은 `probe_id`를
+반환한다.
+
+### min은 강제하지 않는다
+
+`mastery_probe_target_per_session_min`은 **관측 목표이지 엔진 제약이
+아니다.** 후보가 없거나 세션이 짧아 min에 미치지 못해도 그대로 둔다.
+
+-   min을 채우려고 조건 3의 cooldown이나 대상 우선순위를 깨면, 방금
+    explicit feedback을 준 item이나 최근 skip한 item을 다시 묻게 된다.
+    그렇게 얻은 응답은 evidence로서 가치가 낮고
+    `02_LEARNING_POLICY.md`의 `Skip` 규칙과 정면으로 충돌한다.
+-   min을 채우려고 조건 2를 깨면 세션 끝에 probe가 몰려
+    `03_UI_UX_SPEC.md`의 제약을 어긴다.
+
+따라서 엔진이 강제하는 것은 **max와 간격**뿐이다. min은
+`probe_min_gap_presentations`를 조정할 때의 기준값이고, 실사용에서 probe가
+너무 드물면 gap을 줄인다. `13_ACCEPTANCE_CRITERIA.md`의 "configured probe
+budget과 cooldown을 따른다"가 검증하는 것도 max와 cooldown이다.
+
+연속 skip 시 세션 probe budget을 줄이는 동작은 **MVP에서 구현하지
+않는다.** 같은 item을 다시 묻지 않는 것은 `probe_skip_cooldown_days`가
+item 단위로 이미 보장하고, 세션 단위 budget 축소는 그 위에 추가 상태를
+요구한다.
 
 ## Backlog
 
@@ -309,8 +633,12 @@ difficulty_distance가 동률이 되어 `frequency_rank`가 순서를 결정한�
 
 -   초기 사용자는 `starting_level = beginner`를 기본으로 한다.
 -   긴 onboarding JLPT 시험이나 placement test는 MVP에 없다.
--   초기 세션은 **new + exploration 중심**으로 시작하고, Review pool이
-    생기면 configured ratio로 점진적으로 수렴한다.
+-   초기 세션은 **review가 아닌 category로** 시작하고, Review pool이
+    생기면 configured ratio로 점진적으로 수렴한다. 첫 세션에는
+    `user_item_learning_state` 행이 없어 실제로는 **exploration만**
+    생긴다. 사용자가 첫 `몰랐음`/`애매함`을 누르면 그 item이 active
+    learning target이 되고 `review_states`가 생겨 new/review pool이
+    자라기 시작한다(`Candidate Materialization`의 `role별 규칙`).
 
 초기 학습 item 공급을 위해 **작은 version-controlled starter seed
 set**을 둔다.
@@ -325,12 +653,24 @@ exploration 대상 선정은 위 `Exploration Item 선정` 절을 따른다.
 ## Pool Fallback
 
 선택 대상 category의 Ready candidate가 없으면 다음 순서로 처리한다.
+**이 순서가 canonical이며 다른 문서는 여기를 참조한다.**
 
 ``` text
-1. 다른 available category 선택
+0. Candidate Materialization 1회 실행 (LLM 호출 없음)
+1. 같은 deficit 순서로 available category를 다시 훑는다
+   (0단계가 방금 채웠을 수 있으므로 처음 고른 category부터 다시 본다)
 2. 안전한 기존 anchor/near-original reinforcement candidate 사용
 3. background replenishment job enqueue
 ```
+
+0단계가 먼저인 이유는 "Ready candidate가 없다"가 대부분 **콘텐츠가
+없다**가 아니라 **아직 이 사용자에게 투영되지 않았다**이기 때문이다.
+다른 category로 먼저 내려가면 아직 만들 수 있었던 문장을 두고 Category
+Mix가 틀어진다.
+
+0단계는 **요청당 1회**다. 1단계를 훑고도 비어 있다고 해서 0단계로
+돌아가지 않는다. 3단계(job enqueue)는 0단계를 돌려도 만들 candidate가
+없을 때, 즉 정말로 콘텐츠가 없을 때만 의미가 있다.
 
 세션을 LLM 응답 대기로 block하지 않는다. **모든 pool이 비어도 API
 request handler에서 provider를 synchronous 호출하지 않는다**

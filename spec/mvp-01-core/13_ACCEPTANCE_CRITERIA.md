@@ -11,7 +11,12 @@
 -   configured max new items per sentence 정책 지원
 -   **configured category mix를 Learning Engine이 따른다**
 -   **configured probe budget과 cooldown을 따른다**
--   무신호 review가 무한 due loop를 만들지 않음
+-   무신호 review가 무한 due loop를 만들지 않음 (click이나 probe skip만
+    있는 review도 무신호로 처리된다)
+-   **configured probe 간격을 지켜 probe가 연속으로 몰리지 않음**
+-   세션 시작이 seed 콘텐츠로 Ready Pool을 만들어, background worker 없이
+    첫 세션이 성립함
+-   presentation 제시 / 완료 / probe 제시가 재시도로 중복 기록되지 않음
 -   contextual progression을 DB에서 재현 가능
 -   item explanation을 DB에서 조회 가능
 -   tap마다 live LLM 불필요

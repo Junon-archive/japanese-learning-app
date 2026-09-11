@@ -278,6 +278,31 @@ Unique: `(study_presentation_id, learning_item_id)` — 한 presentation의
 -   created_at
 -   updated_at
 
+row를 **만드는 주체와 시점, role/reason/stage/status에 넣는 값의
+canonical 정의는 `06_LEARNING_ENGINE.md`의 `Candidate Materialization`**
+이다. 요약하면 Wave 2의 Learning Engine이 `POST /api/study/session`과
+`POST /session/{id}/next`의 pool 부족 시점에 **요청한 사용자 한 명분만**
+만든다. seed loader도 계정 생성 CLI도 candidate를 만들지 않는다.
+
+`status`의 두 값은 다음 경계를 가진다.
+
+``` text
+queued  콘텐츠가 아직 없어 worker가 생성 중인 candidate (Wave 3)
+ready   Ready invariant를 만족해 지금 그대로 제시할 수 있다
+```
+
+유일성: materialization이 idempotent해야 하므로 **아직 소비되지 않은
+candidate에 partial unique index**를 건다.
+
+``` text
+UNIQUE (user_id, sentence_id, presentation_role, context_stage)
+WHERE status IN ('queued', 'ready')
+```
+
+`shown / consumed / quarantined / expired`를 제외하는 이유는 같은 문장을
+나중에 다른 시점에 다시 candidate로 만들 수 있어야 하기 때문이다
+(contextual review의 전제). 새 컬럼이나 새 테이블은 필요하지 않다.
+
 ## user_sentence_candidate_targets
 
 문장당 target item 1\~2개를 연결한다.
@@ -304,6 +329,12 @@ Unique: `(study_presentation_id, learning_item_id)` — 한 presentation의
 
 이 구조로 same sentence 재사용, role 변화, original/near/new context,
 exposure replay, content flag invalidation을 추적한다.
+
+불변식: **한 `study_session_id`에 `completed_at IS NULL`인 row는 최대
+1개다.** `POST /session/{id}/next`는 열린 presentation이 있으면 새로
+만들지 않고 그것을 반환한다(`05_API_SPEC.md`의
+`열린 presentation 불변식`). 이것이 재시도로 인한 중복 presentation을
+막는다.
 
 ## study_sessions
 
@@ -335,10 +366,59 @@ replay할 수 있도록 원본을 보존한다.
 -   learning_item_id nullable
 -   event_type
 -   payload_json
--   client_event_id (idempotency용 client 생성 UUID)
+-   client_event_id (event idempotency key. UUID. **client 발급과 server
+    발급이 모두 있다** --- 아래)
 -   created_at
 
 Unique: `(user_id, client_event_id)`.
+
+### client_event_id 발급 주체
+
+이 컬럼은 v0.2까지 "client 생성 UUID"로만 설명했지만, `session_started`,
+`sentence_viewed`, `sentence_completed`, `mastery_probe_shown`,
+`session_finished`는 **client가 POST하는 endpoint가 없고 서버가 부수적으로
+남기는 event**다. 그래서 컬럼 의미를 다음으로 고친다.
+
+``` text
+client_event_id = 이 event의 idempotency key (UUID)
+발급 주체는 event_type마다 고정이며 섞이지 않는다
+```
+
+-   **client 발급**: 같은 사용자 입력이 여러 번 정당하게 발생할 수 있고
+    서버에 그것을 구분할 자연키가 없는 event.
+-   **server 발급**: 서버가 만든 row(session / presentation) 하나당 최대
+    1건만 존재해야 하는 event. 고정 namespace를 쓴 **UUIDv5**로
+    결정론적으로 계산하므로 재시도해도 같은 값이 나오고
+    `(user_id, client_event_id)` unique가 중복을 막는다.
+
+**event_type별 발급 주체와 자연키의 canonical 표는
+`05_API_SPEC.md`의 `event idempotency key`에 둔다.** 두 문서에 표를
+중복해 두지 않는다.
+
+컬럼 이름은 `client_event_id`로 유지한다. 이름을 바꾸면 migration과 이미
+작성된 model/테스트가 따라 움직이는데, 얻는 것은 이름 하나의 정확도뿐이다.
+의미는 이 절이 canonical이다.
+
+### probe 상태를 어디에 두는가
+
+**`mastery_probes` 같은 전용 테이블을 만들지 않는다.**
+`05_API_SPEC.md`의 `probe.probe_id`는 해당 probe를 낸
+`mastery_probe_shown` **learning_event의 id**(정수)다
+(`docs/decisions/ADR-009-probe-id.md`).
+
+probe가 실제로 필요로 하는 **상태**는 이미 전용 컬럼에 있다.
+
+``` text
+마지막 probe 시각    user_item_learning_state.last_probe_at
+skip 누적            user_item_learning_state.probe_skip_count
+cooldown 판정        위 두 값 + probe_skip_cooldown_days
+```
+
+event log에서 읽는 것은 "이 probe_id가 유효한가, 어떤 item에 대한
+것인가"라는 **조회**이지 상태 저장이 아니다. 따라서 전용 테이블은 파생
+가능한 컬럼만 가진 20번째 테이블이 되고, 그 unique 제약
+`(presentation_id, learning_item_id)`도 위 UUIDv5 자연키와 같은 내용을
+두 번 표현하게 된다.
 
 MVP event_type 목록:
 
@@ -445,7 +525,14 @@ starter seed set**을 둔다.
     `frequency_rank`로 싣고, seed loader가 같은 `metadata_json`에
     `seed_order`(적재 순서)를 채운다. 두 값의 canonical 정의와 loader
     규약은 `06_LEARNING_ENGINE.md`의 `Exploration Item 선정`에 있다
--   seed 문장을 함께 두어 첫 세션의 new/exploration pool을 확보한다
+-   seed 문장을 함께 두어 첫 세션의 new/exploration pool의 **재료**를
+    확보한다. seed 적재는 `learning_items` / `sentences` /
+    `sentence_items` / `sentence_item_spans` /
+    `sentence_item_explanations`까지만 만들고
+    **`user_sentence_candidates`는 만들지 않는다.** candidate는 사용자별
+    데이터이고 적재 시점에 사용자가 없을 수 있다. Ready Pool은
+    `06_LEARNING_ENGINE.md`의 `Candidate Materialization`이 세션 시작
+    시점에 이 seed 콘텐츠에서 만든다.
 -   정확한 개수는 제품 명세에 고정하지 않는다
 
 seed는 Git으로 관리하고 migration 또는 별도 seed 절차로 적재한다.

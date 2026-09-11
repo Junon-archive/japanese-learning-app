@@ -379,7 +379,9 @@ def test_logout_revokes_only_the_calling_session(
     아무것도 깨지지 않는다. 그래서 두 개를 만든다.
     """
     logged_out = _login(auth_client).cookies[SESSION_COOKIE_NAME]
-    other_device = create_session(db_session, user_id=user.id, ttl_days=TTL_DAYS)
+    other_device = create_session(
+        db_session, user_id=user.id, ttl_days=TTL_DAYS, now=datetime.now(UTC)
+    )
     db_session.flush()
 
     assert auth_client.post("/api/auth/logout", headers={"Origin": ORIGIN}).status_code == 204

@@ -20,9 +20,10 @@ audio 관련 endpoint와 event는 MVP에 없다(`00_SCOPE.md`).
 -   모든 학습 API는 인증 필요. 미인증 요청은 401.
 -   익명 접근 허용 목록은 아래 `익명 접근 허용 목록`이 canonical이다.
 -   요청/응답의 timestamp는 UTC ISO-8601.
--   상태 변경 event POST는 client가 생성한 `client_event_id`(UUID)를
-    포함한다. 서버는 `(user_id, client_event_id)` unique로 중복 저장을
-    막고, 재전송 시 동일 결과를 반환한다.
+-   모든 `learning_events` row는 `client_event_id`(UUID) idempotency key를
+    가진다. 서버는 `(user_id, client_event_id)` unique로 중복 저장을 막고,
+    재전송 시 동일 결과를 반환한다. **발급 주체는 event_type마다 고정이며
+    아래 `event idempotency key`가 canonical이다.**
 -   모든 학습 API handler는 **외부 provider를 호출하지 않는다**
     (`08_LLM_SPEC.md`).
 -   응답에 실리는 id는 DB 정수 PK를 **JSON number(정수)** 로 그대로
@@ -72,8 +73,69 @@ API가 노출하는 id는 DB 정수 PK이며 **JSON number(정수)** 로 낸다.
 -   문자열로 감싸면 backend·frontend 양쪽에 변환 지점이 생기고, 같은
     값이 `"1"`과 `1`로 갈리는 버그를 만든다. 근거와 한계는
     `docs/decisions/ADR-005-api-id-representation.md`.
--   `probe_id`의 발급·저장 방식은 Wave 2에서 확정하지만, 확정 이후에도
-    이 표현 규칙을 따른다.
+-   `probe_id`는 `mastery_probe_shown` learning_event의 정수 id다
+    (아래 `Mastery Probe`, `04_DB_SPEC.md`의 `probe 상태를 어디에 두는가`).
+    다른 PK와 같은 표현 규칙을 따른다.
+
+### event idempotency key
+
+**`learning_events.client_event_id`의 발급 주체 표는 여기가 canonical이다.**
+컬럼 의미는 `04_DB_SPEC.md`의 `client_event_id 발급 주체`를 따른다.
+
+v0.2의 "상태 변경 event POST는 client가 생성한 `client_event_id`를
+포함한다"는 규칙은 `session_started`, `sentence_viewed`,
+`sentence_completed`, `mastery_probe_shown`, `session_finished`에
+적용할 수 없었다. **client가 이 event들을 POST하지 않기 때문이다.** 서버가
+요청을 처리하면서 부수적으로 남긴다. 그래서 규칙을 둘로 나눈다.
+
+``` text
+event_type                 발급    출처 / 자연키
+-------------------------  ------  ---------------------------------------------
+session_started            server  "session_started:{study_session_id}"
+sentence_viewed            server  "sentence_viewed:{study_presentation_id}"
+sentence_completed         server  "sentence_completed:{study_presentation_id}"
+mastery_probe_shown        server  "mastery_probe_shown:{study_presentation_id}:{learning_item_id}"
+session_finished           server  "session_finished:{study_session_id}"
+
+session_extended           client  POST /session/{id}/extend      body
+item_clicked               client  POST .../click                 body
+explanation_revealed       client  POST .../explanation-revealed  body
+translation_revealed       client  POST .../translation/reveal    body
+self_report_known          client  POST .../self-report           body
+self_report_uncertain      client  POST .../self-report           body
+self_report_unknown        client  POST .../self-report           body
+mastery_probe_known        client  POST .../probe-response        body
+mastery_probe_uncertain    client  POST .../probe-response        body
+mastery_probe_unknown      client  POST .../probe-response        body
+mastery_probe_skipped      client  POST .../probe-response        body
+content_flagged            client  POST .../flag                  body
+```
+
+server 발급은 **고정 namespace UUID를 쓴 UUIDv5**다.
+
+``` text
+client_event_id = uuid5(NC_EVENT_NAMESPACE, 자연키 문자열)
+```
+
+`NC_EVENT_NAMESPACE`는 코드에 고정한 UUID 상수다. 설정값이 아니다. 바꾸면
+과거 event의 idempotency key를 재계산할 수 없다.
+
+-   자연키에 시각이나 순번을 넣지 않는다. 그러면 재시도마다 값이 달라져
+    idempotency가 사라진다.
+-   server 발급 event는 그래서 **재시도해도 두 번 기록되지 않는다.**
+    unique 충돌이 나면 기존 row를 그대로 두고 성공으로 처리한다.
+-   `session_extended`만 client 발급인 이유: `+5분`은 한 세션에서 여러 번
+    정당하게 일어나고, 서버에는 재시도와 두 번째 연장을 구분할 자연키가
+    없다. `"...:{순번}"`을 쓰면 재시도가 순번을 하나 더 올려 중복 연장이
+    된다. 이 event만 client가 key를 들고 와야 한다.
+
+`POST /api/study/session`, `/next`, `/finish`의 request body에는
+`client_event_id`를 **받지 않는다.** 셋 다 서버 row(session /
+presentation) 하나에 대응하는 자연키가 있어 server 발급으로 충분하고,
+body를 늘리면 client가 endpoint마다 UUID를 만들어 재시도 간 보존해야
+한다. `/next` 재시도로 presentation이 중복 생성되는 문제는 client key가
+아니라 아래 `열린 presentation 불변식`으로 막는다. 근거는
+`docs/decisions/ADR-008-event-idempotency-key.md`.
 
 ## Authentication
 
@@ -100,12 +162,45 @@ GET  /api/study/session            현재 열린 session 조회 (없으면 null)
 POST /api/study/session            create 또는 resume
 POST /api/study/session/{id}/next      다음 presentation 반환
 POST /api/study/session/{id}/finish    세션 종료
-POST /api/study/session/{id}/extend    +5분 연장
+POST /api/study/session/{id}/extend    +5분 연장  body: {client_event_id}
 ```
+
+`/extend`만 body에 `client_event_id`를 받는다. 이유는 위
+`event idempotency key`에 있다.
 
 `POST /session`은 idle timeout 이내면 기존 세션을 resume하고, 초과면 새
 세션을 만든다(`04_DB_SPEC.md`의 `study_sessions`,
 `14_CONFIGURATION.md`의 `study_session_idle_timeout_minutes`).
+
+`POST /session`은 세션을 만들거나 resume한 직후
+`06_LEARNING_ENGINE.md`의 `Candidate Materialization`을 **요청 사용자
+한 명분** 실행한다. seed만 적재된 신규 사용자의 Ready Pool이 이 시점에
+채워지므로 첫 세션을 시작할 수 있다.
+
+### 열린 presentation 불변식
+
+``` text
+한 study_session에 completed_at IS NULL 인 study_presentation은
+최대 1개다.
+```
+
+`POST /session/{id}/next`는 그 세션에 완료되지 않은 presentation이 이미
+있으면 **새로 만들지 않고 그것을 그대로 반환한다.** 따라서 네트워크
+재시도나 모바일 더블탭으로 presentation이 중복 생성되지 않고, candidate가
+헛되이 소비되지 않으며 Category Mix 집계도 왜곡되지 않는다.
+
+-   다음 문장으로 넘어가려면 client가 **먼저
+    `POST /presentations/{pid}/complete`를 호출**한다. `/next`가 직전
+    문장을 암묵적으로 완료시키지 않는다. 그렇게 하면 `/next` 재시도가
+    다시 새 presentation을 만들게 되어 이 불변식이 깨진다.
+-   `POST /session/{id}/finish`는 아직 열려 있는 presentation이 있으면
+    그것을 완료 처리하고 `sentence_completed`를 남긴다. 이 event의
+    idempotency key는 presentation id 기반 server 발급이므로 동시에 도착한
+    `/complete`와 중복 기록되지 않는다.
+-   `/next`가 선택한 category에 ready candidate가 없으면 `Pool Fallback`
+    0단계로 materialization을 **요청당 1회** 실행하고, 그 뒤 같은 deficit
+    순서로 category를 다시 훑는다. 순서의 canonical 정의는
+    `06_LEARNING_ENGINE.md`의 `Pool Fallback`이다.
 
 ## Sentence Presentation Payload
 
@@ -151,6 +246,39 @@ POST /api/study/session/{id}/extend    +5분 연장
 }
 ```
 
+### Mastery Probe
+
+probe를 **언제** 싣는지는 `06_LEARNING_ENGINE.md`의 `Probe Pacing`이
+canonical이다.
+
+``` text
+probe_id = 이 probe를 낸 mastery_probe_shown learning_event의 id (정수)
+```
+
+전용 probe 테이블은 만들지 않는다(`04_DB_SPEC.md`의
+`probe 상태를 어디에 두는가`, ADR-009). probe를 실을 때 서버는
+`mastery_probe_shown` event를 먼저 기록하고 그 id를 응답에 싣는다. 그
+event의 idempotency key는
+`uuid5(NC_EVENT_NAMESPACE, "mastery_probe_shown:{pid}:{learning_item_id}")`
+이므로, 같은 presentation을 `열린 presentation 불변식`으로 다시 받아도
+probe event와 `probe_id`가 **같은 값으로 유지된다.**
+
+`POST /api/study/presentations/{pid}/probe-response`는 `probe_id`로
+event를 조회해 다음을 모두 확인하고, 하나라도 어긋나면 **400**이다.
+
+``` text
+event_type            = mastery_probe_shown
+user_id               = 요청 사용자
+study_presentation_id = {pid}
+```
+
+-   응답 event(`mastery_probe_known | uncertain | unknown | skipped`)의
+    `learning_item_id`는 **조회한 probe event의 값을 그대로 쓴다.**
+    client가 보낸 값을 신뢰하지 않는다. 그래서 body에 별도
+    `learning_item_id`를 받지 않는다.
+-   같은 `probe_id`에 이미 응답 event가 있으면 새로 기록하지 않고 기존
+    결과를 반환한다. probe 하나에 응답은 최대 1건이다.
+
 ## Interaction
 
 ``` text
@@ -169,6 +297,12 @@ POST /api/study/presentations/{pid}/flag
 POST /api/study/presentations/{pid}/complete
      -> sentence_completed 기록, meaningful exposure 확정
 ```
+
+`/complete`는 `Next`를 누를 때 client가 **명시적으로** 호출한다
+(`열린 presentation 불변식`). idempotency key는 presentation id 기반
+server 발급이므로 body에 `client_event_id`를 받지 않고, 재호출해도
+`sentence_completed`와 `item_exposures`가 중복 생성되지 않는다
+(`item_exposures`의 `(study_presentation_id, learning_item_id)` unique).
 
 Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
 그대로 반환한다.
@@ -253,4 +387,5 @@ components.worker.status    unknown | ok | stale    + last_heartbeat_at nullable
 -   Normal item tap should not depend on live LLM response.
 -   API response schema를 명확히 정의하고 frontend와 backend 사이의
     implicit state를 최소화한다.
--   event endpoint는 `client_event_id` 기반 idempotency를 가진다.
+-   모든 event는 `client_event_id` 기반 idempotency를 가진다. 발급 주체는
+    event_type마다 고정이며 위 `event idempotency key`가 canonical이다.

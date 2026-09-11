@@ -10,13 +10,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, get_now
 from app.models.user import User
 from app.schemas.auth import LoginRequest, UserResponse
 from app.services.auth import (
@@ -57,6 +58,7 @@ def login(
     payload: LoginRequest,
     response: Response,
     db: Annotated[Session, Depends(get_db)],
+    now: Annotated[datetime, Depends(get_now)],
 ) -> UserResponse:
     """실패 사유(없는 사용자 / 틀린 password / 비활성)를 구분하지 않는다."""
     login_id = normalize_login_id(payload.login_id)
@@ -70,7 +72,7 @@ def login(
         raise _invalid_credentials()
 
     ttl_days = get_settings().auth_session_ttl_days
-    token = create_session(db, user_id=user.id, ttl_days=ttl_days)
+    token = create_session(db, user_id=user.id, ttl_days=ttl_days, now=now)
     # cookie를 내주기 전에 세션 저장을 확정한다. commit이 실패하면 500이 나가고
     # cookie는 설정되지 않는다(저장 실패를 성공처럼 응답하지 않는다).
     db.commit()
@@ -81,10 +83,11 @@ def login(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
     db: Annotated[Session, Depends(get_db)],
+    now: Annotated[datetime, Depends(get_now)],
     session_token: Annotated[str, Cookie(alias=SESSION_COOKIE_NAME)],
 ) -> Response:
     """cookie가 없으면 api_router의 인증 dependency가 이미 401을 냈다."""
-    revoke_session(db, session_token)
+    revoke_session(db, session_token, now=now)
     db.commit()
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     # 설정할 때와 같은 속성으로 덮어써야 브라우저가 기존 cookie를 지운다.

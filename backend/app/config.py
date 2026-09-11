@@ -40,6 +40,8 @@ class LearningConfig(BaseModel):
     minimum_meaningful_exposures: int = Field(...)
     mastery_probe_target_per_session_min: int = Field(...)
     mastery_probe_target_per_session_max: int = Field(...)
+    # 양의 정수 (14_CONFIGURATION.md). 0이면 probe 간격 규칙이 사라진다.
+    probe_min_gap_presentations: int = Field(..., ge=1)
     mastery_ema_alpha: float = Field(...)
     passive_review_deferral_hours: int = Field(...)
     passive_exposures_before_probe: int = Field(...)
@@ -51,6 +53,9 @@ class LearningConfig(BaseModel):
     # 0.0이면 최소 지분 규칙이 꺼진다 (14_CONFIGURATION.md).
     reinforcement_min_share_of_review: float = Field(..., ge=0.0, le=1.0)
     exploration_recent_days: int = Field(...)
+    # 양의 정수 (14_CONFIGURATION.md). Ready Pool 생성 1회 실행당 role별 상한이며
+    # 0이면 materialization이 아무것도 만들지 못한다.
+    candidate_materialization_batch_size: int = Field(..., ge=1)
 
     @model_validator(mode="after")
     def _check_category_ratio_sums(self) -> LearningConfig:

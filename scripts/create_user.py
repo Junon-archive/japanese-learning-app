@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from sqlalchemy import select
 
+from app.clock import utc_now
 from app.config import get_config
 from app.db import new_session
 from app.models.enums import StartingLevel
@@ -125,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
             password_hash=hash_password(password),
             timezone=args.timezone,
             starting_level=StartingLevel(args.starting_level),
+            # created_at에 server_default가 없다. 진입점이 값을 채운다 (ADR-007).
+            created_at=utc_now(),
         )
         session.add(user)
         session.commit()

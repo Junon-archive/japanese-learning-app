@@ -23,7 +23,7 @@ import hashlib
 import itertools
 import unicodedata
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -404,13 +404,16 @@ def _reject_if_already_seeded(session: Session) -> None:
         )
 
 
-def load_seed(session: Session, seed_dir: Path) -> SeedSummary:
-    """seed 디렉터리를 적재하고 요약을 돌려준다. commit은 호출자가 한다."""
+def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary:
+    """seed 디렉터리를 적재하고 요약을 돌려준다. commit은 호출자가 한다.
+
+    `now`는 호출자(CLI 진입점)가 읽은 값이다. 여기서 시계를 읽지 않고, 이 적재로
+    생기는 모든 `created_at` / `generated_at`이 **같은 순간**을 갖는다 (ADR-007).
+    """
     items = _parse_items(seed_dir / ITEMS_FILE)
     sentences = _parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items})
     _reject_if_already_seeded(session)
 
-    loaded_at = datetime.now(UTC)
     spans = 0
     explanations = 0
 
@@ -430,6 +433,7 @@ def load_seed(session: Session, seed_dir: Path) -> SeedSummary:
                 topic_tags=item.topic_tags,
                 origin=LearningItemOrigin.SEED,
                 metadata_json=metadata,
+                created_at=now,
             )
             session.add(row)
             session.flush()
@@ -443,6 +447,7 @@ def load_seed(session: Session, seed_dir: Path) -> SeedSummary:
                 source_id=sentence.seed_id,
                 normalized_hash=_normalized_hash(sentence.japanese),
                 status=SentenceStatus.VALIDATED,
+                created_at=now,
             )
             session.add(sentence_row)
             session.flush()
@@ -453,6 +458,7 @@ def load_seed(session: Session, seed_dir: Path) -> SeedSummary:
                     learning_item_id=item_ids[sentence_item.item_seed_id],
                     surface_form=sentence_item.surface_form,
                     is_tappable=sentence_item.is_tappable,
+                    created_at=now,
                 )
                 session.add(item_row)
                 session.flush()
@@ -478,7 +484,7 @@ def load_seed(session: Session, seed_dir: Path) -> SeedSummary:
                         nuance=explanation.nuance,
                         example_sentence=explanation.example_sentence,
                         example_translation=explanation.example_translation,
-                        generated_at=loaded_at,
+                        generated_at=now,
                         status=ExplanationStatus.VALIDATED,
                     )
                 )

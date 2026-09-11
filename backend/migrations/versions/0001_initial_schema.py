@@ -67,12 +67,7 @@ def upgrade() -> None:
         sa.Column("max_attempts", sa.Integer(), nullable=False),
         sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_generation_jobs")),
@@ -115,12 +110,7 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
             nullable=False,
         ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_learning_items")),
     )
     op.create_table(
@@ -141,12 +131,7 @@ def upgrade() -> None:
         sa.Column("version", sa.Text(), nullable=False),
         sa.Column("provider", sa.Text(), nullable=False),
         sa.Column("model", sa.Text(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("active", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_prompt_versions")),
         sa.UniqueConstraint(
@@ -171,12 +156,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.CheckConstraint(
             "login_id ~ '^[a-z0-9._+@-]{3,64}$'", name=op.f("ck_users_login_id_format")
@@ -189,12 +169,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), sa.Identity(always=False), nullable=False),
         sa.Column("user_id", sa.BigInteger(), nullable=False),
         sa.Column("token_hash", sa.Text(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
@@ -284,12 +259,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["generation_job_id"],
             ["generation_jobs.id"],
@@ -374,12 +344,7 @@ def upgrade() -> None:
         sa.Column("learning_item_id", sa.BigInteger(), nullable=False),
         sa.Column("surface_form", sa.Text(), nullable=False),
         sa.Column("is_tappable", sa.Boolean(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["learning_item_id"],
             ["learning_items.id"],
@@ -504,12 +469,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["sentence_id"],
@@ -526,6 +486,16 @@ def upgrade() -> None:
         "user_sentence_candidates",
         ["user_id", "status", "presentation_role"],
         unique=False,
+    )
+    # partial unique: materialization idempotency (04_DB_SPEC.md, ADR-010).
+    # shown / consumed / quarantined / expired를 제외해야 같은 문장을 나중에 다시
+    # candidate로 만들 수 있다 (contextual review의 전제).
+    op.create_index(
+        "uq_user_sentence_candidates_active",
+        "user_sentence_candidates",
+        ["user_id", "sentence_id", "presentation_role", "context_stage"],
+        unique=True,
+        postgresql_where=sa.text("status IN ('queued', 'ready')"),
     )
     op.create_table(
         "sentence_item_explanations",
@@ -712,12 +682,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["learning_item_id"],
@@ -763,12 +728,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("invalidated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["learning_item_id"],
@@ -840,12 +800,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("client_event_id", sa.UUID(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.text("now()"),
-            nullable=False,
-        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["learning_item_id"],
             ["learning_items.id"],
@@ -901,6 +856,7 @@ def downgrade() -> None:
         "ix_sentence_item_explanations_sentence_item_id", table_name="sentence_item_explanations"
     )
     op.drop_table("sentence_item_explanations")
+    op.drop_index("uq_user_sentence_candidates_active", table_name="user_sentence_candidates")
     op.drop_index(
         "ix_user_sentence_candidates_user_id_status_role", table_name="user_sentence_candidates"
     )

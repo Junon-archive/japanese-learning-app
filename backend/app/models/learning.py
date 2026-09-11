@@ -155,6 +155,22 @@ class UserSentenceCandidate(Base):
             "status",
             "presentation_role",
         ),
+        # materialization idempotency (04_DB_SPEC.md, ADR-010). 아직 소비되지 않은
+        # candidate에만 건다. `shown / consumed / quarantined / expired`를 제외해야
+        # 같은 문장을 나중에 다른 시점에 다시 candidate로 만들 수 있다 --- contextual
+        # review의 전제다. 전체 unique로 만들면 그 재사용이 영구히 막힌다.
+        #
+        # 이름은 uq convention(`uq_%(table_name)s_%(column_0_N_name)s`)을 그대로 쓰면
+        # 76자로 PostgreSQL identifier 한계(63)를 넘겨 잘리므로 줄여서 고정한다.
+        sa.Index(
+            "uq_user_sentence_candidates_active",
+            "user_id",
+            "sentence_id",
+            "presentation_role",
+            "context_stage",
+            unique=True,
+            postgresql_where=sa.text("status IN ('queued', 'ready')"),
+        ),
     )
 
 

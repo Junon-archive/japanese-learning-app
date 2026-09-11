@@ -95,6 +95,7 @@ def user_id(observer: sa.Engine) -> int:
             password_hash=hash_password(PASSWORD),
             timezone="Asia/Seoul",
             starting_level=StartingLevel.BEGINNER,
+            created_at=datetime.now(UTC),
         )
         session.add(account)
         session.commit()

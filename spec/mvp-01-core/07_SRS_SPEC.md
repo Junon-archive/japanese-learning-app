@@ -47,14 +47,55 @@ Exposures와 FSRS의 분리`의 "interval을 cap하지 않는다"와 충돌하�
 
 ## No-signal review
 
-사용자가 review sentence를 보고
+**무신호 판정의 canonical 정의는 이 절이다.**
 
--   item을 누르지 않고
--   self-report도 하지 않고
--   probe도 없고
--   그냥 다음 sentence로 이동
+판정 단위는 presentation 전체가 아니라 **(presentation, target item)
+쌍**이다. 한 문장에 target이 둘이고 하나만 self-report를 받았다면 다른
+하나는 무신호다.
 
-했다면 **FSRS rating을 추론하지 않는다.**
+``` text
+신호 있음 = 그 (presentation, learning_item)에 대해
+            FSRS rating을 만드는 explicit evidence event가 존재한다
+
+self_report_known | self_report_uncertain | self_report_unknown
+mastery_probe_known | mastery_probe_uncertain | mastery_probe_unknown
+
+무신호   = 위 6개 중 어느 것도 없다
+```
+
+따라서 다음은 **전부 무신호다.** 있어도 무신호 처리를 막지 못한다.
+
+``` text
+item_clicked
+explanation_revealed
+translation_revealed
+mastery_probe_shown          (probe를 냈지만 답하지 않음)
+mastery_probe_skipped        (건너뛰기)
+sentence_viewed
+sentence_completed
+```
+
+v0.2의 "item을 누르지 않고 / self-report도 하지 않고 / probe도 없고"라는
+서술은 이 목록을 **신호로 오해하게 만든다.** 문자 그대로 읽으면 click 한
+번이나 probe 제시만으로 무신호가 아니게 되고, 그러면
+`deferred_until`이 설정되지 않아 그 due item이 같은 세션에서 무한히 다시
+뽑힌다. 이는 `13_ACCEPTANCE_CRITERIA.md`의 "무신호 review가 무한 due
+loop를 만들지 않음"과 `12_TEST_PLAN.md`의 Scenario B를 정면으로 어긴다.
+
+기준을 "FSRS rating을 만드는가"로 두는 이유는 무신호 처리의 목적 자체가
+둘이기 때문이다.
+
+``` text
+1. 증거 없는 review가 FSRS를 오염시키지 않게 한다
+2. 그러면서도 무한 due loop를 막는다
+```
+
+`item_clicked`는 `02_LEARNING_POLICY.md`에서 auxiliary signal이고 mastery도
+FSRS rating도 만들지 않는다. `mastery_probe_skipped`도 같은 문서의 `Skip`
+규칙에서 "mastery evidence 아님 / FSRS grade 아님"이다. 둘 다 목적 1에
+기여하지 않으므로 목적 2를 포기할 이유가 없다.
+
+무신호일 때 **FSRS rating을 추론하지 않는다.**
 
 ``` text
 no-click != Good
@@ -64,6 +105,20 @@ no-click != Easy
 FSRS memory state(`stability` / `difficulty` / `state` / `step`)도,
 애플리케이션 카운터(`reps` / `lapses`)도 **변경하지 않는다.** 대신 `review_states.deferred_until`을 설정해 같은 due item이
 같은 세션에서 계속 반복되지 않게 한다.
+
+무신호 처리는 `presentation_role = review`인 presentation에만 적용한다.
+`new` / `exploration`에는 `review_states` 행이 아직 없을 수 있고, 아직
+스케줄이 없는 item을 defer할 대상도 없다. 이때는
+`user_item_learning_state.passive_no_signal_count`만 올린다
+(`02_LEARNING_POLICY.md`의 `passive_exposures_before_probe`가 이 값을
+쓴다).
+
+무신호 처리로 하는 일은 정확히 다음 둘이다.
+
+``` text
+review_states.deferred_until = now + passive_review_deferral_hours
+user_item_learning_state.passive_no_signal_count += 1
+```
 
 ``` text
 passive_review_deferral_hours = 12   # 초기 기본값, configurable
@@ -118,6 +173,18 @@ context_repair  # 새 문맥 실패 후 한 단계 쉬운 문맥으로 되돌림
 canonical source는 integer counter가 아니라 `item_exposures` row다
 (`04_DB_SPEC.md`). `review_states.meaningful_exposure_count`는
 denormalized cache일 뿐이다.
+
+``` text
+노출 건수 = invalidated_at IS NULL 인 item_exposures row 수
+```
+
+**엔진 판정에는 cache를 쓰지 않는다.** reinforcement 판정, context
+progression, exploration 후보 조건처럼 결과가 candidate 선택이나 mastery /
+FSRS 상태에 영향을 주는 계산은 전부 `item_exposures`를 센다. cache를 읽어도
+되는 곳은 **결과가 학습 결정에 영향을 주지 않는 표시·집계**뿐이다
+(`11_OBSERVABILITY.md`). 이유는 content flag/quarantine이
+`invalidated_at`을 설정하는 시점과 cache 재계산 시점이 어긋날 수 있기
+때문이다(`10_ERROR_HANDLING.md`).
 
 ### MVP에서 meaningful exposure로 인정하는 조건
 

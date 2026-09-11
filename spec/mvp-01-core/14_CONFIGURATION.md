@@ -12,8 +12,12 @@ learning:
   preferred_new_items_per_sentence: 1
   max_new_items_per_sentence: 2
   minimum_meaningful_exposures: 5
+  # probe budget. min은 관측 목표이고 엔진이 강제하지 않는다.
+  # 강제 조건은 max와 아래 간격뿐이다 (06_LEARNING_ENGINE.md의 Probe Pacing).
   mastery_probe_target_per_session_min: 2
   mastery_probe_target_per_session_max: 4
+  # 세션 내 probe 최소 간격 (presentation 수, 06_LEARNING_ENGINE.md)
+  probe_min_gap_presentations: 3
 
   # mastery 갱신 (02_LEARNING_POLICY.md)
   mastery_ema_alpha: 0.4
@@ -36,6 +40,10 @@ learning:
 
   # exploration 대상 선정 (06_LEARNING_ENGINE.md)
   exploration_recent_days: 14
+
+  # Ready Pool 생성 1회 실행당 role별 상한 (06_LEARNING_ENGINE.md의
+  # Candidate Materialization). 없으면 첫 세션에서 seed 전체가 복제된다.
+  candidate_materialization_batch_size: 20
 
 srs:
   # FSRS 결정론 (ADR-003, 07_SRS_SPEC.md)
@@ -88,6 +96,16 @@ backlog 모드의 비율 키(`backlog_review_ratio`, `backlog_new_ratio`,
 `reinforcement_min_share_of_review`는 category 비율이 아니라 review 슬롯
 **내부** 지분이므로 어느 합 검증에도 포함되지 않는다. 허용 범위는
 `[0.0, 1.0]`이며 0.0이면 최소 지분 규칙이 꺼진다.
+
+`mastery_probe_target_per_session_min`은 **엔진 제약이 아니라 관측
+목표**다. 엔진이 강제하는 것은 `mastery_probe_target_per_session_max`와
+`probe_min_gap_presentations`뿐이며, min을 채우려고 cooldown이나 대상
+우선순위를 깨지 않는다. 이유는 `06_LEARNING_ENGINE.md`의
+`Probe Pacing`에 있다. probe가 너무 드물면 min을 올리는 것이 아니라
+`probe_min_gap_presentations`를 줄인다.
+
+`probe_min_gap_presentations`와 `candidate_materialization_batch_size`는
+양의 정수다.
 
 `srs`, `session`, `user`, `content`, `jobs`, `llm` 섹션의 키는 비율 합
 검증 대상이 아니다.

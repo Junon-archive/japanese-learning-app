@@ -11,7 +11,6 @@ id는 반환된 객체에서 읽어라. 롤백 격리는 시퀀스를 되돌리�
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -42,8 +41,12 @@ from app.models.enums import (
     SentenceStatus,
     StartingLevel,
 )
+from tests.clock import DEFAULT_START
 
-NOW = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+# `created_at`에는 server_default가 없다(ADR-007). factory가 명시적으로 채운다.
+# 값은 테스트 시계(`tests.clock`)와 같은 순간이어야 한다 --- 두 값이 갈리면
+# "DB에 남은 시각"과 "요청이 본 시각"이 어긋나 시간 기반 단정이 거짓 통과한다.
+NOW = DEFAULT_START
 
 # 실제 hash가 아니다. 검증 경로를 타지 않는 자리 채우기 값이다.
 _FAKE_HASH = "not-a-real-hash"
@@ -59,6 +62,7 @@ def make_user(session: Session, *, login_id: str | None = None) -> User:
         password_hash=_FAKE_HASH,
         timezone="Asia/Seoul",
         starting_level=StartingLevel.BEGINNER,
+        created_at=NOW,
     )
     session.add(user)
     session.flush()
@@ -72,6 +76,7 @@ def make_learning_item(session: Session) -> LearningItem:
         reading="まかせる",
         default_meaning="맡기다",
         origin=LearningItemOrigin.SEED,
+        created_at=NOW,
     )
     session.add(item)
     session.flush()
@@ -85,6 +90,7 @@ def make_sentence(session: Session) -> Sentence:
         source_type=SentenceSourceType.SEED,
         normalized_hash=_unique("hash-"),
         status=SentenceStatus.VALIDATED,
+        created_at=NOW,
     )
     session.add(sentence)
     session.flush()
@@ -105,15 +111,24 @@ def make_study_session(session: Session, user: User, *, target_minutes: int) -> 
 
 
 def make_candidate(
-    session: Session, user: User, sentence: Sentence, *, status: CandidateStatus
+    session: Session,
+    user: User,
+    sentence: Sentence,
+    *,
+    status: CandidateStatus,
+    presentation_role: PresentationRole = PresentationRole.NEW,
+    context_stage: ContextStage = ContextStage.ANCHOR,
 ) -> UserSentenceCandidate:
+    """role/stage는 partial unique key의 일부라 호출자가 지정할 수 있어야 한다
+    (`uq_user_sentence_candidates_active`)."""
     candidate = UserSentenceCandidate(
         user_id=user.id,
         sentence_id=sentence.id,
-        presentation_role=PresentationRole.NEW,
-        context_stage=ContextStage.ANCHOR,
+        presentation_role=presentation_role,
+        context_stage=context_stage,
         status=status,
         updated_at=NOW,
+        created_at=NOW,
     )
     session.add(candidate)
     session.flush()
@@ -155,6 +170,7 @@ def make_exposure(
         sentence_id=sentence.id,
         modality=ExposureModality.READING,
         context_stage=ContextStage.ANCHOR,
+        created_at=NOW,
     )
     session.add(exposure)
     session.flush()
@@ -174,6 +190,7 @@ def make_event(
         study_session_id=study_session.id,
         event_type=event_type,
         client_event_id=client_event_id,
+        created_at=NOW,
     )
     session.add(event)
     session.flush()
@@ -190,6 +207,7 @@ def make_generation_job(
         idempotency_key=idempotency_key,
         max_attempts=max_attempts,
         next_attempt_at=NOW,
+        created_at=NOW,
     )
     session.add(job)
     session.flush()

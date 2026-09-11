@@ -11,6 +11,8 @@ learning:
   minimum_meaningful_exposures: 5
   mastery_probe_target_per_session_min: 2
   mastery_probe_target_per_session_max: 4
+  # 세션 내 probe 최소 간격 (presentation 수, 06_LEARNING_ENGINE.md)
+  probe_min_gap_presentations: 3
 
   # mastery 갱신 (02_LEARNING_POLICY.md)
   mastery_ema_alpha: 0.4
@@ -33,6 +35,10 @@ learning:
 
   # exploration 대상 선정 (06_LEARNING_ENGINE.md)
   exploration_recent_days: 14
+
+  # Ready Pool 생성 1회 실행당 role별 상한 (06_LEARNING_ENGINE.md의
+  # Candidate Materialization). 없으면 첫 세션에서 seed 전체가 복제된다.
+  candidate_materialization_batch_size: 20
 
 srs:
   # FSRS 결정론 (ADR-003, 07_SRS_SPEC.md)

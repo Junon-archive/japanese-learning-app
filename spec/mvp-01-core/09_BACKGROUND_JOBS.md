@@ -65,6 +65,14 @@ Learning Engine은 다음 학습에 필요한 Ready candidate가 충분한지
 enqueue한다(`06_LEARNING_ENGINE.md`). replenishment 자체는 job_type이
 아니다(위).
 
+**worker는 `user_sentence_candidates` row를 만들지 않는다.** worker가
+만드는 것은 global content(`sentences` 등)이고, 그것을 사용자별
+candidate로 투영하는 일은 request 경로의 Learning Engine이 한다
+(`06_LEARNING_ENGINE.md`의 `Candidate Materialization`이 canonical).
+worker가 생성한 문장은 **다음 materialization 실행에서** candidate가
+된다. 이 분리 덕분에 seed만 적재된 신규 사용자도 worker 없이 첫 세션을
+시작할 수 있다.
+
 ## Cost Guard
 
 worker는 하루 token/request ceiling을 넘으면 신규 generation을 중단하고

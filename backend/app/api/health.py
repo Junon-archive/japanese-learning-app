@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
+from app.api.deps import get_now
 from app.db import get_engine
 from app.schemas.health import (
     ApiComponent,
@@ -54,7 +56,7 @@ def _check_database() -> DatabaseComponent:
 
 
 @router.get("/api/health")
-def read_health() -> HealthResponse:
+def read_health(now: Annotated[datetime, Depends(get_now)]) -> HealthResponse:
     components = HealthComponents(
         api=ApiComponent(status="ok"),
         database=_check_database(),
@@ -64,7 +66,7 @@ def read_health() -> HealthResponse:
     statuses = {components.api.status, components.database.status, components.worker.status}
     return HealthResponse(
         status="degraded" if statuses & _DEGRADED_COMPONENT_STATUSES else "ok",
-        checked_at=datetime.now(UTC),
+        checked_at=now,
         version=APP_VERSION,
         components=components,
     )

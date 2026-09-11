@@ -89,6 +89,40 @@ def test_exploration_recent_days_is_loaded() -> None:
     assert load_config(DEFAULT_CONFIG_FILE).learning.exploration_recent_days == 14
 
 
+def test_probe_min_gap_presentations_is_loaded() -> None:
+    # 06_LEARNING_ENGINE.md의 Probe Pacing이 강제하는 두 값 중 하나다.
+    assert load_config(DEFAULT_CONFIG_FILE).learning.probe_min_gap_presentations == 3
+
+
+def test_candidate_materialization_batch_size_is_loaded() -> None:
+    # Ready Pool 생성 1회 실행당 role별 상한 (06_LEARNING_ENGINE.md).
+    assert load_config(DEFAULT_CONFIG_FILE).learning.candidate_materialization_batch_size == 20
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("probe_min_gap_presentations", 9), ("candidate_materialization_batch_size", 5)],
+)
+def test_pacing_keys_are_outside_every_ratio_sum(tmp_path: Path, key: str, value: int) -> None:
+    # 비율 합 검증 대상은 review/new/exploration 세트와 backlog_* 세트뿐이다
+    # (14_CONFIGURATION.md). 이 두 키를 바꿔도 합 검증에 걸리지 않아야 한다.
+    raw = _raw_default()
+    raw["learning"][key] = value
+    assert getattr(load_config(_write(tmp_path, raw)).learning, key) == value
+
+
+@pytest.mark.parametrize(
+    "key", ["probe_min_gap_presentations", "candidate_materialization_batch_size"]
+)
+def test_pacing_keys_must_be_positive_integers(tmp_path: Path, key: str) -> None:
+    # 14_CONFIGURATION.md: 둘 다 양의 정수다. 0이면 probe 간격 규칙이 사라지고
+    # materialization이 아무것도 만들지 못한다.
+    raw = _raw_default()
+    raw["learning"][key] = 0
+    with pytest.raises(ConfigError):
+        load_config(_write(tmp_path, raw))
+
+
 def test_fsrs_fuzzing_is_disabled() -> None:
     # ADR-003: 테스트 재현성을 위해 끈다.
     assert load_config(DEFAULT_CONFIG_FILE).srs.fsrs_enable_fuzzing is False

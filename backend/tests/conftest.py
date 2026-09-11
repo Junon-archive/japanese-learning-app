@@ -9,12 +9,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy.engine import URL, Engine
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_now
 from app.config import get_config
 from app.db import _build_engine, get_engine
 from app.main import create_app
 from app.settings import get_settings
 from tests import db_support
+from tests.clock import MutableClock
 
 # `app.settings.Settings`의 모든 필드가 여기에 있어야 한다. 하나라도 빠지면 셸에
 # 그 변수가 있을 때 테스트로 샌다. test_env_isolation.py가 어긋남을 감시한다.
@@ -58,9 +59,25 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    with TestClient(create_app()) as test_client:
-        yield test_client
+def study_clock() -> MutableClock:
+    """이 테스트가 보는 시각 (ADR-007).
+
+    `client` / `db_client`가 `app.dependency_overrides[get_now]`로 이 시계를 앱에
+    꽂는다. 같은 테스트가 `study_clock`을 함께 요청하면 **같은 인스턴스**이므로
+    `advance()` 한 번으로 다음 요청의 시각이 움직인다. freezegun을 쓰지 않는다.
+    """
+    return MutableClock()
+
+
+@pytest.fixture
+def client(study_clock: MutableClock) -> Iterator[TestClient]:
+    app = create_app()
+    app.dependency_overrides[get_now] = study_clock.now
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
 
 
 # --------------------------------------------------------------------------
@@ -128,7 +145,10 @@ def db_session(db_engine: Engine) -> Iterator[Session]:
 
 @pytest.fixture
 def db_client(
-    db_session: Session, database_url: URL, monkeypatch: pytest.MonkeyPatch
+    db_session: Session,
+    database_url: URL,
+    monkeypatch: pytest.MonkeyPatch,
+    study_clock: MutableClock,
 ) -> Iterator[TestClient]:
     """요청 핸들러가 테스트와 같은 트랜잭션을 보게 만든다.
 
@@ -144,6 +164,7 @@ def db_client(
     _clear_caches()
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_now] = study_clock.now
     try:
         with TestClient(app) as test_client:
             yield test_client

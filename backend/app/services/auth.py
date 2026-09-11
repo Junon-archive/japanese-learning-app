@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import string
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from argon2 import PasswordHasher
@@ -75,12 +75,13 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_session(db: Session, *, user_id: int, ttl_days: int) -> str:
+def create_session(db: Session, *, user_id: int, ttl_days: int, now: datetime) -> str:
     """세션 row를 만들고 **원본 token**을 돌려준다. commit은 호출부가 한다.
 
     원본 token은 cookie로만 나가고 DB에도 로그에도 남지 않는다.
+
+    `now`는 호출부(요청)가 읽은 값이다. 여기서 시계를 다시 읽지 않는다(ADR-007).
     """
-    now = datetime.now(UTC)
     token = generate_session_token()
     db.add(
         AuthSession(
@@ -88,12 +89,13 @@ def create_session(db: Session, *, user_id: int, ttl_days: int) -> str:
             token_hash=hash_token(token),
             expires_at=now + timedelta(days=ttl_days),
             last_used_at=now,
+            created_at=now,
         )
     )
     return token
 
 
-def resolve_session(db: Session, token: str) -> User | None:
+def resolve_session(db: Session, token: str, *, now: datetime) -> User | None:
     """유효한 session이면 User, 아니면 None.
 
     실패 사유(없음 / 폐기됨 / 만료됨 / 비활성 사용자)를 구분해서 돌려주지 않는다.
@@ -102,7 +104,6 @@ def resolve_session(db: Session, token: str) -> User | None:
     만료 판정의 canonical source는 `expires_at`과 `revoked_at`이다. cookie Max-Age는
     브라우저 힌트일 뿐이다.
     """
-    now = datetime.now(UTC)
     row = db.execute(
         sa.select(AuthSession, User)
         .join(User, User.id == AuthSession.user_id)
@@ -122,7 +123,7 @@ def resolve_session(db: Session, token: str) -> User | None:
     return user
 
 
-def revoke_session(db: Session, token: str) -> None:
+def revoke_session(db: Session, token: str, *, now: datetime) -> None:
     """logout. 이미 폐기된 세션이면 아무것도 하지 않는다. commit은 호출부가 한다."""
     db.execute(
         sa.update(AuthSession)
@@ -130,5 +131,5 @@ def revoke_session(db: Session, token: str) -> None:
             AuthSession.token_hash == hash_token(token),
             AuthSession.revoked_at.is_(None),
         )
-        .values(revoked_at=datetime.now(UTC))
+        .values(revoked_at=now)
     )

@@ -19,6 +19,18 @@ FSRS wrapper, validation, duplicate, auth.
 -   password 하한 미만이면 계정 생성이 실패하고, 하한 이상이면
     성공한다 (`spec/04_SECURITY_AND_DATA.md`의
     `Password 요구사항 (MVP 확정)`)
+-   무신호 판정: `item_clicked`만 있는 review presentation과
+    `mastery_probe_skipped`만 있는 review presentation이 **둘 다
+    무신호로 처리되어** `deferred_until`이 설정된다
+    (`07_SRS_SPEC.md`의 `No-signal review`)
+-   무신호 판정이 (presentation, item) 쌍 단위다: target 2개 중 하나만
+    self-report를 받으면 나머지 하나만 defer된다
+-   probe pacing: `probe_min_gap_presentations` 미만 간격이면 probe를
+    싣지 않고, `mastery_probe_target_per_session_max`에 도달하면 더 싣지
+    않는다. 후보가 없어 `..._min`에 못 미치는 것은 실패가 아니다
+-   server 발급 `client_event_id`가 결정론적이다: 같은 자연키로
+    `uuid5`를 두 번 계산하면 같은 값이 나온다
+    (`05_API_SPEC.md`의 `event idempotency key`)
 
 ## Integration
 
@@ -33,13 +45,27 @@ Alembic from empty DB.
 -   flag → quarantine → 이후 selection 제외.
 -   login 실패 응답이 사유와 무관하게 동일하다 (없는 `login_id` /
     틀린 password / 비활성 계정 → 같은 401, 본문 구분 없음).
--   seed 상태의 신규 사용자가 첫 세션을 시작할 수 있다.
+-   seed 상태의 신규 사용자가 첫 세션을 시작할 수 있다. 구체적으로
+    `POST /api/study/session`이 `Candidate Materialization`을 실행해
+    seed 콘텐츠에서 `status = ready` candidate를 만들고, 이어진 `/next`가
+    presentation을 반환한다. **candidate row를 손으로 INSERT하지 않는다**
+    (`06_LEARNING_ENGINE.md`의 `테스트에서의 candidate 구성`).
+-   materialization 재실행이 같은 candidate를 중복 생성하지 않는다
+    (`04_DB_SPEC.md`의 partial unique index).
+-   `/next` 재시도가 presentation을 중복 생성하지 않는다
+    (`05_API_SPEC.md`의 `열린 presentation 불변식`).
+-   `/complete` 재호출이 `sentence_completed`와 `item_exposures`를 중복
+    생성하지 않는다.
+-   `probe-response`가 다른 presentation의 `probe_id`를 받으면 400이고,
+    같은 `probe_id`에 두 번 응답하면 첫 응답 결과가 유지된다.
 -   Demo isolation: demo API endpoint가 존재하지 않고, demo frontend
     fixture가 backend로 네트워크 요청을 하지 않는다.
 
 ## Core E2E Scenario
 
-1.  신규 사용자/테스트 사용자 생성 (seed 기반 cold start)
+1.  신규 사용자/테스트 사용자 생성 (seed 기반 cold start). 세션 시작이
+    Ready Pool을 만든다(`06_LEARNING_ENGINE.md`의
+    `Candidate Materialization`). Wave 3 worker 없이 성립한다.
 2.  `任せる`가 포함된 문장 노출
 3.  item 클릭
 4.  precomputed 설명 표시 (live LLM 호출 0)

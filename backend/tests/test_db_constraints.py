@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import ItemExposure, LearningItem, Sentence, StudyPresentation, User
-from app.models.enums import CandidateStatus, ContextStage, ExposureModality
+from app.models.enums import CandidateStatus, ContextStage, ExposureModality, PresentationRole
 from tests import factories
 
 pytestmark = pytest.mark.integration
@@ -67,7 +67,15 @@ def test_exposures_of_the_same_item_in_different_presentations_are_allowed(
     study_session = factories.make_study_session(
         db_session, user, target_minutes=SESSION_MINUTES_FILLER
     )
-    candidate = factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+    # 같은 문장의 두 번째 candidate이므로 stage를 달리한다. 같은 stage로 두면
+    # 이 테스트의 주장과 무관한 uq_user_sentence_candidates_active 위반이 된다.
+    candidate = factories.make_candidate(
+        db_session,
+        user,
+        sentence,
+        status=CandidateStatus.READY,
+        context_stage=ContextStage.NEAR_ORIGINAL,
+    )
     other = factories.make_presentation(db_session, user, study_session, candidate, sentence)
     second = factories.make_exposure(db_session, user, item, other, sentence)
 
@@ -256,3 +264,95 @@ def test_too_short_login_id_is_rejected(db_session: Session) -> None:
     """허용 형식은 `^[a-z0-9._+@-]{3,64}$`다."""
     with pytest.raises(IntegrityError):
         factories.make_user(db_session, login_id="ab")
+
+
+def test_two_unconsumed_candidates_with_the_same_key_are_rejected(db_session: Session) -> None:
+    """04_DB_SPEC.md / ADR-010: materialization은 idempotent해야 한다.
+
+    이 partial unique가 없으면 `/session`과 pool 부족 시의 `/next`가 같은 조합을
+    반복 생성해 Ready Pool이 같은 문장으로 부풀고 batch 상한이 무의미해진다.
+    """
+    user = factories.make_user(db_session)
+    sentence = factories.make_sentence(db_session)
+    factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+
+    with pytest.raises(IntegrityError):
+        factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+
+
+def test_queued_and_ready_collide_because_both_are_unconsumed(db_session: Session) -> None:
+    """유일성 범위는 status IN ('queued','ready')다. 두 status를 섞어도 중복이다.
+
+    queued는 "worker가 생성 중", ready는 "지금 제시 가능"이며 둘 다 아직 소비되지
+    않은 같은 슬롯이다.
+    """
+    user = factories.make_user(db_session)
+    sentence = factories.make_sentence(db_session)
+    factories.make_candidate(db_session, user, sentence, status=CandidateStatus.QUEUED)
+
+    with pytest.raises(IntegrityError):
+        factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+
+
+@pytest.mark.parametrize(
+    "consumed_status",
+    [
+        CandidateStatus.SHOWN,
+        CandidateStatus.CONSUMED,
+        CandidateStatus.QUARANTINED,
+        CandidateStatus.EXPIRED,
+    ],
+)
+def test_a_consumed_candidate_can_be_materialized_again(
+    db_session: Session, consumed_status: CandidateStatus
+) -> None:
+    """partial인 이유. 전체 unique로 만들면 이 테스트가 실패한다.
+
+    같은 문장을 나중에 다른 시점에 다시 candidate로 만들 수 있어야 한다
+    (contextual review의 전제, 04_DB_SPEC.md). 소비된 candidate가 그 문장을
+    영구히 점유하면 review context 재사용이 불가능해진다.
+    """
+    user = factories.make_user(db_session)
+    sentence = factories.make_sentence(db_session)
+    first = factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+
+    first.status = consumed_status
+    db_session.flush()
+
+    again = factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+    assert again.id != first.id
+
+
+def test_candidates_differing_only_in_stage_or_role_coexist(db_session: Session) -> None:
+    """key는 4개 컬럼이다. 더 좁게 걸면 같은 문장의 다른 stage/role이 막힌다."""
+    user = factories.make_user(db_session)
+    sentence = factories.make_sentence(db_session)
+    factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+
+    other_stage = factories.make_candidate(
+        db_session,
+        user,
+        sentence,
+        status=CandidateStatus.READY,
+        context_stage=ContextStage.VARIED,
+    )
+    other_role = factories.make_candidate(
+        db_session,
+        user,
+        sentence,
+        status=CandidateStatus.READY,
+        presentation_role=PresentationRole.EXPLORATION,
+    )
+    assert other_stage.id != other_role.id
+
+
+def test_the_same_candidate_key_for_another_user_is_allowed(db_session: Session) -> None:
+    """Ready Pool은 사용자별이다. user_id가 key에서 빠지면 한 사용자의 candidate가
+    다른 사용자의 materialization을 막는다."""
+    sentence = factories.make_sentence(db_session)
+    for _ in range(2):
+        user = factories.make_user(db_session)
+        candidate = factories.make_candidate(
+            db_session, user, sentence, status=CandidateStatus.READY
+        )
+        assert candidate.id is not None

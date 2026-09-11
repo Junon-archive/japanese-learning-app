@@ -33,10 +33,15 @@ def bigint_pk() -> Mapped[int]:
 
 
 def created_at_column() -> Mapped[datetime]:
-    """생성 시각만 DB가 채운다. 그 외 시각 컬럼은 애플리케이션이 채운다."""
-    return mapped_column(
-        sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
-    )
+    """생성 시각도 **애플리케이션이** 주입된 `now`로 채운다 (ADR-007).
+
+    `server_default now()`를 두지 않는다. 안전망처럼 보이지만 반대로 간다 --- 값을
+    빠뜨린 INSERT가 조용히 DB wall clock으로 채워지는 것이 정확히 막으려는 실패다.
+    `exploration_recent_days`와 probe cooldown은 주입된 clock을 보는데 `created_at`이
+    DB 시계면 두 시계가 갈려 테스트가 거짓 통과한다. default가 없으면 누락이 NOT NULL
+    위반으로 즉시 드러난다.
+    """
+    return mapped_column(sa.DateTime(timezone=True), nullable=False)
 
 
 def enum_column(python_enum: type[enum.StrEnum], constraint_name: str) -> sa.Enum:

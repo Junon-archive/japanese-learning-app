@@ -133,6 +133,33 @@ def test_identity_unique_constraints_exist_with_their_spec_names(db_engine: Engi
 
 
 @pytest.mark.integration
+def test_unconsumed_candidate_uniqueness_is_a_partial_index(db_engine: Engine) -> None:
+    """04_DB_SPEC.md / ADR-010: materialization idempotency는 **partial** unique다.
+
+    전체 unique로 만들면 소비된 candidate가 그 조합을 영구히 점유해 같은 문장을
+    나중에 다시 candidate로 만들 수 없다 --- contextual review의 전제가 깨진다.
+    거부/허용 동작은 test_db_constraints.py가 본다.
+    """
+    with db_engine.connect() as connection:
+        definition = connection.scalar(
+            sa.text(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"
+            ),
+            {"name": "uq_user_sentence_candidates_active"},
+        )
+    assert definition is not None, "uq_user_sentence_candidates_active가 없다"
+    assert definition.startswith("CREATE UNIQUE INDEX"), definition
+    assert "(user_id, sentence_id, presentation_role, context_stage)" in definition, definition
+    # WHERE 절이 없으면 전체 unique다. 소비된 status가 조건에 들어가도 마찬가지다.
+    assert " WHERE " in definition, definition
+    predicate = definition.split(" WHERE ", 1)[1]
+    for status in ("queued", "ready"):
+        assert status in predicate, definition
+    for status in ("shown", "consumed", "quarantined", "expired"):
+        assert status not in predicate, definition
+
+
+@pytest.mark.integration
 def test_no_naive_timestamp_columns(db_engine: Engine) -> None:
     # 불변식 9: 모든 timestamp는 UTC(timestamptz) 저장.
     # timestamp without time zone이 하나라도 있으면 서버 로컬 시각이 섞여 들어오고
@@ -365,3 +392,32 @@ def test_quarantined_is_an_allowed_status(db_engine: Engine, table: str, column:
     ]
     assert matching, f"{table}.{column}에 CHECK 제약이 없다 (허용값이 강제되지 않는다)"
     assert all("quarantined" in definition for definition in matching), matching
+
+
+# --------------------------------------------------------------------------
+# created_at은 애플리케이션이 채운다 (ADR-007).
+# `test_module_boundaries.py`의 G10은 **소스**만 본다. DB가 실제로 default를 들고
+# 있지 않다는 것은 information_schema로만 확인된다.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_no_created_at_column_has_a_database_default(db_engine: Engine) -> None:
+    """`created_at`에 server default가 있으면 값을 빠뜨린 INSERT가 조용히 DB 시계로
+    채워진다. 그러면 주입된 `now`를 보는 정책(`exploration_recent_days`, probe
+    cooldown)과 두 시계가 갈려 테스트가 거짓 통과한다. default가 없고 NOT NULL이면
+    누락은 즉시 실패한다.
+    """
+    with db_engine.connect() as connection:
+        rows = list(
+            connection.execute(
+                sa.text(
+                    "SELECT table_name, column_default, is_nullable "
+                    "FROM information_schema.columns "
+                    "WHERE table_schema = 'public' AND column_name = 'created_at'"
+                )
+            )
+        )
+    assert rows, "created_at 컬럼이 하나도 없다 --- 검사가 아무것도 보고 있지 않다"
+    assert [(row.table_name, row.column_default) for row in rows if row.column_default] == []
+    assert [row.table_name for row in rows if row.is_nullable != "NO"] == []

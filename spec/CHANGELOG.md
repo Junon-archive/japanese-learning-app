@@ -226,3 +226,200 @@ Wave 1 보안 검토에서 드러난 명세 공백 1건을 확정했다. 새 버
     **Argon2 파라미터를 낮추는 방식으로 대응하지 않는다**(password hash
     강도는 1차 방어의 축이다). 완화가 필요해지면 배포 계층이 먼저다. 기록일
     뿐 새 요구사항·테이블·설정 키를 만들지 않았다.
+
+Wave 2(Learning Engine + SRS) 계획에서 드러난 **차단성 명세 공백 5건**을
+확정했다. 새 버전 번호를 만들지 않는다. MVP 범위는 넓히지 않았고 새
+테이블도 만들지 않았다.
+
+-   **[P-1] Ready Pool을 누가 만드는가** (`06_LEARNING_ENGINE.md`의
+    `Candidate Materialization`이 canonical, ADR-010): seed 적재는 global
+    content만 만들고 `user_sentence_candidates`를 만들지 않는데, Ready
+    Pool의 실체가 그 테이블이라 **pool을 채우는 주체가 명세에 없었다.**
+    `user_sentence_candidates` row는 **Wave 2의 Learning Engine이 request
+    경로에서 직접 만든다.** 실행 시점은 `POST /api/study/session`(세션
+    생성/resume 직후)과 `/session/{id}/next`(선택된 category에 ready
+    candidate가 없을 때 Pool Fallback 3단계 직전)이고, 대상은 **요청을
+    보낸 인증 사용자 한 명**이다. seed loader도 계정 생성 CLI도 Wave 3
+    worker도 만들지 않는다(각각의 기각 이유는 ADR-010). **review
+    candidate(`fsrs_due` / `context_repair` / `reinforcement`)도 Wave 2가
+    만든다.** 그래서 Core E2E 9~12단계와 Regression Scenario A~D를 worker
+    없이 Wave 2에서 재현할 수 있다. 판정 근거: materialization은 provider
+    호출이 아니라 결정론적 DB 연산이므로 `08_LLM_SPEC.md`의 LLM 호출
+    경계를 어기지 않고, 같은 문서가 request handler에 허용한 범위 안이다.
+    worker의 일은 **없는 콘텐츠를 생성**해 `sentences`를 채우는 것이고,
+    그렇게 만들어진 문장은 다음 materialization에서 candidate가 된다
+    (`09_BACKGROUND_JOBS.md`에 "worker는 candidate row를 만들지 않는다"
+    명시). role은 `user_item_learning_state.is_active_learning_target`으로
+    `new`/`exploration`이 배타적으로 갈리며, cold start에서는 exploration만
+    생긴다(Cold Start 절의 "available category만 사용한다"와 일치).
+    `context_repair`는 **새 컬럼 없이** 가장 최근 `몰랐음` event의
+    presentation stage + 현재 `context_stage` + `item_exposures`로 판정한다.
+    한 item에 대해 review candidate는 **한 reason으로 하나만** 만든다
+    (평가 순서는 `Review Reason 선택`의 우선순위와 동일). 둘 이상 만들면
+    같은 item·같은 stage에서 대개 같은 문장을 골라 유일성 제약과 충돌한다.
+    `status`의 경계를 고정했다: `queued` = 콘텐츠가 아직 없어 worker가
+    생성 중(Wave 3), `ready` = 지금 그대로 제시 가능. 테스트는 candidate를
+    손으로 INSERT하지 않고 materialization을 호출해 만든다(선택 함수의
+    unit test만 예외). **한계:** MVP에는 문장 단위 "anchor로부터의 거리"
+    지표가 없어 `varied`와 `new_context`의 문장 선택 규칙이 같다.
+-   **[P-2] 서버가 발생시키는 event의 `client_event_id`**
+    (`05_API_SPEC.md`의 `event idempotency key`가 canonical,
+    `04_DB_SPEC.md`의 `client_event_id 발급 주체`, ADR-008):
+    `04_DB_SPEC.md`는 컬럼을 "client 생성 UUID"로, `05_API_SPEC.md`는
+    "상태 변경 event POST는 client가 생성한 `client_event_id`를 포함한다"로
+    정의했지만 `session_started` / `sentence_viewed` /
+    `sentence_completed` / `mastery_probe_shown` / `session_finished`는
+    **client가 POST하는 endpoint가 없어** 두 문장이 서로 모순이었다. 컬럼
+    의미를 **"event의 idempotency key(UUID), 발급 주체는 event_type마다
+    고정"**으로 고치고 16개 event 전부의 발급 주체 표를
+    `05_API_SPEC.md`에 두었다(두 문서에 표를 중복하지 않는다). server
+    발급은 `uuid5(NC_EVENT_NAMESPACE, 자연키)`이며 자연키에 시각·순번을
+    넣지 않는다. **`/session`·`/next`·`/finish`의 body에
+    `client_event_id`를 받지 않는다** --- 셋 다 서버 row에 대응하는 자연키가
+    있고, body를 늘리면 client가 endpoint마다 UUID를 만들어 재시도 간
+    보존해야 한다. `session_extended`만 client 발급이다(한 세션에서 여러
+    번 정당하게 일어나고 재시도와 두 번째 연장을 구분할 자연키가 없다).
+    `/next` 재시도의 presentation 중복 생성은 client key가 아니라 새
+    **`열린 presentation 불변식`**으로 막는다: 한 세션에 `completed_at IS
+    NULL`인 presentation은 최대 1개이고 `/next`는 그것을 그대로 반환한다.
+    따라서 `/next`가 직전 문장을 암묵적으로 완료시키지 않고, client가
+    `/complete`를 명시적으로 호출한다. `/finish`는 열린 presentation을
+    완료 처리한다. 컬럼 이름은 `client_event_id`로 유지한다(이름 변경의
+    이득이 migration 비용보다 작다).
+-   **[G-1] 세션 내 probe pacing** (`06_LEARNING_ENGINE.md`의
+    `Probe Pacing`이 canonical): `14_CONFIGURATION.md`가 세션당 개수만
+    정하고 "언제 꽂는가"가 없어, 상한만 구현하면 초반에 probe가 연속으로
+    나와 `03_UI_UX_SPEC.md`("probe는 세션의 중심 UI가 되어서는 안 된다")와
+    충돌했다. `/next`가 probe를 싣는 조건을 결정론적 3항으로 확정했다:
+    max 미만 + `probe_min_gap_presentations` 간격(세션 첫 probe도 gap만큼
+    뒤로 민다) + 대상 우선순위·cooldown을 만족하는 후보 존재.
+    **`mastery_probe_target_per_session_min`은 강제하지 않는다.** 관측
+    목표이며, 채우려고 cooldown이나 대상 우선순위를 깨면 가치 없는
+    evidence를 만들고 `Skip` 규칙과 충돌하며, 간격을 깨면 UI 제약을
+    어긴다. probe가 너무 드물면 min을 올리는 것이 아니라
+    `probe_min_gap_presentations`를 줄인다. 연속 skip 시 세션 probe budget
+    축소는 **MVP에서 구현하지 않는다**(item 단위 `probe_skip_cooldown_days`가
+    이미 담당한다). 새 config 키: `learning.probe_min_gap_presentations: 3`.
+-   **[G-4] `probe_id`의 발급·저장 위치** (`05_API_SPEC.md`의
+    `Mastery Probe`가 canonical, `04_DB_SPEC.md`의
+    `probe 상태를 어디에 두는가`, ADR-009): `probe_id`는 해당 probe를 낸
+    **`mastery_probe_shown` learning_event의 정수 id**다. **전용
+    `mastery_probes` 테이블을 만들지 않는다** --- probe가 필요로 하는
+    *상태*는 이미 `user_item_learning_state.last_probe_at`과
+    `probe_skip_count`에 전용 컬럼으로 있고, event log에서 읽는 것은
+    "이 probe_id가 유효한가, 어떤 item인가"라는 조회이지 상태 저장이
+    아니다. 새 테이블은 모든 컬럼이 파생값이고 그 unique 제약도 P-2의
+    UUIDv5 자연키와 같은 내용을 두 번 표현한다. `probe_id =
+    study_presentation_id` 안은 body의 `probe_id`를 중복 정보로 만들면서
+    event 조회를 그대로 남기므로 기각했다. `probe-response`는 `probe_id`로
+    event를 조회해 `event_type` / `user_id` / `study_presentation_id`를
+    검증하고(어긋나면 400), 응답 event의 `learning_item_id`는 **client가
+    보낸 값이 아니라 조회한 probe event의 값**을 쓴다. 같은 `probe_id`에
+    응답은 최대 1건이다. P-2의 server 발급 덕분에 같은 presentation을 다시
+    받아도 `probe_id`가 같은 값으로 유지된다.
+-   **[E-1] 무신호 판정 기준** (`07_SRS_SPEC.md`의 `No-signal review`가
+    canonical): v0.2의 "item을 누르지 않고 / self-report도 하지 않고 /
+    probe도 없고"라는 서술을 문자 그대로 읽으면 **click 한 번이나 probe
+    제시만으로 무신호가 아니게 되어** `deferred_until`이 설정되지 않고 그
+    due item이 무한히 재선택된다. 이는 `13_ACCEPTANCE_CRITERIA.md`의
+    "무신호 review가 무한 due loop를 만들지 않음"과 Scenario B를 어긴다.
+    기준을 **"FSRS rating을 만드는 explicit evidence가 있는가"**로
+    고쳤다. 신호는 `self_report_{known,uncertain,unknown}`과
+    `mastery_probe_{known,uncertain,unknown}` **6개뿐**이며,
+    `item_clicked` / `explanation_revealed` / `translation_revealed` /
+    `mastery_probe_shown` / `mastery_probe_skipped` / `sentence_viewed` /
+    `sentence_completed`는 **있어도 무신호**다. 근거: 무신호 처리의 목적은
+    (1) 증거 없는 review가 FSRS를 오염시키지 않게 하면서 (2) 무한 due
+    loop를 막는 것인데, click과 skip은 `02_LEARNING_POLICY.md`에서 이미
+    mastery evidence도 FSRS grade도 아니므로 목적 1에 기여하지 않는다.
+    목적 2를 포기할 이유가 없다. 판정 단위를 **(presentation, target
+    item) 쌍**으로 명시했고(target 2개 중 하나만 self-report를 받는 경우),
+    처리는 `presentation_role = review`일 때만
+    `review_states.deferred_until` 설정 +
+    `user_item_learning_state.passive_no_signal_count` 증가로 고정했다.
+    `02_LEARNING_POLICY.md`의 중복 서술은 canonical 참조로 교체했다.
+
+새 config 키 2개(`learning.probe_min_gap_presentations: 3`,
+`learning.candidate_materialization_batch_size: 20`)를
+`14_CONFIGURATION.md`에 추가했다. 둘 다 학습 정책 tuning 값이며 본문과
+acceptance에는 숫자를 박지 않았다. **새 테이블은 0개**이고,
+`user_sentence_candidates`에 materialization idempotency를 위한 partial
+unique index 하나만 추가했다.
+
+교차 참조만 추가하거나 중복 서술을 canonical 참조로 바꾼 문서:
+`02_LEARNING_POLICY.md`, `09_BACKGROUND_JOBS.md`, `12_TEST_PLAN.md`(unit
+4건 + integration 5건 + Core E2E 1단계 보강), `13_ACCEPTANCE_CRITERIA.md`
+(수치 없는 기준 4줄).
+
+#### Wave 2 구현 보고 반영 (같은 후속 보완)
+
+Wave 2 구현 중 보고된 명세 모순 2건과 공백 4건을 확정했다. 새 버전 번호를
+만들지 않는다. **새 테이블·새 컬럼·새 config 키는 없다.**
+
+-   **[C-1] Candidate Materialization의 실행 위치**
+    (`06_LEARNING_ENGINE.md`의 `Pool Fallback`이 canonical):
+    06은 "0단계", `05_API_SPEC.md`는 "3단계(job enqueue) 직전"이라고 적혀
+    서로 다르게 읽혔다. **0단계로 확정**하고, 0단계 실행 뒤 같은 deficit
+    순서로 category를 다시 훑는 1단계를 명시했다. 다른 category로 먼저
+    내려가면 아직 만들 수 있던 문장을 두고 Category Mix가 틀어진다.
+    0단계는 **요청당 1회**이며 1단계가 비어도 되돌아가지 않는다. 05와
+    `실행 시점과 대상` 표, ADR-010의 서술을 이 canonical 참조로 맞췄다.
+-   **[C-2] reinforcement 판정의 exposure 소스**
+    (`07_SRS_SPEC.md`의 `Meaningful Exposure 정의`가 canonical):
+    06이 denormalized cache인 `review_states.meaningful_exposure_count`를
+    읽는다고 적어 07의 "canonical source는 `item_exposures`"와 충돌했다.
+    06의 reinforcement 조건을 **`invalidated_at IS NULL`인
+    `item_exposures` 건수**로 고쳤다. 07에는 cache를 읽어도 되는 조건을
+    명시했다 --- **결과가 candidate 선택이나 mastery/FSRS 상태에 영향을 주지
+    않는 표시·집계뿐**이다. content flag가 `invalidated_at`을 설정하는
+    시점과 cache 재계산 시점이 어긋날 수 있기 때문이다.
+-   **[G-5] probe 대상 우선순위가 도달 불가능했다**
+    (`02_LEARNING_POLICY.md`, ADR-011): `user_mastery` 행은 explicit
+    evidence 기록 시에만 만들어지고 그 시점에 `evidence_count = 1`,
+    `comprehension_mastery`가 non-NULL이 되므로, v0.2의 2번("passive
+    exposure가 반복됐지만 explicit evidence가 없는 item")은 항상 1번의
+    부분집합이었다. 목록을 **2단**으로 확정하고 2번을 **1번 내부의 정렬
+    기준**(`passive_no_signal_count >= passive_exposures_before_probe`인
+    item 먼저)으로 내렸다. 행 생성 시점을 첫 exposure로 앞당기는 안은
+    스키마 의미를 바꾸고도 **같은 순서**를 낳으므로 기각했다. `uncertain`은
+    새 임계값 없이 기존 세 observation 값 중 `애매함` 최근접으로 정의했다.
+-   **[G-6] "서로 충돌하는 evidence"의 정의 부재**
+    (`02_LEARNING_POLICY.md`, ADR-011): **MVP에서 순위로 두지 않는다.**
+    EMA 갱신 아래에서 known/unknown이 섞인 item의 mastery는 가운데로
+    모이므로 uncertain 순위가 이미 잡는다. 정의를 지금 만들면
+    `learning_events` 역추적 규칙이 그대로 새 정책이 된다.
+-   **[G-7] `max_new_items_per_sentence` 초과 처리**
+    (`06_LEARNING_ENGINE.md`의 `role별 규칙`): "초과하면 그 문장은
+    건너뛴다"를 **"상한까지만 붙이고 초과 item은 그 문장에 싣지 않는다.
+    문장 자체를 버리지 않는다"**로 고쳤다. 문장을 버리면 이미 만든
+    candidate를 되돌려야 하고 item 하나 때문에 멀쩡한 문장이 사라진다.
+    실리지 못한 item은 다른 문장이나 다음 실행에서 자기 candidate를 얻는다.
+    `08_LLM_SPEC.md`의 validation 10번은 **생성 시점**, 이 규칙은
+    **materialization 시점**임을 명시했다.
+-   **[G-8] anchor 문장을 더는 쓸 수 없을 때**
+    (`06_LEARNING_ENGINE.md`의 `anchor 문장을 더는 쓸 수 없을 때`):
+    원인에 따라 갈랐다. **`quarantined`면 `anchor_sentence_id`를 NULL로
+    되돌리고 재지정**하고, 그 밖의 사유로 Ready invariant를 만족하지
+    않으면 재지정 없이 그 stage를 건너뛴다. 둘을 같게 다루면 quarantine된
+    anchor를 가진 item이 `anchor`/`near_original`에서 영영 candidate를 얻지
+    못해 학습 대상에서 조용히 빠진다. quarantine 시점에 그 문장의
+    `item_exposures`는 이미 `invalidated_at`으로 무효화되므로
+    (`10_ERROR_HANDLING.md`) 보존할 "최초 학습 문맥" 기록 자체가 없다.
+
+구현 결정 중 명세에 남긴 것 2건:
+
+-   **deficit 비교 전 반올림**(`06_LEARNING_ENGINE.md`의 `Category Mix
+    계산`): `0.7*12-8`과 `0.2*12-2`가 IEEE 754에서 1e-16 다르므로,
+    반올림하지 않으면 명세가 정한 tie-break(`review → new → exploration`)가
+    사실상 실행되지 않고 부동소수점 오차가 순서를 정한다. 자릿수는 구현
+    상수이며 학습 정책 값이 아니므로 config에 두지 않는다. (기본 비율과
+    15문장 세션에서는 review 11 / new 3 / exploration 1로 수렴한다. 동률이
+    전부 review로 가는 것이 명세의 귀결이며 acceptance에는 숫자를 박지
+    않는다.)
+-   **probe 선택은 idempotent하지 않다**(`06_LEARNING_ENGINE.md`의
+    `Probe Pacing`): probe를 실으면 그 event가 세션에 남아 다음 호출의
+    pacing과 제외 집합이 달라진다. `열린 presentation 불변식`으로 같은
+    presentation을 다시 반환하는 경로에서는 다시 고르지 않고 `uuid5`
+    자연키로 기존 event를 조회해 같은 `probe_id`를 반환한다.
+
+새 ADR: `docs/decisions/ADR-011-probe-target-priority.md`.

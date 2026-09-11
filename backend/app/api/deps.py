@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.clock import utc_now
 from app.db import new_session
 from app.models.user import User
 from app.services.auth import SESSION_COOKIE_NAME, resolve_session
@@ -15,6 +17,19 @@ from app.settings import get_settings
 
 # CORS preflight(OPTIONS)와 조회(GET/HEAD)는 상태를 바꾸지 않는다.
 _STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def get_now() -> datetime:
+    """이 요청이 보는 시각. 요청당 **한 번**만 읽힌다 (ADR-007).
+
+    FastAPI는 같은 요청 안에서 같은 dependency 호출을 캐시하므로, handler와 그
+    아래의 어떤 dependency가 `Depends(get_now)`를 몇 번 선언하든 값은 하나다.
+    이후로는 `now: datetime` **값**으로만 전달한다.
+
+    테스트는 `app.dependency_overrides[get_now]`로 시각을 옮긴다. freezegun이나
+    `datetime` monkeypatch를 쓰지 않는다.
+    """
+    return utc_now()
 
 
 def get_db() -> Iterator[Session]:
@@ -41,6 +56,7 @@ def require_trusted_origin(request: Request) -> None:
 
 def get_current_user(
     db: Annotated[Session, Depends(get_db)],
+    now: Annotated[datetime, Depends(get_now)],
     session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE_NAME)] = None,
 ) -> User:
     """유효한 auth session cookie가 없으면 401.
@@ -51,7 +67,7 @@ def get_current_user(
     """
     if session_token is None:
         raise _not_authenticated()
-    user = resolve_session(db, session_token)
+    user = resolve_session(db, session_token, now=now)
     if user is None:
         raise _not_authenticated()
     # last_used_at 갱신은 이 요청의 성패와 무관한 기록이므로 여기서 확정한다.
