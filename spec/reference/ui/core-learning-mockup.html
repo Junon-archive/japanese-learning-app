@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nihongo Context — Core Learning Mockup</title>
+<style>
+  :root{
+    --bg:#f4f6f8;
+    --panel:#ffffff;
+    --line:#e6e9ee;
+    --text:#17202a;
+    --muted:#697586;
+    --accent:#4f6df5;
+    --accent-soft:#eef1ff;
+    --soft:#f8fafc;
+    --warn:#fff6df;
+    --success:#eef8f2;
+    --shadow:0 18px 50px rgba(25,34,50,.10);
+    --radius:22px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard","Noto Sans KR",Arial,sans-serif;
+    background:linear-gradient(180deg,#eef2f6 0%,#f8fafc 100%);
+    color:var(--text);
+  }
+  .shell{
+    min-height:100vh;
+    display:grid;
+    grid-template-columns:270px minmax(0,1fr);
+  }
+  .sidebar{
+    border-right:1px solid var(--line);
+    background:rgba(255,255,255,.86);
+    backdrop-filter:blur(18px);
+    padding:26px 20px;
+    position:sticky;
+    top:0;
+    height:100vh;
+  }
+  .brand{
+    display:flex;align-items:center;gap:12px;
+    margin-bottom:34px;
+  }
+  .logo{
+    width:42px;height:42px;border-radius:14px;
+    background:linear-gradient(135deg,#4f6df5,#8398ff);
+    color:#fff;display:grid;place-items:center;
+    font-weight:800;font-size:20px;
+    box-shadow:0 8px 20px rgba(79,109,245,.25);
+  }
+  .brand h1{font-size:17px;margin:0}
+  .brand p{font-size:12px;color:var(--muted);margin:3px 0 0}
+  .nav{display:grid;gap:8px}
+  .nav button{
+    border:0;background:transparent;text-align:left;
+    padding:12px 14px;border-radius:12px;
+    color:var(--muted);font-size:14px;cursor:pointer;
+  }
+  .nav button.active{background:var(--accent-soft);color:var(--accent);font-weight:700}
+  .side-note{
+    position:absolute;bottom:22px;left:20px;right:20px;
+    padding:14px;border:1px solid var(--line);border-radius:14px;
+    background:#fff;font-size:12px;color:var(--muted);line-height:1.55;
+  }
+  .main{padding:28px 34px 50px}
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;
+    max-width:980px;margin:0 auto 24px;
+  }
+  .mode{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:8px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);
+    font-size:12px;color:var(--muted)
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:#35b36f}
+  .top-actions{display:flex;gap:8px}
+  .top-actions button{
+    border:1px solid var(--line);background:#fff;color:var(--text);
+    padding:9px 12px;border-radius:11px;font-size:12px;cursor:pointer
+  }
+  .workspace{
+    max-width:980px;margin:0 auto;
+    display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;
+  }
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  .study{padding:28px}
+  .session-head{
+    display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:26px
+  }
+  .eyebrow{font-size:12px;color:var(--accent);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+  .study h2{margin:5px 0 4px;font-size:22px}
+  .sub{color:var(--muted);font-size:13px}
+  .progress-wrap{min-width:130px;text-align:right}
+  .progress-wrap strong{font-size:13px}
+  .bar{height:7px;background:#edf0f4;border-radius:99px;margin-top:8px;overflow:hidden}
+  .bar span{display:block;height:100%;width:42%;background:var(--accent);border-radius:99px}
+  .sentence-box{
+    min-height:285px;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:34px 26px;border-radius:18px;
+    background:linear-gradient(180deg,#fbfcfe 0%,#f7f9fc 100%);
+    border:1px solid #edf0f4;
+  }
+  .sentence{
+    font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;
+    font-size:29px;line-height:1.72;letter-spacing:.01em;
+  }
+  .token{
+    cursor:pointer;border-radius:8px;padding:2px 4px;margin:-2px -4px;
+    transition:.16s;
+    border-bottom:2px solid rgba(79,109,245,.22);
+  }
+  .token:hover,.token.selected{background:var(--accent-soft);border-bottom-color:var(--accent)}
+  .helper{
+    display:flex;align-items:center;gap:8px;margin-top:24px;color:var(--muted);font-size:12px
+  }
+  .helper kbd{
+    border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 6px;font-family:inherit
+  }
+  .translation{
+    display:none;margin-top:18px;padding:14px 16px;border-radius:13px;
+    background:#fff;border:1px dashed #cfd6e4;color:#465366;font-size:14px;line-height:1.6;
+  }
+  .translation.show{display:block}
+  .actions{
+    display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:10px
+  }
+  .actions .left{display:flex;gap:8px}
+  .btn{
+    border:1px solid var(--line);background:#fff;color:var(--text);
+    border-radius:12px;padding:11px 14px;cursor:pointer;font-size:13px
+  }
+  .btn.primary{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:700}
+  .btn.ghost{background:transparent}
+  .right-col{display:grid;gap:16px;align-content:start}
+  .panel{padding:20px}
+  .panel h3{font-size:14px;margin:0 0 14px}
+  .explain-empty{color:var(--muted);font-size:13px;line-height:1.7}
+  .explain{display:none}
+  .explain.show{display:block}
+  .item-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .jp-word{font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;font-size:24px;font-weight:700}
+  .reading{color:var(--muted);font-size:12px;margin-top:2px}
+  .tag{font-size:10px;padding:5px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700}
+  .meaning{font-size:16px;font-weight:700;margin-top:16px}
+  .explain p{font-size:13px;color:#4f5d6d;line-height:1.65;margin:8px 0}
+  .example{
+    margin-top:12px;padding:11px 12px;background:var(--soft);border-radius:11px;
+    font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif;font-size:13px
+  }
+  .feedback{display:flex;gap:7px;margin-top:14px}
+  .feedback button{
+    flex:1;border:1px solid var(--line);background:#fff;padding:9px 6px;border-radius:10px;
+    font-size:11px;cursor:pointer
+  }
+  .feedback button:hover{background:var(--accent-soft);color:var(--accent)}
+  .probe{
+    border:1px solid #f0dfac;background:var(--warn);border-radius:16px;padding:16px;
+  }
+  .probe strong{font-size:13px}
+  .probe p{font-size:12px;line-height:1.55;color:#6e6041;margin:7px 0 12px}
+  .probe-options{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .probe-options button{
+    border:1px solid #ead79a;background:#fff;border-radius:9px;padding:8px;font-size:11px;cursor:pointer
+  }
+  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .metric{
+    border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:11px
+  }
+  .metric b{display:block;font-size:17px;margin-bottom:2px}
+  .metric span{font-size:10px;color:var(--muted)}
+  .footer-note{
+    max-width:980px;margin:22px auto 0;color:var(--muted);font-size:12px;line-height:1.7
+  }
+  .mobile-tab{display:none}
+  @media(max-width:860px){
+    .shell{display:block}
+    .sidebar{display:none}
+    .main{padding:16px 14px 86px}
+    .workspace{grid-template-columns:1fr}
+    .right-col{grid-template-columns:1fr}
+    .sentence{font-size:25px}
+    .topbar{margin-bottom:14px}
+    .mobile-tab{
+      display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);
+      border-top:1px solid var(--line);padding:10px 14px;justify-content:space-around;z-index:20
+    }
+    .mobile-tab button{border:0;background:none;color:var(--muted);font-size:11px}
+    .mobile-tab .active{color:var(--accent);font-weight:700}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">日</div>
+      <div>
+        <h1>Nihongo Context</h1>
+        <p>Context-first Japanese learning</p>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="active">오늘의 학습</button>
+      <button>학습 기록</button>
+      <button>표현 보관함</button>
+      <button>설정</button>
+    </div>
+    <div class="side-note">
+      <b>Portfolio Demo</b><br/>
+      공개 방문자는 고정된 데모 데이터만 사용합니다. 실제 학습 기록과 LLM 호출은 로그인한 개인 사용자에게만 허용합니다.
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="mode"><span class="dot"></span> Private Learning Mode</div>
+      <div class="top-actions">
+        <button>Demo 전환</button>
+        <button>⚙︎</button>
+      </div>
+    </div>
+
+    <section class="workspace">
+      <div class="card study">
+        <div class="session-head">
+          <div>
+            <div class="eyebrow">Today · 12 min</div>
+            <h2>오늘의 일본어</h2>
+            <div class="sub">복습 중심 · 새 표현은 문장당 1–2개</div>
+          </div>
+          <div class="progress-wrap">
+            <strong>약 5분 진행</strong>
+            <div class="bar"><span></span></div>
+          </div>
+        </div>
+
+        <div class="sentence-box">
+          <div class="sentence">
+            今日は研究室に行くつもりだったけど、<br/>
+            <span class="token" data-key="nantonaku">なんとなく</span>
+            <span class="token" data-key="kinoranai">気が乗らなくて</span>
+            家にいた。
+          </div>
+
+          <div class="helper">
+            <span>모르는 표현을 눌러보세요.</span>
+            <kbd>Tap</kbd>
+            <span>설명은 즉시 표시됩니다.</span>
+          </div>
+
+          <div id="translation" class="translation">
+            오늘은 연구실에 갈 생각이었는데, 왠지 내키지 않아서 집에 있었다.
+          </div>
+        </div>
+
+        <div class="actions">
+          <div class="left">
+            <button class="btn" id="translateBtn">문장 뜻 보기</button>
+            <button class="btn ghost">🔊 듣기</button>
+          </div>
+          <button class="btn primary">다음 문장 →</button>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="card panel">
+          <h3>표현 설명</h3>
+          <div id="empty" class="explain-empty">
+            문장 안의 표현을 누르면 읽기, 핵심 의미, 현재 문맥에서의 뜻과 짧은 예문이 표시됩니다.
+          </div>
+
+          <div id="nantonaku" class="explain">
+            <div class="item-head">
+              <div>
+                <div class="jp-word">なんとなく</div>
+                <div class="reading">nantonaku</div>
+              </div>
+              <span class="tag">expression</span>
+            </div>
+            <div class="meaning">왠지 / 특별한 이유 없이</div>
+            <p>뚜렷한 이유를 설명하기 어렵지만 어떤 느낌이나 상태가 있을 때 자연스럽게 씁니다.</p>
+            <p><b>이 문장에서는:</b> “특별한 이유는 없지만 왠지”라는 느낌입니다.</p>
+            <div class="example">なんとなく今日は家にいたい。</div>
+            <div class="feedback">
+              <button>알고 있었음</button>
+              <button>애매함</button>
+              <button>몰랐음</button>
+            </div>
+          </div>
+
+          <div id="kinoranai" class="explain">
+            <div class="item-head">
+              <div>
+                <div class="jp-word">気が乗らない</div>
+                <div class="reading">き が のらない</div>
+              </div>
+              <span class="tag">expression</span>
+            </div>
+            <div class="meaning">내키지 않다 / 할 마음이 나지 않다</div>
+            <p>해야 할 이유는 있어도 기분이나 의욕이 따라주지 않을 때 자주 사용하는 일상 표현입니다.</p>
+            <p><b>이 문장에서는:</b> 연구실에 갈 생각이었지만 마음이 내키지 않았다는 뜻입니다.</p>
+            <div class="example">今日はあまり出かける気が乗らない。</div>
+            <div class="feedback">
+              <button>알고 있었음</button>
+              <button>애매함</button>
+              <button>몰랐음</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="probe">
+          <strong>가끔 앱이 먼저 확인합니다</strong>
+          <p>클릭하지 않았다고 해서 “안다”고 판단하지 않습니다. 일부 표현은 짧게 확인해 실제 이해도를 추정합니다.</p>
+          <div class="probe-options">
+            <button>뜻을 안다</button>
+            <button>조금 애매함</button>
+            <button>잘 모르겠다</button>
+            <button>건너뛰기</button>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <h3>오늘의 상태</h3>
+          <div class="summary-grid">
+            <div class="metric"><b>70%</b><span>Review</span></div>
+            <div class="metric"><b>20%</b><span>New</span></div>
+            <div class="metric"><b>10%</b><span>Explore</span></div>
+            <div class="metric"><b>5+</b><span>Minimum exposure</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-note">
+      이 목업은 시각 디자인 확정본이 아니라 <b>UI/UX reference</b>입니다. 실제 명세에서는 상태 전이, API, DB, SRS, mastery 계산과 디자인 토큰을 별도로 정의합니다.
+    </div>
+  </main>
+</div>
+
+<div class="mobile-tab">
+  <button class="active">오늘 학습</button>
+  <button>기록</button>
+  <button>표현</button>
+  <button>설정</button>
+</div>
+
+<script>
+  const tokens = document.querySelectorAll('.token');
+  tokens.forEach(token => {
+    token.addEventListener('click', () => {
+      tokens.forEach(t => t.classList.remove('selected'));
+      token.classList.add('selected');
+      document.getElementById('empty').style.display = 'none';
+      document.querySelectorAll('.explain').forEach(el => el.classList.remove('show'));
+      document.getElementById(token.dataset.key).classList.add('show');
+    });
+  });
+
+  const translateBtn = document.getElementById('translateBtn');
+  const translation = document.getElementById('translation');
+  translateBtn.addEventListener('click', () => {
+    translation.classList.toggle('show');
+    translateBtn.textContent = translation.classList.contains('show') ? '문장 뜻 숨기기' : '문장 뜻 보기';
+  });
+</script>
+</body>
+</html>
