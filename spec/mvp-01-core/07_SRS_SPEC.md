@@ -25,6 +25,26 @@ probe correct   -> Good
 
 `Easy`는 MVP UI에서 사용하지 않는다.
 
+## FSRS 라이브러리 바인딩
+
+MVP는 PyPI distribution `fsrs` 6.x를 사용한다
+(`docs/decisions/ADR-003-fsrs-library-binding.md`).
+
+``` text
+Rating: Again = 1 | Hard = 2 | Good = 3 | Easy = 4
+```
+
+MVP는 `1~3`만 기록한다. `Card` 필드와 `review_states` 컬럼의 대응은
+`04_DB_SPEC.md`를 따른다.
+
+fuzzing은 MVP에서 끈다(`Scheduler(enable_fuzzing = False)`). fuzzing은
+대규모 덱의 due 쏠림을 흩는 ± jitter이며 사용자 1명 규모에서는 이득이
+없고 테스트 재현성만 깎는다. 이것은 **interval cap이 아니다.** FSRS가
+계산한 interval을 jitter 없이 그대로 쓰는 것이므로 아래 `Minimum 5
+Exposures와 FSRS의 분리`의 "interval을 cap하지 않는다"와 충돌하지 않는다.
+값의 canonical 정의는 `14_CONFIGURATION.md`의 `srs.fsrs_enable_fuzzing`에
+둔다.
+
 ## No-signal review
 
 사용자가 review sentence를 보고
@@ -41,8 +61,8 @@ no-click != Good
 no-click != Easy
 ```
 
-FSRS memory state(stability/difficulty/reps/lapses)는 **변경하지
-않는다.** 대신 `review_states.deferred_until`을 설정해 같은 due item이
+FSRS memory state(`stability` / `difficulty` / `state` / `step`)도,
+애플리케이션 카운터(`reps` / `lapses`)도 **변경하지 않는다.** 대신 `review_states.deferred_until`을 설정해 같은 due item이
 같은 세션에서 계속 반복되지 않게 한다.
 
 ``` text

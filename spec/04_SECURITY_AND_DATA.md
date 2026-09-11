@@ -37,6 +37,27 @@ Private DB access  = structurally impossible
 -   OpenAI key와 DB credential은 server-side secret.
 -   PWA bundle에 secret 금지.
 -   FastAPI는 Tunnel로 공개, PostgreSQL은 외부 직접 노출 금지.
+-   FastAPI 자동 문서 경로(`/docs`, `/redoc`, `/openapi.json`,
+    `/docs/oauth2-redirect`)는 **기본 비활성**이다. Tunnel 너머 누구나
+    private API 표면 전체(경로, 파라미터명, enum, 스키마)를 익명으로
+    가져갈 수 있게 두지 않는다.
+
+### 배포 환경 구분
+
+환경 구분은 `APP_ENV` 환경변수로 한다. 학습 정책 값이 아니라 **배포
+설정**이므로 `14_CONFIGURATION.md`의 YAML이 아니라 `.env` 계열에 둔다.
+
+``` text
+APP_ENV = local | development | production
+기본값  = local
+```
+
+-   자동 문서 경로는 `APP_ENV = development`일 때만 연다. 값이 다르거나
+    변수가 없으면 닫는다(**fail-closed**).
+-   `APP_ENV`는 **배포 표면 제어에만** 쓴다. 학습 기능·정책·데이터 동작을
+    환경에 따라 분기시키지 않는다.
+-   인증 없이 열리는 API endpoint 목록은
+    `spec/mvp-01-core/05_API_SPEC.md`의 공통 규칙이 canonical이다.
 
 ## Authentication (MVP 확정)
 

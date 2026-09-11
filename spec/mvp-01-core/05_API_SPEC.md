@@ -18,6 +18,9 @@ audio 관련 endpoint와 event는 MVP에 없다(`00_SCOPE.md`).
 ## 공통 규칙
 
 -   모든 학습 API는 인증 필요. 미인증 요청은 401.
+-   인증 없이 접근 가능한 endpoint는 `GET /api/health` **하나뿐**이다.
+    FastAPI 자동 문서 경로(`/docs`, `/redoc`, `/openapi.json`)의 노출
+    규칙과 `APP_ENV`는 `spec/04_SECURITY_AND_DATA.md`를 따른다.
 -   요청/응답의 timestamp는 UTC ISO-8601.
 -   상태 변경 event POST는 client가 생성한 `client_event_id`(UUID)를
     포함한다. 서버는 `(user_id, client_event_id)` unique로 중복 저장을
@@ -144,6 +147,48 @@ GET /api/history/items           기본 learned/reviewed item summary
 ``` text
 GET /api/health                  FastAPI/DB/worker heartbeat 상태
 ```
+
+인증 없이 호출할 수 있다. 대신 **사용자 데이터와 설정값을 노출하지
+않는다.**
+
+health는 의존성 상태와 무관하게 **항상 HTTP 200**을 반환하고, 판정은
+body의 `status`로 표현한다. 모니터링이 "앱이 응답은 한다"와 "의존성이
+성하다"를 구분할 수 있어야 하기 때문이다.
+
+``` json
+{
+  "status": "ok",
+  "checked_at": "2026-09-11T09:00:00Z",
+  "version": "0.1.0",
+  "components": {
+    "api": {"status": "ok"},
+    "database": {"status": "ok", "latency_ms": 3},
+    "worker": {"status": "unknown", "last_heartbeat_at": null}
+  }
+}
+```
+
+``` text
+status                      ok | degraded
+checked_at                  UTC ISO-8601
+version                     애플리케이션 버전 문자열
+components.api.status       ok
+components.database.status  ok | down | unknown     + latency_ms nullable
+components.worker.status    unknown | ok | stale    + last_heartbeat_at nullable
+```
+
+-   `database.unknown`은 DSN이 설정되지 않아 확인하지 않았다는 뜻이다.
+    `down`은 확인했고 실패했다는 뜻이다.
+-   `status = degraded`는 component 중 하나 이상이 `down` 또는
+    `stale`일 때다. `unknown`은 그 자체로 `degraded`가 아니다.
+-   **DB 오류 원문, DSN, credential, host/port를 응답에 넣지 않는다**
+    (`spec/04_SECURITY_AND_DATA.md`). 상세는 서버 로그로만 남긴다.
+-   `version`에 빌드 환경 변수나 설정값을 덧붙이지 않는다.
+
+**미결:** worker heartbeat를 어디에 저장하는지는 `04_DB_SPEC.md`에 아직
+없다. 저장 방식은 **Wave 3(job queue 구현) 시점에 확정한다.** 그 전까지
+`components.worker.status`는 `unknown`을 반환하며, 이를 위해 테이블이나
+컬럼을 미리 만들지 않는다.
 
 ## API Principles
 

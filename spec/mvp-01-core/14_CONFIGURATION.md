@@ -31,6 +31,17 @@ learning:
   backlog_new_ratio: 0.05
   backlog_exploration_ratio: 0.10
 
+  # review 슬롯 내부 reason 선택 (06_LEARNING_ENGINE.md)
+  reinforcement_min_share_of_review: 0.2
+
+  # exploration 대상 선정 (06_LEARNING_ENGINE.md)
+  exploration_recent_days: 14
+
+srs:
+  # FSRS 결정론 (ADR-003, 07_SRS_SPEC.md)
+  # 대규모 덱용 jitter이므로 MVP에서는 끄고 테스트 재현성을 택한다.
+  fsrs_enable_fuzzing: false
+
 session:
   # 23_ 결정
   study_session_idle_timeout_minutes: 30
@@ -68,3 +79,15 @@ llm:
 
 비율 키(`review_ratio`, `new_ratio`, `exploration_ratio`)의 합은 1.0이어야
 하며 config 로드 시 검증한다.
+
+backlog 모드의 비율 키(`backlog_review_ratio`, `backlog_new_ratio`,
+`backlog_exploration_ratio`)도 **동일하게 합 1.0을 검증한다.** backlog
+모드는 세 ratio를 이 세트로 통째로 교체하며 같은 deficit 계산에 그대로
+들어가기 때문이다(`06_LEARNING_ENGINE.md`의 `Backlog`).
+
+`reinforcement_min_share_of_review`는 category 비율이 아니라 review 슬롯
+**내부** 지분이므로 어느 합 검증에도 포함되지 않는다. 허용 범위는
+`[0.0, 1.0]`이며 0.0이면 최소 지분 규칙이 꺼진다.
+
+`srs`, `session`, `user`, `content`, `jobs`, `llm` 섹션의 키는 비율 합
+검증 대상이 아니다.

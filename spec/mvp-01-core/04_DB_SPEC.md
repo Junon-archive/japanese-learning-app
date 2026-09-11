@@ -160,21 +160,39 @@ Unique: `(user_id, learning_item_id)`.
 
 FSRS scheduling 상태를 저장한다. mastery score와 **별도 테이블**이다.
 
+컬럼은 실제 사용하는 라이브러리(`fsrs` 6.x)의 `Card`에 1:1로 대응시킨다
+(`docs/decisions/ADR-003-fsrs-library-binding.md`).
+
 -   user_id
 -   learning_item_id
--   stability
--   difficulty
+-   stability nullable (`Card.stability`)
+-   difficulty nullable (`Card.difficulty`)
+-   state (`Card.state`. fsrs 6 열거값 `1 = Learning | 2 = Review |
+    3 = Relearning`)
+-   step nullable int (`Card.step`. learning/relearning step index이며
+    이것 없이는 Card를 복원할 수 없다. `state = Review`이면 NULL)
+-   last_review_at nullable (`Card.last_review`에 1:1 대응)
+-   next_review_at NOT NULL (`Card.due`에 1:1 대응)
 -   reps
 -   lapses
--   state (FSRS 라이브러리의 card state)
--   last_review_at nullable
--   scheduled_days
--   next_review_at
 -   fsrs_params_version (파라미터 변경 시 재현용)
 -   deferred_until nullable (무신호 passive review 후 단기 재노출 방지.
     FSRS memory state와 무관)
 -   meaningful_exposure_count (denormalized cache. **canonical source는
     `item_exposures`다**)
+
+스케줄은 **절대시각(`next_review_at`)으로만 저장한다.** fsrs 6의 스케줄은
+`Card.due`이고 interval(일수)은 `due - last_review`의 파생값이므로
+`scheduled_days` 같은 컬럼을 중복 저장하지 않는다.
+
+`reps`와 `lapses`는 FSRS가 돌려주는 값이 아니라 **애플리케이션이 직접
+유지하는 카운터**다. review를 기록할 때 `reps`를 1 증가시키고 rating이
+`Again`이면 `lapses`를 1 증가시킨다. 무신호 review는 rating을 만들지
+않으므로 둘 다 증가시키지 않는다(`07_SRS_SPEC.md`).
+
+`Card.card_id`는 저장하지 않는다. identity는 아래 unique 제약이며 Card는
+매 review마다 이 컬럼들에서 재구성한다. 외부 식별자를 하나 더 두면
+canonical identity가 둘이 된다.
 
 Unique: `(user_id, learning_item_id)`.
 
@@ -364,6 +382,9 @@ starter seed set**을 둔다.
 
 -   everyday high-frequency word / grammar / expression
 -   `learning_items.origin = seed`
+-   빈도 정보는 새 컬럼 없이 `learning_items.metadata_json`의
+    `frequency_rank`로 싣는다. canonical 정의와 fallback(적재 순서)은
+    `06_LEARNING_ENGINE.md`의 `Exploration Item 선정`에 있다
 -   seed 문장을 함께 두어 첫 세션의 new/exploration pool을 확보한다
 -   정확한 개수는 제품 명세에 고정하지 않는다
 

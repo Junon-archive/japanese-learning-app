@@ -48,6 +48,13 @@ provider call 성공 직후 worker가 crash하면 provider 비용이 다시 발�
 가능성을 **완전히 제거할 수 있다고 주장하지 않는다.** 대신 duplicate DB
 insertion은 unique/idempotency constraint로 막는다.
 
+## Worker Heartbeat (미결)
+
+`GET /api/health`의 `components.worker`는 worker heartbeat를 보고한다
+(`05_API_SPEC.md`). **heartbeat의 저장 위치는 아직 정해지지 않았고 Wave 3
+job queue 구현 시점에 확정한다.** 확정 전까지 health는 `unknown`을
+반환하며 전용 테이블/컬럼을 선반영하지 않는다.
+
 ## Ready Pool
 
 Learning Engine은 다음 학습에 필요한 Ready candidate가 충분한지
