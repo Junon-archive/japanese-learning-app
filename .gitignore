@@ -1,8 +1,40 @@
-.DS_Store
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
 node_modules/
-.env
-.env.local
+frontend/dist/
+frontend/.vite/
 dist/
 build/
-*.log
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Data (spec/04_SECURITY_AND_DATA.md: Git 제외)
+data/postgres/
+data/backups/
+data/pgdata/
+
+# Working notes (구현 지시서 §9)
+temp/
+
+# Local agent settings
 .claude/settings.local.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store
