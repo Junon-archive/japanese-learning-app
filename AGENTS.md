@@ -15,3 +15,11 @@
 
 `05_LEARNING_SYSTEM_VISION`, `06_LLM_ENGINEERING_PRINCIPLES`,
 `future/*`는 미래 의도를 보존하지만 MVP 구현 범위를 넓히지 않는다.
+
+**Global/Future 문서에 숫자나 아이디어가 존재한다는 이유만으로 구현하지
+않는다.** MVP 구현 source of truth는 `spec/mvp-01-core/*`다.
+
+특히 다음은 MVP 구현 대상이 아니다: audio/TTS, `ANALYZE_SENTENCE`,
+comprehensible-input 난이도 밴드, source mix 비율, Busy/Deadline 모드,
+register/sense/multidimensional difficulty, 형태소 분석기, embedding
+duplicate detector, golden eval harness, admin UI, export.
