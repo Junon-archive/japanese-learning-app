@@ -1,3 +1,16 @@
+# 앱 컨테이너가 받는 환경변수는 여기 한 곳에만 적는다. backend/worker가 같은 블록을
+# 참조하므로 "한쪽에만 전달"이라는 드리프트가 생기지 않는다.
+# `app.settings.Settings`의 모든 필드가 여기에 있어야 한다
+# (backend/tests/test_infra_compose.py가 감시한다). 값이 .env에 없으면 compose가
+# 빈 문자열을 넘기고, 정수 필드는 부팅 시 검증 오류로 즉시 드러난다 --- 조용히
+# 기본값으로 도는 것보다 낫다.
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV}
+  DATABASE_URL: ${DATABASE_URL}
+  CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+  AUTH_SESSION_TTL_DAYS: ${AUTH_SESSION_TTL_DAYS}
+  NC_CONFIG_PATH: ${NC_CONFIG_PATH}
+
 services:
   postgres:
     image: postgres:16
@@ -19,10 +32,7 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
-    environment:
-      APP_ENV: ${APP_ENV}
-      DATABASE_URL: ${DATABASE_URL}
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS}
+    environment: *app-env
     ports:
       - "127.0.0.1:8000:8000"
 
@@ -33,6 +43,4 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
-    environment:
-      APP_ENV: ${APP_ENV}
-      DATABASE_URL: ${DATABASE_URL}
+    environment: *app-env

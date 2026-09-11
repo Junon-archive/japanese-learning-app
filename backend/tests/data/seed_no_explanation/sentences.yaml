@@ -1,0 +1,10 @@
+# explanation이 없는 item. Ready invariant(불변식 6) 때문에 거부되어야 한다.
+- seed_id: sn_min_0001
+  japanese: 仕事を任せる。
+  korean_translation: 일을 맡긴다.
+  items:
+    - item_seed_id: it_min_makaseru
+      surface_form: 任せる
+      is_tappable: true
+      spans:
+        - {start_codepoint: 3, end_codepoint: 6, span_order: 0}

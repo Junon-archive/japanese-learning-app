@@ -1,0 +1,6 @@
+- seed_id: it_min_makaseru
+  type: word
+  lemma: 任せる
+  reading: まかせる
+  default_meaning: 맡기다
+  difficulty_label: beginner

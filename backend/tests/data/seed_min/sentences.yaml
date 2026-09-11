@@ -1,0 +1,47 @@
+- seed_id: sn_min_0001
+  japanese: 仕事を任せる。
+  korean_translation: 일을 맡긴다.
+  items:
+    - item_seed_id: it_min_shigoto
+      surface_form: 仕事
+      is_tappable: true
+      spans:
+        - {start_codepoint: 0, end_codepoint: 2, span_order: 0}
+      explanation:
+        reading: しごと
+        core_meaning: 일
+        meaning_in_context: 넘길 수 있는 업무 한 건.
+        nuance: 집안일에도 쓴다.
+        example_sentence: 仕事が終わった。
+        example_translation: 일이 끝났다.
+    - item_seed_id: it_min_makaseru
+      surface_form: 任せる
+      is_tappable: true
+      spans:
+        - {start_codepoint: 3, end_codepoint: 6, span_order: 0}
+      explanation:
+        reading: まかせる
+        core_meaning: 맡기다
+        meaning_in_context: 처리를 상대에게 넘긴다.
+        nuance: 판단까지 넘기는 뉘앙스다.
+        example_sentence: 私に任せて。
+        example_translation: 나에게 맡겨.
+
+# 불연속 span fixture.
+- seed_id: sn_min_0002
+  japanese: 今日は気が全然乗らない。
+  korean_translation: 오늘은 전혀 마음이 내키지 않는다.
+  items:
+    - item_seed_id: it_min_kiganoru
+      surface_form: 気が乗ら
+      is_tappable: true
+      spans:
+        - {start_codepoint: 3, end_codepoint: 5, span_order: 0}
+        - {start_codepoint: 7, end_codepoint: 9, span_order: 1}
+      explanation:
+        reading: きがのら
+        core_meaning: 마음이 내키다
+        meaning_in_context: 사이에 全然이 끼어들었다.
+        nuance: 기분의 문제다.
+        example_sentence: 気が乗らない。
+        example_translation: 마음이 내키지 않는다.

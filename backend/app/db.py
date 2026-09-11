@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.settings import get_settings
 
@@ -27,3 +28,15 @@ def get_engine() -> Engine | None:
     if not database_url:
         return None
     return _build_engine(database_url)
+
+
+# bind는 요청 시점에 준다. DATABASE_URL이 없으면 엔진 자체가 없기 때문이다.
+SessionLocal = sessionmaker(expire_on_commit=False)
+
+
+def new_session() -> Session:
+    """DATABASE_URL이 없으면 세션을 만들 수 없다."""
+    engine = get_engine()
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is not configured")
+    return SessionLocal(bind=engine)

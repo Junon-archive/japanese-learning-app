@@ -28,6 +28,8 @@ data/postgres/*
 data/backups/*
 !data/backups/.gitkeep
 data/pgdata/
+# pytest용 pgserver data 디렉터리 (ADR-002). 세션 간 재사용하므로 고정 경로다.
+data/pgtest/
 
 # Working notes (구현 지시서 §9)
 temp/

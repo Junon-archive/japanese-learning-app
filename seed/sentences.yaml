@@ -1,0 +1,131 @@
+# starter seed sentences (04_DB_SPEC.md Seed Data).
+#
+# start_codepoint / end_codepoint는 `japanese`의 Unicode code point index이며
+# 반열린 구간 [start, end)다. byte offset도 UTF-16 code unit도 아니다.
+# loader가 실제 문자열과 대조해 검증하므로 손으로 센 값이 틀리면 적재가 통째로
+# 실패한다.
+#
+# 모든 sentence item은 explanation을 가져야 한다. 설명이 없으면 tap했을 때
+# 보여줄 것이 없으므로 loader가 거부한다.
+
+- seed_id: sn_0001
+  japanese: この仕事、田中さんに任せてもいい？
+  korean_translation: 이 일, 다나카 씨에게 맡겨도 될까?
+  items:
+    - item_seed_id: it_shigoto
+      surface_form: 仕事
+      is_tappable: true
+      spans:
+        - {start_codepoint: 2, end_codepoint: 4, span_order: 0}
+      explanation:
+        reading: しごと
+        core_meaning: 일, 업무
+        meaning_in_context: 지금 화자가 처리 중인 구체적인 업무 하나를 가리킨다.
+        nuance: 직장 업무에도 집안일에도 쓰지만, 여기서는 누군가에게 넘길 수 있는 한 건의 업무다.
+        example_sentence: 今日の仕事はもう終わりました。
+        example_translation: 오늘 일은 이미 끝났습니다.
+
+    - item_seed_id: it_makaseru
+      surface_form: 任せ
+      is_tappable: true
+      spans:
+        - {start_codepoint: 10, end_codepoint: 12, span_order: 0}
+      explanation:
+        reading: まかせ
+        core_meaning: 맡기다
+        meaning_in_context: 이 업무의 처리를 다나카 씨에게 넘긴다는 뜻이다.
+        nuance: 「任せる」는 판단까지 상대에게 넘기는 쪽이고, 「頼む」는 부탁에 가깝다.
+        example_sentence: あとは私に任せてください。
+        example_translation: 나머지는 저에게 맡겨 주세요.
+
+    - item_seed_id: it_temoii
+      surface_form: てもいい
+      is_tappable: true
+      spans:
+        - {start_codepoint: 12, end_codepoint: 16, span_order: 0}
+      explanation:
+        reading: てもいい
+        core_meaning: ~해도 된다 (허가)
+        meaning_in_context: 상승 억양의 의문형이라 "그렇게 해도 괜찮겠냐"고 상대의 허락을 구한다.
+        nuance: 평서문이면 허가를 주는 쪽, 의문문이면 허가를 구하는 쪽이 된다.
+        example_sentence: ここに座ってもいいですか。
+        example_translation: 여기 앉아도 될까요?
+
+- seed_id: sn_0002
+  japanese: ちょっと手伝ってもらえますか？
+  korean_translation: 좀 도와주실 수 있나요?
+  items:
+    - item_seed_id: it_chotto
+      surface_form: ちょっと
+      is_tappable: true
+      spans:
+        - {start_codepoint: 0, end_codepoint: 4, span_order: 0}
+      explanation:
+        reading: ちょっと
+        core_meaning: 조금, 좀
+        meaning_in_context: 부탁의 부담을 낮추는 완충어로, 실제 분량이 적다는 뜻은 아니다.
+        nuance: 한국어 "좀 도와줄래?"의 "좀"과 거의 같은 자리에 쓰인다.
+        example_sentence: ちょっと待ってください。
+        example_translation: 잠깐만 기다려 주세요.
+
+    - item_seed_id: it_tetsudau
+      surface_form: 手伝って
+      is_tappable: true
+      spans:
+        - {start_codepoint: 4, end_codepoint: 8, span_order: 0}
+      explanation:
+        reading: てつだって
+        core_meaning: 돕다, 거들다
+        meaning_in_context: 화자가 하고 있는 일을 옆에서 거들어 달라는 요청이다.
+        nuance: 「助ける」가 위기에서 구한다는 뜻이라면 「手伝う」는 일손을 보탠다는 뜻이다.
+        example_sentence: 引っ越しを手伝ってくれてありがとう。
+        example_translation: 이사를 도와줘서 고마워.
+
+- seed_id: sn_0003
+  japanese: お疲れ様でした。あとは私に任せてください。
+  korean_translation: 수고하셨습니다. 나머지는 저에게 맡겨 주세요.
+  items:
+    - item_seed_id: it_otsukaresama
+      surface_form: お疲れ様でした
+      is_tappable: true
+      spans:
+        - {start_codepoint: 0, end_codepoint: 7, span_order: 0}
+      explanation:
+        reading: おつかれさまでした
+        core_meaning: 수고하셨습니다
+        meaning_in_context: 일을 끝낸 상대에게 건네는 정중한 인사다.
+        nuance: 「ご苦労様」는 윗사람이 아랫사람에게 쓰므로 상사에게는 쓰지 않는다.
+        example_sentence: 今日もお疲れ様でした。
+        example_translation: 오늘도 수고하셨습니다.
+
+    - item_seed_id: it_makaseru
+      surface_form: 任せて
+      is_tappable: true
+      spans:
+        - {start_codepoint: 13, end_codepoint: 16, span_order: 0}
+      explanation:
+        reading: まかせて
+        core_meaning: 맡기다
+        meaning_in_context: 남은 일을 화자가 떠맡겠다고 나서는 표현이다.
+        nuance: 「任せてください」는 자신감을, 「お願いします」는 부탁을 나타낸다.
+        example_sentence: この件は任せておいてください。
+        example_translation: 이 건은 맡겨 두세요.
+
+# 불연속 span 예시. 「気が乗る」가 「気が全然乗らない」로 갈라진다.
+- seed_id: sn_0004
+  japanese: 今日はなぜか気が全然乗らない。
+  korean_translation: 오늘은 왠지 전혀 마음이 내키지 않는다.
+  items:
+    - item_seed_id: it_kiganoru
+      surface_form: 気が乗ら
+      is_tappable: true
+      spans:
+        - {start_codepoint: 6, end_codepoint: 8, span_order: 0}
+        - {start_codepoint: 10, end_codepoint: 12, span_order: 1}
+      explanation:
+        reading: きがのら
+        core_meaning: 마음이 내키다
+        meaning_in_context: 「全然」이 사이에 끼어들어 "전혀 내키지 않는다"가 된다.
+        nuance: 능력이나 상황이 아니라 기분의 문제를 말한다. 부정형으로 쓰이는 일이 많다.
+        example_sentence: 今日は勉強に気が乗らない。
+        example_translation: 오늘은 공부에 마음이 내키지 않는다.

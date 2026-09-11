@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Nihongo Context — contextual Japanese learning backend"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "alembic",
+    "argon2-cffi",
     "fastapi",
+    "fsrs==6.3.2",
     "uvicorn[standard]",
     "sqlalchemy>=2.0",
     "psycopg[binary]",
@@ -20,6 +23,8 @@ dev = [
     "ruff",
     "mypy",
     "types-PyYAML",
+    # 로컬/테스트 전용 PostgreSQL 16 (ADR-002). app 코드에서 import 금지.
+    "pgserver",
 ]
 
 [tool.ruff]
@@ -48,11 +53,12 @@ select = [
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
-"backend/tests/**" = ["S101", "ANN201", "ANN001"]
+# 테스트는 assert를 쓰고 리터럴 credential을 다룬다(S101/S105/S106).
+"backend/tests/**" = ["S101", "S105", "S106", "ANN201", "ANN001"]
 
 [tool.mypy]
 strict = true
-files = ["backend"]
+files = ["backend", "scripts"]
 mypy_path = ["backend"]
 plugins = ["pydantic.mypy"]
 

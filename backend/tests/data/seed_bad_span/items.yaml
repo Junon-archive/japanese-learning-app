@@ -1,0 +1,26 @@
+# 테스트 전용 최소 fixture. repo 루트의 `seed/`와 물리적으로 분리되어 있으므로
+# 실 seed 데이터를 통째로 교체해도 테스트는 깨지지 않는다.
+- seed_id: it_min_makaseru
+  type: word
+  lemma: 任せる
+  reading: まかせる
+  default_meaning: 맡기다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 120
+
+# frequency_rank가 없는 item. loader는 seed_order만 채운다.
+- seed_id: it_min_shigoto
+  type: word
+  lemma: 仕事
+  reading: しごと
+  default_meaning: 일
+  difficulty_label: beginner
+
+- seed_id: it_min_kiganoru
+  type: expression
+  lemma: 気が乗る
+  reading: きがのる
+  default_meaning: 마음이 내키다
+  difficulty_label: intermediate
+  frequency_rank: 900
