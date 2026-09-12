@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -13,8 +14,22 @@ import sqlalchemy as sa
 from sqlalchemy.engine import Engine
 
 from app.models import Base
+from app.models.study import EVIDENCE_UNIQUE_INDEX
+from app.services.presentation import FSRS_RATING_EVENTS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _index_definition(engine: Engine, name: str) -> str | None:
+    with engine.connect() as connection:
+        definition: str | None = connection.scalar(
+            sa.text(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"
+            ),
+            {"name": name},
+        )
+    return definition
+
 
 # 04_DB_SPEC.md의 테이블 목록(`## <table>` 절). 20개다.
 SPEC_TABLES = frozenset(
@@ -181,6 +196,70 @@ def test_active_prompt_version_uniqueness_is_a_partial_index(db_engine: Engine) 
     # WHERE 절이 없으면 전체 unique이고 inactive 이력 행이 서로 충돌한다.
     assert " WHERE " in definition, definition
     assert definition.split(" WHERE ", 1)[1].strip() == "active", definition
+
+
+@pytest.mark.integration
+def test_open_presentation_uniqueness_is_a_partial_index(db_engine: Engine) -> None:
+    """04_DB_SPEC.md의 `study_presentations`: 한 session에 열린 행은 최대 1개다.
+
+    index가 없으면 동시 `/next` 2건이 각자 "열린 presentation 없음"을 읽고 둘 다
+    만들어 어느 것이 "현재 문장"인지 정의되지 않는다. 전체 unique로 만들면 반대로
+    한 세션에 문장을 하나밖에 보여줄 수 없다. 거부/허용 동작은
+    test_db_constraints.py가, 요청 2건의 결과는 test_presentation_concurrency.py가 본다.
+    """
+    with db_engine.connect() as connection:
+        definition = connection.scalar(
+            sa.text(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"
+            ),
+            {"name": "uq_study_presentations_open"},
+        )
+    assert definition is not None, "uq_study_presentations_open이 없다"
+    assert definition.startswith("CREATE UNIQUE INDEX"), definition
+    assert "(study_session_id)" in definition, definition
+    assert " WHERE " in definition, definition
+    assert definition.split(" WHERE ", 1)[1].strip() == "(completed_at IS NULL)", definition
+
+
+@pytest.mark.integration
+def test_evidence_per_exposure_uniqueness_is_a_partial_index(db_engine: Engine) -> None:
+    """07_SRS_SPEC.md의 `노출당 evidence 1건`: 한 노출의 evidence는 최대 1건이다.
+
+    index가 없으면 서로 다른 `client_event_id` 2건의 동시 요청이 각자 "evidence 없음"을
+    읽고 둘 다 기록해 한 노출이 mastery EMA와 `reps`를 두 번 움직인다. 전체 unique로
+    만들면 반대로 한 노출에 event를 2건 이상 남길 수 없어 click / reveal / probe 제시가
+    전부 막힌다. 거부/허용 동작은 test_db_constraints.py가, 요청 2건의 결과는
+    test_evidence_concurrency.py가 본다.
+    """
+    definition = _index_definition(db_engine, EVIDENCE_UNIQUE_INDEX)
+    assert definition is not None, f"{EVIDENCE_UNIQUE_INDEX}가 없다"
+    assert definition.startswith("CREATE UNIQUE INDEX"), definition
+    assert "(study_presentation_id, learning_item_id)" in definition, definition
+    # WHERE 절이 없으면 전체 unique다.
+    assert " WHERE " in definition, definition
+
+
+@pytest.mark.integration
+def test_the_evidence_index_covers_exactly_the_fsrs_rating_events(db_engine: Engine) -> None:
+    """predicate의 event_type 집합 == `FSRS_RATING_EVENTS`.
+
+    predicate는 migration과 모델 양쪽에 **literal로** 박힌다(`app/models`는
+    `app/services`를 import할 수 없다). 그래서 7번째 evidence 타입이 생겨도 index는
+    그것을 덮지 않고, 덮지 않는다는 사실을 아무도 모른다 --- 그 노출에는 상한이
+    애플리케이션 SELECT에만 남고 동시 요청에 다시 뚫린다. 두 집합이 갈라지는 순간
+    여기가 빨개진다.
+
+    `mastery_probe_skipped`가 들어가서도 안 된다. skip은 evidence가 아니므로
+    (02_LEARNING_POLICY.md의 `Skip`) 한 노출에 skip과 evidence가 함께 있는 것이 정상인데,
+    predicate에 들어가면 그 정상 상태가 제약 위반이 된다.
+    """
+    definition = _index_definition(db_engine, EVIDENCE_UNIQUE_INDEX)
+    assert definition is not None, f"{EVIDENCE_UNIQUE_INDEX}가 없다"
+    predicate = definition.split(" WHERE ", 1)[1]
+    # PostgreSQL이 `IN (...)`을 `= ANY (ARRAY[...])`로 다시 쓰므로 값만 뽑아 비교한다.
+    assert set(re.findall(r"'([^']*)'", predicate)) == {
+        event_type.value for event_type in FSRS_RATING_EVENTS
+    }, predicate
 
 
 @pytest.mark.integration

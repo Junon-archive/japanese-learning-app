@@ -159,8 +159,14 @@ def next_presentation(
     None은 Pool Fallback 3단계(replenishment enqueue)까지 끝났다는 뜻이다. 그때도
     **provider를 부르지 않는다**(불변식 #1). 호출부는 이것을 200 + `presentation:
     null`로 내보낸다(10_ERROR_HANDLING.md의 `Empty Pool`).
+
+    session 행을 `FOR UPDATE`로 잠그고 시작한다. 그 불변식의 판정이
+    `SELECT ... LIMIT 1`이므로 잠그지 않으면 동시 `/next` 2건이 둘 다 "열린
+    presentation 없음"을 읽고 각자 만든다. DB의 `uq_study_presentations_open`이 그
+    INSERT를 거부하기는 하지만, 거부는 경합에서 진 요청에게 500이다. 이 잠금 덕분에
+    두 번째 요청은 첫 번째가 만든 presentation을 보고 **같은 문장**을 받는다.
     """
-    session = load_owned_session(db, user_id=user.id, session_id=session_id)
+    session = load_owned_session(db, user_id=user.id, session_id=session_id, for_update=True)
     if session.ended_at is not None:
         # 05_API_SPEC.md의 `세션·presentation 상태 게이트`. 끝난 세션에 presentation을
         # 더 만들면 그 세션의 `ended_at` 이후에 시작된 문장이 생긴다.

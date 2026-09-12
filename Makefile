@@ -2,7 +2,7 @@ UV ?= $(shell command -v uv || echo $(HOME)/.local/bin/uv)
 # --env-file을 명시하지 않으면 compose가 infra/.env를 찾는다. 루트 .env를 쓴다.
 COMPOSE ?= docker compose --env-file .env -f infra/docker-compose.yml
 
-.PHONY: install lint format typecheck test test-unit frontend-build ci run worker-run db-up db-up-local db-down db-reset seed create-user prompts
+.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset seed create-user prompts
 
 install:
 	$(UV) sync
@@ -23,13 +23,32 @@ test:
 	$(UV) run pytest
 
 # 개발 중 단축 경로일 뿐이다. 보고 근거는 항상 `make test`다.
+# e2e도 뺀다. `-m`은 명령줄 값이 addopts를 덮으므로 여기서 명시하지 않으면
+# 브라우저 테스트가 unit 실행으로 새어 들어온다.
 test-unit:
-	$(UV) run pytest -m "not integration"
+	$(UV) run pytest -m "not integration and not e2e"
 
 frontend-build:
 	cd frontend && npm ci && npm run build
 
-ci: lint typecheck test
+frontend-test:
+	cd frontend && npm ci && npm test
+
+# 실제 Chrome으로 도는 브라우저 E2E. `make test`는 이것을 수집하지 않는다
+# (pyproject의 addopts가 `-m "not e2e"`).
+#
+# frontend 빌드는 Makefile이 아니라 `backend/tests/e2e/conftest.py`가 한다 ---
+# `VITE_API_BASE_URL`에 넣을 API 포트는 fixture 시점에야 정해진다. 그 빌드는 매
+# 실행 `frontend/dist`를 **지우고** 다시 만들므로 옛 산출물이 검증될 수 없고,
+# 빌드 실패는 그대로 테스트 실패가 된다. 여기서 하는 것은 의존성 설치뿐이다.
+#
+# NC_E2E_REQUIRED=1: Chrome이나 node가 없으면 skip이 아니라 **실패**다. skip이
+# 초록으로 위장하면 이 하네스는 아무것도 지키지 못한다.
+test-e2e:
+	cd frontend && npm ci
+	NC_E2E_REQUIRED=1 $(UV) run pytest -m e2e --capture=tee-sys
+
+ci: lint typecheck test frontend-test test-e2e
 
 run:
 	$(UV) run uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000

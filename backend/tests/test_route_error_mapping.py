@@ -46,6 +46,7 @@ from app.services.events import (
     ServerEventKeyConflictError,
 )
 from app.services.interactions import (
+    EvidenceAlreadyRecordedError,
     ExplanationMissingError,
     ProbeNotFoundError,
     SentenceItemNotFoundError,
@@ -73,6 +74,8 @@ EXPECTED_STATUS: list[tuple[Exception, int]] = [
     (IdOutOfRangeError(INTERNAL_DETAIL), 404),
     (StudySessionClosedError(INTERNAL_DETAIL), 409),
     (PresentationClosedError(INTERNAL_DETAIL), 409),
+    # 노출당 evidence 상한. 게이트 409와 코드는 같고 사유 문구가 다르다(ADR-018).
+    (EvidenceAlreadyRecordedError(INTERNAL_DETAIL), 409),
     (EventKeyConflictError(INTERNAL_DETAIL), 409),
     # server 발급 key 충돌은 client가 만들 수 없다. 409로 되돌려 주면 고칠 수 없는
     # 요청을 재시도하게 만든다(05_API_SPEC.md의 `키 공간 분리`).

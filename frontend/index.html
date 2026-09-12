@@ -2,10 +2,27 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Nihongo Context</title>
+    <meta name="description" content="문맥 안에서 일본어 표현을 익히는 짧은 학습 세션" />
+
+    <!--
+      installable PWA (spec/02_ARCHITECTURE.md). **service worker는 등록하지 않는다.**
+      MVP는 offline을 지원하지 않고, SW가 있으면 저장 실패를 성공처럼 보이게 만드는
+      경로(POST 오프라인 큐, /api 응답 캐시, 오프라인 폴백 셸)가 열린다
+      (10_ERROR_HANDLING.md). manifest와 아이콘만으로 설치 가능하다.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#4f6df5" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Nihongo" />
   </head>
   <body>
+    <!-- 화면(F2~)이 여기에 마운트된다. -->
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

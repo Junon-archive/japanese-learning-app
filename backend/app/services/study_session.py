@@ -247,17 +247,26 @@ def extend(
     return session
 
 
-def load_owned_session(db: Session, *, user_id: int, session_id: int) -> StudySession:
+def load_owned_session(
+    db: Session, *, user_id: int, session_id: int, for_update: bool = False
+) -> StudySession:
     """요청 사용자의 session. 아니면 `StudySessionNotFoundError`다.
 
     presentation service도 이것을 쓴다. 소유권 확인이 두 곳에 복제되면 한쪽에서
     `user_id` 조건을 빠뜨리는 순간 남의 세션에 문장을 붙일 수 있다.
+
+    `for_update=True`는 이 session에 대한 후속 작업을 **직렬화**한다. `/next`만
+    쓴다 --- `열린 presentation 불변식`의 판정과 presentation INSERT 사이에 다른
+    요청이 끼어들면 둘 다 "열린 presentation 없음"을 읽는다(04_DB_SPEC.md의
+    `study_presentations`). DB의 `uq_study_presentations_open`이 그 결과를 거부하지만
+    거부는 경합에서 진 요청에게 500이다. 이 잠금이 애초에 그 경로를 만들지 않는다.
     """
-    session = db.execute(
-        sa.select(StudySession).where(
-            StudySession.id == session_id, StudySession.user_id == user_id
-        )
-    ).scalar_one_or_none()
+    statement = sa.select(StudySession).where(
+        StudySession.id == session_id, StudySession.user_id == user_id
+    )
+    if for_update:
+        statement = statement.with_for_update()
+    session = db.execute(statement).scalar_one_or_none()
     if session is None:
         raise StudySessionNotFoundError(f"study session {session_id} is not available")
     return session

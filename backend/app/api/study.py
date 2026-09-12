@@ -98,6 +98,14 @@ def _http_errors() -> Iterator[None]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Presentation is already completed"
         ) from exc
+    except interactions.EvidenceAlreadyRecordedError as exc:
+        # 05_API_SPEC.md의 `노출당 evidence 상한`. 게이트 409와 **사유가 다르다** ---
+        # 이쪽은 어떤 재시도도 성공하지 못하므로 client는 세션을 다시 얻지 않고
+        # "이미 기록했습니다"로 끝낸다(같은 절의 `409 사유 구분`).
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This exposure already has recorded evidence",
+        ) from exc
     except EventKeyConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

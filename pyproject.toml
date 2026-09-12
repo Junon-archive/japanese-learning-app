@@ -26,6 +26,11 @@ dev = [
     "types-PyYAML",
     # 로컬/테스트 전용 PostgreSQL 16 (ADR-002). app 코드에서 import 금지.
     "pgserver",
+    # 브라우저 E2E (backend/tests/e2e). 브라우저 바이너리는 내려받지 않는다 ---
+    # `channel="chrome"`으로 **시스템에 설치된 Chrome**을 쓴다. 그래서 이 의존성이
+    # 있어도 `playwright install`은 필요 없고, Chrome이 없는 머신에서는
+    # `make test-e2e`가 실패한다(skip이 아니다).
+    "playwright>=1.62.0",
 ]
 
 [tool.ruff]
@@ -66,8 +71,15 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
-addopts = "-q --strict-markers --strict-config"
-markers = ["integration: requires a running PostgreSQL"]
+# 기본 실행에서 `e2e`를 뺀다. e2e는 frontend 빌드 산출물과 Chrome을 요구하므로
+# `make test`가 그것들의 존재에 의존하면 안 된다. 진입점은 `make test-e2e` 하나다.
+# 명령줄의 `-m`이 이 값을 덮어쓴다(addopts가 앞에 붙는다).
+addopts = "-q --strict-markers --strict-config -m \"not e2e\""
+markers = [
+    "integration: requires a running PostgreSQL",
+    # 실제 브라우저(Chrome)로 도는 테스트. `-m e2e`로만 수집된다.
+    "e2e: drives a real browser against the in-process app",
+]
 filterwarnings = [
     "error",
     # starlette 1.6이 import 시점에 띄우는 서드파티 alias 경고. 우리 코드로는 못 고친다.

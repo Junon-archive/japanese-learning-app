@@ -86,10 +86,16 @@ def _set_passive_count(
 def _presentation(db: Session, user: UserModel, study_session: StudySession) -> StudyPresentation:
     """presentation 하나 = 문장 하나 + candidate 하나. 문장을 매번 새로 만드는 이유는
     `uq_user_sentence_candidates_active`가 (user, sentence, role, stage)에 걸려 있기
-    때문이다."""
+    때문이다.
+
+    **완료된 행으로 만든다.** 한 세션에 미완료 행은 하나뿐이므로
+    (`uq_study_presentations_open`) 세션 이력을 여러 건 세우려면 앞의 것들이 닫혀
+    있어야 한다. probe pacing은 `completed_at`을 보지 않으므로 판정에는 영향이 없다."""
     sentence = factories.make_sentence(db)
     candidate = factories.make_candidate(db, user, sentence, status=CandidateStatus.READY)
-    return factories.make_presentation(db, user, study_session, candidate, sentence)
+    return factories.make_presentation(
+        db, user, study_session, candidate, sentence, completed_at=factories.NOW
+    )
 
 
 def _presentations(

@@ -35,7 +35,7 @@ from fastapi import APIRouter, Depends, FastAPI
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute, RouteContext, iter_route_contexts
 
-from app.api import auth, health, study
+from app.api import auth, health, history, study
 from app.api.deps import get_current_user, require_trusted_origin
 
 # 05_API_SPEC.md의 `익명 접근 허용 목록`. 이 집합을 늘리려면 명세를 먼저 고친다.
@@ -78,6 +78,7 @@ anonymous_router.include_router(auth.anonymous_router)
 # 그 밖의 **모든** endpoint는 여기에 올린다. 인증은 구조적으로 상속된다.
 api_router = APIRouter(dependencies=[Depends(get_current_user)])
 api_router.include_router(auth.router)
+api_router.include_router(history.router)
 api_router.include_router(study.router)
 
 

@@ -19,10 +19,13 @@ click / explanation reveal / translation reveal / self-report / probe 응답.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig
@@ -36,9 +39,10 @@ from app.models.content import (
 )
 from app.models.enums import EventType, ExplanationStatus, ExplicitSignal, LearningItemType
 from app.models.learning import ReviewState, UserItemLearningState
-from app.models.study import LearningEvent
+from app.models.study import EVIDENCE_UNIQUE_INDEX, LearningEvent
 from app.services.events import record_event
 from app.services.presentation import (
+    FSRS_RATING_EVENTS,
     PROBE_ANSWER_EVENTS,
     PROBE_RESPONSE_EVENTS,
     begin_interaction,
@@ -69,6 +73,19 @@ class ExplanationMissingError(Exception):
 
 class ProbeNotFoundError(Exception):
     """`probe_id`가 이 사용자/presentation의 `mastery_probe_shown` event가 아니다 (HTTP 400)."""
+
+
+class EvidenceAlreadyRecordedError(Exception):
+    """그 `(presentation, learning_item)`에 explicit evidence가 이미 있다 (HTTP 409).
+
+    07_SRS_SPEC.md의 `노출당 evidence 1건`. self-report 3종과 probe 응답 3종을 합쳐
+    세고 `mastery_probe_skipped`는 세지 않는다.
+
+    `PresentationClosedError`의 **형제이고 상속 관계가 아니다.** 둘을 한 타입으로
+    묶으면 client가 두 409를 구분할 수 없는데 복구 동작이 반대다 --- 게이트 409는
+    "화면 상태가 서버와 어긋났다"라서 세션 재획득으로 이어지고, 이쪽은 "이미
+    기록했습니다"이므로 **어떤 재시도도 성공하지 못하고 해서도 안 된다**(ADR-018).
+    """
 
 
 @dataclass(frozen=True)
@@ -227,18 +244,30 @@ def self_report(
     item = _sentence_item(
         db, sentence_id=presentation.sentence_id, sentence_item_id=sentence_item_id
     )
-
-    _, created = record_event(
+    # 판정 단위는 `learning_item_id`다. `sentence_item_id`로 세면 한 문장에 같은
+    # learning item을 가리키는 sentence item이 둘일 때 evidence 2건이 통과한다.
+    _reject_if_evidence_exists(
         db,
         user_id=user_id,
-        study_session_id=presentation.study_session_id,
-        event_type=SELF_REPORT_EVENTS[signal],
-        client_event_id=client_event_id,
         presentation_id=presentation.id,
-        sentence_id=presentation.sentence_id,
         learning_item_id=item.learning_item_id,
-        now=now,
+        client_event_id=client_event_id,
     )
+
+    with _evidence_conflict_as_409(
+        db, presentation_id=presentation.id, learning_item_id=item.learning_item_id
+    ):
+        _, created = record_event(
+            db,
+            user_id=user_id,
+            study_session_id=presentation.study_session_id,
+            event_type=SELF_REPORT_EVENTS[signal],
+            client_event_id=client_event_id,
+            presentation_id=presentation.id,
+            sentence_id=presentation.sentence_id,
+            learning_item_id=item.learning_item_id,
+            now=now,
+        )
     if created:
         _apply_explicit_evidence(
             db,
@@ -289,18 +318,29 @@ def respond_to_probe(
             learning_item_id=item_id,
             signal=_signal_of(answered.event_type),
         )
+    if signal is not None:
+        # skip은 evidence가 아니므로 상한에 걸리지 않고, 상한 때문에 거부되어서도
+        # 안 된다(02_LEARNING_POLICY.md의 `Skip`).
+        _reject_if_evidence_exists(
+            db,
+            user_id=user_id,
+            presentation_id=presentation.id,
+            learning_item_id=item_id,
+            client_event_id=client_event_id,
+        )
 
-    _, created = record_event(
-        db,
-        user_id=user_id,
-        study_session_id=presentation.study_session_id,
-        event_type=PROBE_RESPONSE_EVENTS[signal],
-        client_event_id=client_event_id,
-        presentation_id=presentation.id,
-        sentence_id=presentation.sentence_id,
-        learning_item_id=item_id,
-        now=now,
-    )
+    with _evidence_conflict_as_409(db, presentation_id=presentation.id, learning_item_id=item_id):
+        _, created = record_event(
+            db,
+            user_id=user_id,
+            study_session_id=presentation.study_session_id,
+            event_type=PROBE_RESPONSE_EVENTS[signal],
+            client_event_id=client_event_id,
+            presentation_id=presentation.id,
+            sentence_id=presentation.sentence_id,
+            learning_item_id=item_id,
+            now=now,
+        )
     if created:
         # 답했든 건너뛰었든 물어본 사실은 남는다(`last_probe_at`). skip은 여기서
         # 끝이며 mastery도 FSRS도 건드리지 않는다.
@@ -466,6 +506,96 @@ def _existing_probe_response(
         .order_by(LearningEvent.id)
         .limit(1)
     ).scalar_one_or_none()
+
+
+def _reject_if_evidence_exists(
+    db: Session,
+    *,
+    user_id: int,
+    presentation_id: int,
+    learning_item_id: int,
+    client_event_id: uuid.UUID,
+) -> None:
+    """노출당 evidence 1건을 강제한다 (07_SRS_SPEC.md의 `노출당 evidence 1건`).
+
+    `record_event()` **전에** 판정한다. 뒤에서 판정하면 이미 나간 INSERT가 호출부의
+    rollback으로 지워지기를 기대해야 하는데, 명세는 "409이면 event를 기록하지 않고
+    mastery·FSRS·`context_stage`도 건드리지 않는다"를 요구한다(05_API_SPEC.md의
+    `노출당 evidence 상한`).
+
+    **이 SELECT가 상한의 전부는 아니다.** SELECT와 INSERT 사이에 잠금이 없으므로 서로
+    다른 `client_event_id` 2건의 동시 요청은 각자 "evidence 없음"을 읽고 둘 다 기록으로
+    넘어간다. 그것을 막는 것은 DB의 `uq_learning_events_evidence`이고, 거부를 409로
+    옮기는 것은 아래 `_evidence_conflict_as_409()`다. 이 SELECT를 지우면 안 된다 ---
+    2회차 요청이 정상 경로에서 event를 **애초에 내지 않는** 근거가 이것이다.
+
+    **같은 `client_event_id`의 event는 제외한다.** 그것은 재전송이고 재전송
+    멱등성이 이 상한보다 먼저 판정된다(같은 절의 `판정 순서`에서 3 < 4). 제외하지
+    않으면 성공한 요청의 네트워크 재시도가 자기가 만든 evidence에 걸려 409가 된다.
+
+    세는 집합은 `FSRS_RATING_EVENTS`다. `PROBE_ANSWER_EVENTS`를 쓰면
+    `mastery_probe_skipped`가 evidence로 세어진다.
+    """
+    existing = db.execute(
+        sa.select(LearningEvent.id)
+        .where(
+            LearningEvent.user_id == user_id,
+            LearningEvent.study_presentation_id == presentation_id,
+            LearningEvent.learning_item_id == learning_item_id,
+            LearningEvent.event_type.in_(FSRS_RATING_EVENTS),
+            LearningEvent.client_event_id != client_event_id,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise _already_recorded(presentation_id=presentation_id, learning_item_id=learning_item_id)
+
+
+def _already_recorded(
+    *, presentation_id: int, learning_item_id: int
+) -> EvidenceAlreadyRecordedError:
+    return EvidenceAlreadyRecordedError(
+        f"learning item {learning_item_id} already has evidence in presentation {presentation_id}"
+    )
+
+
+@contextmanager
+def _evidence_conflict_as_409(
+    db: Session, *, presentation_id: int, learning_item_id: int
+) -> Iterator[None]:
+    """`uq_learning_events_evidence` 위반을 `EvidenceAlreadyRecordedError`로 옮긴다.
+
+    이 경로는 **도달 가능하고 의미가 정해져 있다.** 위 SELECT를 둘 다 통과한 동시 요청
+    2건 중 하나는 index에 걸리는데, 그 요청에 명세가 요구하는 응답은 이미 409다
+    (05_API_SPEC.md의 `노출당 evidence 상한`: 2회차는 409). 잠금으로 직렬화해 SELECT가
+    먼저 보게 만드는 길도 있지만 그렇게 얻는 것이 없다 --- 어느 쪽이든 결과는 같은
+    409이고, 잠금은 evidence마다 행 하나를 더 잡는다.
+
+    **다른 제약 위반은 삼키지 않는다.** psycopg가 알려주는 위반 index 이름이 그
+    index일 때만 옮기고, 그 밖(예: `uq_user_mastery_user_id_learning_item_id`)은 그대로
+    올려 500이 되게 둔다. 그쪽은 서버 불변식이 깨진 것이므로 409로 덮으면 "이미
+    기록했습니다"라는 거짓말이 되고 진단도 사라진다.
+
+    `rollback()`이 필요하다. IntegrityError 뒤의 트랜잭션은 abort 상태라 이후 어떤
+    statement도 실패하고, 호출부는 그 세션으로 아무것도 하지 못한다. 되돌려지는 것은 진
+    요청이 만든 것뿐이고(`touch()`의 `last_activity_at` 포함) 그것이 "409이면 아무것도
+    건드리지 않는다"와 같은 방향이다.
+    """
+    try:
+        yield
+    except IntegrityError as exc:
+        if _violated_constraint(exc) != EVIDENCE_UNIQUE_INDEX:
+            raise
+        db.rollback()
+        raise _already_recorded(
+            presentation_id=presentation_id, learning_item_id=learning_item_id
+        ) from exc
+
+
+def _violated_constraint(error: IntegrityError) -> str | None:
+    """위반한 제약/index의 이름. psycopg가 알려주지 않으면 None이다."""
+    diagnostic = getattr(error.orig, "diag", None)
+    return getattr(diagnostic, "constraint_name", None)
 
 
 def _signal_of(event_type: EventType) -> ExplicitSignal | None:

@@ -18,19 +18,24 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     ItemExposure,
+    LearningEvent,
     LearningItem,
     PromptVersion,
     Sentence,
     StudyPresentation,
+    StudySession,
     User,
+    UserSentenceCandidate,
 )
 from app.models.enums import (
     CandidateStatus,
     ContextStage,
+    EventType,
     ExposureModality,
     LlmTaskType,
     PresentationRole,
 )
+from app.models.study import EVIDENCE_UNIQUE_INDEX
 from tests import factories
 
 pytestmark = pytest.mark.integration
@@ -99,6 +104,60 @@ def test_exposures_of_the_same_item_in_different_presentations_are_allowed(
         sa.select(sa.func.count()).select_from(ItemExposure).where(ItemExposure.user_id == user.id)
     )
     assert count == 2
+
+
+def _open_presentation_fixture(
+    db_session: Session,
+) -> tuple[User, StudySession, UserSentenceCandidate, Sentence, StudyPresentation]:
+    """미완료 presentation 하나가 있는 세션. 두 번째 행은 각 테스트가 만든다."""
+    user = factories.make_user(db_session)
+    sentence = factories.make_sentence(db_session)
+    study_session = factories.make_study_session(
+        db_session, user, target_minutes=SESSION_MINUTES_FILLER
+    )
+    candidate = factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+    presentation = factories.make_presentation(db_session, user, study_session, candidate, sentence)
+    return user, study_session, candidate, sentence, presentation
+
+
+def test_a_second_open_presentation_in_one_session_is_rejected(db_session: Session) -> None:
+    """`열린 presentation 불변식`: 한 session에 `completed_at IS NULL`은 최대 1개다.
+
+    이 partial unique가 없으면 동시 `/next` 2건이 각자 "열린 presentation 없음"을 읽고
+    둘 다 만든다. 그러면 어느 것이 "현재 문장"인지 정의되지 않고 exposure와 context
+    stage 전이가 두 갈래로 갈라진다(04_DB_SPEC.md의 `study_presentations`).
+    """
+    user, study_session, candidate, sentence, _first = _open_presentation_fixture(db_session)
+
+    with pytest.raises(IntegrityError):
+        factories.make_presentation(db_session, user, study_session, candidate, sentence)
+
+
+def test_completing_a_presentation_frees_the_session_slot(db_session: Session) -> None:
+    """partial인 이유. 전체 unique로 걸면 한 세션에 문장을 하나밖에 보여줄 수 없다."""
+    user, study_session, candidate, sentence, first = _open_presentation_fixture(db_session)
+
+    first.completed_at = factories.NOW
+    db_session.flush()
+
+    second = factories.make_presentation(db_session, user, study_session, candidate, sentence)
+    assert second.id != first.id
+    assert second.completed_at is None
+
+
+def test_open_presentations_in_different_sessions_coexist(db_session: Session) -> None:
+    """범위는 session 하나다. idle timeout으로 밀려난 session은 미완료 행을 남기므로
+    (`study_session._expire_idle_session`) 사용자 단위로 걸면 다음 세션의 첫 문장이
+    막힌다."""
+    user, _study_session, candidate, sentence, first = _open_presentation_fixture(db_session)
+    other_session = factories.make_study_session(
+        db_session, user, target_minutes=SESSION_MINUTES_FILLER
+    )
+
+    second = factories.make_presentation(db_session, user, other_session, candidate, sentence)
+
+    assert second.completed_at is None
+    assert first.completed_at is None
 
 
 def _insert_exposure_with_modality(db_session: Session, modality: str) -> None:
@@ -440,3 +499,179 @@ def test_each_task_type_may_have_its_own_active_version(db_session: Session) -> 
         sa.select(sa.func.count()).select_from(PromptVersion).where(PromptVersion.active)
     )
     assert count == len(LlmTaskType)
+
+
+# --------------------------------------------------------------------------
+# 노출당 evidence 1건 (07_SRS_SPEC.md)
+# --------------------------------------------------------------------------
+
+
+def _evidence_fixture(
+    db_session: Session,
+) -> tuple[User, StudySession, LearningItem, StudyPresentation]:
+    """presentation 하나와 거기 붙일 item 하나."""
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    sentence = factories.make_sentence(db_session)
+    study_session = factories.make_study_session(
+        db_session, user, target_minutes=SESSION_MINUTES_FILLER
+    )
+    candidate = factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+    presentation = factories.make_presentation(db_session, user, study_session, candidate, sentence)
+    return user, study_session, item, presentation
+
+
+def _evidence(
+    db_session: Session,
+    user: User,
+    study_session: StudySession,
+    presentation: StudyPresentation,
+    item: LearningItem,
+    *,
+    event_type: EventType,
+) -> LearningEvent:
+    """`client_event_id`가 매번 새것이다.
+
+    같은 값으로 두 번 넣으면 `(user_id, client_event_id)` unique가 먼저 걸려 이 절의
+    테스트가 **다른 제약을 검사하게 된다.**
+    """
+    return factories.make_event(
+        db_session,
+        user,
+        study_session,
+        client_event_id=uuid.uuid4(),
+        event_type=event_type,
+        presentation=presentation,
+        item=item,
+    )
+
+
+def test_one_exposure_cannot_hold_two_evidence_events(db_session: Session) -> None:
+    """07_SRS_SPEC.md의 `노출당 evidence 1건`.
+
+    self-report와 probe 응답을 **합쳐서** 센다. 한쪽만 막으면 사용자가 item X에
+    `알고 있었음`을 self-report한 뒤 같은 X의 probe에 `몰랐음`을 답하는 경로가 남고,
+    그 한 노출이 mastery EMA를 두 번 돌리고 `reps`도 두 번 올린다.
+    """
+    user, study_session, item, presentation = _evidence_fixture(db_session)
+    _evidence(
+        db_session,
+        user,
+        study_session,
+        presentation,
+        item,
+        event_type=EventType.SELF_REPORT_KNOWN,
+    )
+
+    with pytest.raises(IntegrityError) as raised:
+        _evidence(
+            db_session,
+            user,
+            study_session,
+            presentation,
+            item,
+            event_type=EventType.MASTERY_PROBE_UNKNOWN,
+        )
+
+    # 어느 제약이 거부했는지까지 본다. 다른 제약이 우연히 걸려도 통과하는 테스트는
+    # 이 index가 사라진 것을 알아채지 못한다.
+    assert EVIDENCE_UNIQUE_INDEX in str(raised.value)
+
+
+def test_a_skipped_probe_does_not_occupy_the_evidence_slot(db_session: Session) -> None:
+    """skip은 evidence가 아니다 (02_LEARNING_POLICY.md의 `Skip`).
+
+    predicate에 `mastery_probe_skipped`가 들어가면 "물어봤는데 건너뛴 뒤 스스로
+    보고했다"는 **정상 흐름**이 제약 위반이 된다.
+    """
+    user, study_session, item, presentation = _evidence_fixture(db_session)
+    _evidence(
+        db_session,
+        user,
+        study_session,
+        presentation,
+        item,
+        event_type=EventType.MASTERY_PROBE_SKIPPED,
+    )
+
+    reported = _evidence(
+        db_session,
+        user,
+        study_session,
+        presentation,
+        item,
+        event_type=EventType.SELF_REPORT_UNKNOWN,
+    )
+
+    assert reported.id is not None
+
+
+def test_non_evidence_events_repeat_freely_in_one_exposure(db_session: Session) -> None:
+    """partial인 이유. 조건절을 빼면 한 노출에 event를 2건 이상 남길 수 없어
+    click / reveal / probe 제시가 전부 막힌다."""
+    user, study_session, item, presentation = _evidence_fixture(db_session)
+    for event_type in (
+        EventType.ITEM_CLICKED,
+        EventType.EXPLANATION_REVEALED,
+        EventType.ITEM_CLICKED,
+    ):
+        _evidence(db_session, user, study_session, presentation, item, event_type=event_type)
+
+    count = db_session.scalar(
+        sa.select(sa.func.count())
+        .select_from(LearningEvent)
+        .where(LearningEvent.study_presentation_id == presentation.id)
+    )
+    assert count == 3
+
+
+def test_two_items_in_one_exposure_each_get_their_own_evidence(db_session: Session) -> None:
+    """판정 단위는 (presentation, item) 쌍이다. presentation만으로 걸면 한 문장의
+    두 target 중 하나에만 답할 수 있게 된다."""
+    user, study_session, item, presentation = _evidence_fixture(db_session)
+    other = factories.make_learning_item(db_session, lemma="預ける")
+    _evidence(
+        db_session,
+        user,
+        study_session,
+        presentation,
+        item,
+        event_type=EventType.SELF_REPORT_KNOWN,
+    )
+
+    second = _evidence(
+        db_session,
+        user,
+        study_session,
+        presentation,
+        other,
+        event_type=EventType.SELF_REPORT_KNOWN,
+    )
+
+    assert second.id is not None
+
+
+def test_the_same_item_gets_evidence_again_in_the_next_exposure(db_session: Session) -> None:
+    """상한은 노출 하나에 대한 것이다. item 전체로 걸면 그 item을 두 번 다시 평가할 수
+    없어 반복 학습 자체가 불가능해진다."""
+    user, study_session, item, presentation = _evidence_fixture(db_session)
+    _evidence(
+        db_session,
+        user,
+        study_session,
+        presentation,
+        item,
+        event_type=EventType.SELF_REPORT_UNKNOWN,
+    )
+    # 세션당 열린 presentation은 하나다(`uq_study_presentations_open`).
+    presentation.completed_at = factories.NOW
+    db_session.flush()
+    sentence = factories.make_sentence(db_session)
+    candidate = factories.make_candidate(db_session, user, sentence, status=CandidateStatus.READY)
+    later = factories.make_presentation(db_session, user, study_session, candidate, sentence)
+
+    second = _evidence(
+        db_session, user, study_session, later, item, event_type=EventType.SELF_REPORT_KNOWN
+    )
+
+    assert second.id is not None

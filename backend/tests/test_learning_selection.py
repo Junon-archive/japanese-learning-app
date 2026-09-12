@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.config import get_config
-from app.learning.progression import STAGE_LADDER, stage_rank
+from app.learning.progression import INITIAL_CONTEXT_STAGE, STAGE_LADDER, stage_rank
 from app.learning.selection import (
     Selection,
     SessionCounters,
@@ -417,6 +417,10 @@ def _presentation(
         review_reason=reason,
         context_stage=stage,
         shown_at=now,
+        # 세션 이력은 닫힌 행이다. 한 세션에 미완료 행은 하나뿐이므로
+        # (`uq_study_presentations_open`) 여러 건을 세우려면 완료돼 있어야 한다.
+        # category mix 집계는 `completed_at`을 보지 않는다.
+        completed_at=now,
     )
     db_session.add(presentation)
     db_session.flush()
@@ -1332,6 +1336,397 @@ def test_a_null_mastery_outranks_a_measured_one_at_the_same_schedule(
 
     assert selection is not None
     assert selection.target_item_ids == (unmeasured.id,)
+
+
+@pytest.mark.integration
+def test_the_candidate_matching_the_current_stage_wins_over_an_older_one(
+    db_session: Session,
+) -> None:
+    """candidate 단위 tie-break 5번. stage가 오른 뒤에도 낮은 stage candidate가 Ready
+    Pool에 남으므로(ADR-019), 가장 오래된 것이 먼저 뽑히면 최소 노출이 실제 ladder
+    위치보다 낮은 stage로 기운다. candidate id가 더 커도 일치하는 쪽을 고른다."""
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    stale_sentence = _ready_sentence(db_session, [item])
+    fresh_sentence = _ready_sentence(db_session, [item])
+    _learning_state(
+        db_session,
+        user,
+        item,
+        stage=ContextStage.NEAR_ORIGINAL,
+        anchor_sentence_id=stale_sentence.id,
+    )
+    _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    stale = _candidate(
+        db_session,
+        user,
+        stale_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[item],
+        stage=ContextStage.ANCHOR,
+    )
+    fresh = _candidate(
+        db_session,
+        user,
+        fresh_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[item],
+        stage=ContextStage.NEAR_ORIGINAL,
+    )
+    assert stale.id < fresh.id, "옛 tie-break(candidate id ASC)와 갈리는 배치여야 한다"
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None
+    assert selection.candidate_id == fresh.id
+
+
+@pytest.mark.integration
+def test_without_a_matching_candidate_the_lower_stage_one_is_still_chosen(
+    db_session: Session,
+) -> None:
+    """**배제가 아니라 선호다.** 일치하는 candidate가 하나도 없으면 낮은 stage
+    candidate를 그대로 고른다 --- `Pool Fallback` 2단계가 의도적으로 허용한
+    anchor reinforcement 노출을 이 규칙이 막으면 안 된다."""
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    anchor_sentence = _ready_sentence(db_session, [item])
+    _learning_state(
+        db_session,
+        user,
+        item,
+        stage=ContextStage.VARIED,
+        anchor_sentence_id=anchor_sentence.id,
+    )
+    _schedule(db_session, user, item, next_review_at=clock.now() + timedelta(days=365))
+    anchor_candidate = _candidate(
+        db_session,
+        user,
+        anchor_sentence,
+        role=REVIEW,
+        reason=REINFORCEMENT,
+        targets=[item],
+        stage=ContextStage.ANCHOR,
+    )
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None, "일치하는 candidate가 없다고 낮은 stage를 배제하면 안 된다"
+    assert selection.candidate_id == anchor_candidate.id
+    assert selection.context_stage is ContextStage.ANCHOR
+
+
+@pytest.mark.integration
+def test_the_stage_match_is_judged_on_the_dominant_target(db_session: Session) -> None:
+    """판정 대상은 **dominant target**(order key 최소값을 만든 target)이다.
+
+    target이 둘인 candidate의 두 stage는 구조적으로 갈린다(같은 presentation에서 한
+    target이 explicit `몰랐음`, 다른 target이 무신호면 전이 규칙이 target마다 따로
+    적용된다). "아무 target이나 일치하면 통과"로 읽으면 낡은 `anchor` candidate가
+    동승자 item 덕분에 항상 일치로 판정되어 규칙이 무력해진다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    passenger = factories.make_learning_item(db_session, lemma="同乗")
+    dominant = factories.make_learning_item(db_session, lemma="牽引")
+    shared = _ready_sentence(db_session, [passenger, dominant])
+    fresh_sentence = _ready_sentence(db_session, [dominant])
+    _learning_state(db_session, user, passenger, stage=ContextStage.ANCHOR)
+    _learning_state(db_session, user, dominant, stage=ContextStage.NEAR_ORIGINAL)
+    # dominant target = order key 최소값. 첫 항이 next_review_at ASC이므로 더 오래
+    # 밀린 쪽이 두 candidate의 키를 **똑같이** 지배하고, 남는 것은 5~6번뿐이다.
+    _schedule(db_session, user, passenger, next_review_at=clock.now() - timedelta(days=1))
+    _schedule(db_session, user, dominant, next_review_at=clock.now() - timedelta(days=9))
+    stale = _candidate(
+        db_session,
+        user,
+        shared,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[passenger, dominant],
+        stage=ContextStage.ANCHOR,
+    )
+    fresh = _candidate(
+        db_session,
+        user,
+        fresh_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[dominant],
+        stage=ContextStage.NEAR_ORIGINAL,
+    )
+    assert stale.id < fresh.id, "옛 tie-break(candidate id ASC)와 갈리는 배치여야 한다"
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None
+    assert selection.candidate_id == fresh.id, (
+        "동승 target(passenger)이 anchor와 일치하는 것은 판정에 쓰이지 않는다"
+    )
+
+
+@pytest.mark.integration
+def test_a_split_passenger_target_does_not_disqualify_the_candidate(
+    db_session: Session,
+) -> None:
+    """`06`의 두 번째 불릿: **"모든 target이 일치해야 통과"로 읽으면 multi-target
+    candidate가 사실상 배제된다.**
+
+    한 candidate의 두 target은 ladder가 갈리는 것이 구조적이므로(같은 presentation
+    에서 한 target이 explicit `몰랐음`, 다른 target이 무신호면 전이 규칙이 target
+    마다 따로 적용된다), 동승 target이 어긋났다는 이유로 5번에서 지면 그 candidate는
+    **갈린 순간부터 영구히** 불리해진다. 배제는 이 규칙이 하지 않기로 한 것이다
+    (ADR-019).
+
+    바로 위 `..._judged_on_the_dominant_target`은 dominant 불일치 + 동승 일치만
+    본다. 여기는 그 **반대 방향** --- dominant 일치 + 동승 불일치 --- 이고, 판정이
+    dominant 하나로 끝나는지(`all`이 아닌지)를 고정한다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    split_passenger = factories.make_learning_item(db_session, lemma="別途")
+    leader = factories.make_learning_item(db_session, lemma="主導")
+    shared = _ready_sentence(db_session, [split_passenger, leader])
+    solo_sentence = _ready_sentence(db_session, [leader])
+    # 동승자의 ladder만 갈려 있다. candidate.context_stage는 dominant(leader)와 일치한다.
+    _learning_state(db_session, user, split_passenger, stage=ContextStage.ANCHOR)
+    _learning_state(db_session, user, leader, stage=ContextStage.NEAR_ORIGINAL)
+    # 둘 다 due여야 fsrs_due의 usable에 남는다. 더 밀린 leader가 dominant다.
+    _schedule(db_session, user, split_passenger, next_review_at=clock.now() - timedelta(days=1))
+    _schedule(db_session, user, leader, next_review_at=clock.now() - timedelta(days=9))
+    multi_target = _candidate(
+        db_session,
+        user,
+        shared,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[split_passenger, leader],
+        stage=ContextStage.NEAR_ORIGINAL,
+    )
+    single_target = _candidate(
+        db_session,
+        user,
+        solo_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[leader],
+        stage=ContextStage.NEAR_ORIGINAL,
+    )
+    # dominant target이 같으므로 1~4의 order key도 같다. 5번이 갈리지 않으면 6번(id
+    # ASC)이 결정한다 --- multi-target이 일치로 판정될 때에만 먼저 만든 쪽이 이긴다.
+    assert multi_target.id < single_target.id
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None
+    assert selection.candidate_id == multi_target.id, (
+        "동승 target의 stage가 갈렸다고 multi-target candidate를 불일치로 판정하면 안 된다"
+    )
+
+
+@pytest.mark.integration
+def test_a_badly_overdue_candidate_beats_a_matching_but_less_urgent_one(
+    db_session: Session,
+) -> None:
+    """5번은 1~4 **다음**이다(`5. ... 6. ...`가 `1~4`의 동률에 얹힌다).
+
+    stage 일치는 1~4가 이미 동률일 때만 갈리는 항이지 우선순위 자체가 아니다. 두
+    항의 순서가 뒤집히면 심하게 밀린 due item이 stage만 맞는 덜 급한 item에 밀리고,
+    그것은 tie-break가 아니라 Review Ordering 정책의 변경이다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    overdue = factories.make_learning_item(db_session, lemma="延滞")
+    barely_due = factories.make_learning_item(db_session, lemma="直近")
+    overdue_sentence = _ready_sentence(db_session, [overdue])
+    barely_due_sentence = _ready_sentence(db_session, [barely_due])
+    # order key 1순위가 next_review_at ASC다. 두 due 시각을 크게 벌려 1~4에서 확실히
+    # 갈리게 하고, 그 위에 5번을 **반대 방향으로** 얹는다.
+    _learning_state(db_session, user, overdue, stage=ContextStage.NEAR_ORIGINAL)
+    _learning_state(db_session, user, barely_due, stage=ContextStage.ANCHOR)
+    _schedule(db_session, user, overdue, next_review_at=clock.now() - timedelta(days=90))
+    _schedule(db_session, user, barely_due, next_review_at=clock.now() - timedelta(minutes=1))
+    stage_mismatched = _candidate(
+        db_session,
+        user,
+        overdue_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[overdue],
+        # state는 near_original이므로 이 candidate는 5번에서 지는 쪽이다.
+        stage=ContextStage.ANCHOR,
+    )
+    stage_matched = _candidate(
+        db_session,
+        user,
+        barely_due_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[barely_due],
+        stage=ContextStage.ANCHOR,
+    )
+    assert stage_mismatched.id < stage_matched.id
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None
+    assert selection.candidate_id == stage_mismatched.id, (
+        "stage 일치가 order key보다 앞서면 심하게 밀린 due item이 영구히 뒤로 밀린다"
+    )
+    assert selection.target_item_ids == (overdue.id,)
+
+
+@pytest.mark.integration
+def test_the_most_urgent_target_sets_the_candidate_priority(db_session: Session) -> None:
+    """candidate의 order key = 그 candidate의 usable target들의 order key **최소값**.
+
+    "가장 급한 target이 candidate의 우선순위를 정한다. ... 최대값이나 평균을 쓰면
+    급한 target이 덜 급한 동승자 때문에 밀린다." 이 배치에서 최대값을 쓰면
+    multi-target candidate가 덜 급한 동승자 때문에 단일 target candidate에 진다.
+
+    세 item의 stage와 두 candidate의 stage를 전부 같게 두어 5번 항을 상수로 만든다
+    --- dominant는 stage 판정에도 쓰이므로 그렇게 해야 order key 효과만 남는다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    urgent = factories.make_learning_item(db_session, lemma="緊急")
+    lazy = factories.make_learning_item(db_session, lemma="悠長")
+    middle = factories.make_learning_item(db_session, lemma="中間")
+    shared = _ready_sentence(db_session, [urgent, lazy])
+    middle_sentence = _ready_sentence(db_session, [middle])
+    for item in (urgent, lazy, middle):
+        _learning_state(db_session, user, item, stage=ContextStage.ANCHOR)
+    _schedule(db_session, user, urgent, next_review_at=clock.now() - timedelta(days=90))
+    _schedule(db_session, user, middle, next_review_at=clock.now() - timedelta(days=30))
+    _schedule(db_session, user, lazy, next_review_at=clock.now() - timedelta(minutes=1))
+    multi_target = _candidate(
+        db_session,
+        user,
+        shared,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[urgent, lazy],
+        stage=ContextStage.ANCHOR,
+    )
+    single_target = _candidate(
+        db_session,
+        user,
+        middle_sentence,
+        role=REVIEW,
+        reason=FSRS_DUE,
+        targets=[middle],
+        stage=ContextStage.ANCHOR,
+    )
+    assert multi_target.context_stage is single_target.context_stage, "5번 항은 상수여야 한다"
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None
+    assert selection.candidate_id == multi_target.id, (
+        "덜 급한 동승자(lazy)가 candidate의 우선순위를 정하면 안 된다"
+    )
+    assert selection.target_item_ids == (urgent.id, lazy.id)
+
+
+@pytest.mark.integration
+def test_two_matching_candidates_fall_back_to_the_stable_tie_break(
+    db_session: Session,
+) -> None:
+    """규칙 6. 5번이 동률이면 순서가 흔들리지 않는 기존 tie-break로 갈린다."""
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    first_sentence = _ready_sentence(db_session, [item])
+    second_sentence = _ready_sentence(db_session, [item])
+    _learning_state(db_session, user, item, anchor_sentence_id=first_sentence.id)
+    _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    first = _candidate(
+        db_session, user, first_sentence, role=REVIEW, reason=FSRS_DUE, targets=[item]
+    )
+    second = _candidate(
+        db_session, user, second_sentence, role=REVIEW, reason=FSRS_DUE, targets=[item]
+    )
+    assert first.context_stage is second.context_stage
+
+    study_session = _study_session(db_session, user)
+    picks = {_select(db_session, user, study_session, clock.now()) for _ in range(3)}
+
+    assert picks == {
+        Selection(
+            candidate_id=first.id,
+            sentence_id=first_sentence.id,
+            presentation_role=REVIEW,
+            review_reason=FSRS_DUE,
+            context_stage=first.context_stage,
+            target_item_ids=(item.id,),
+        )
+    }
+
+
+@pytest.mark.integration
+def test_the_stage_tie_break_does_not_change_the_chosen_reason(db_session: Session) -> None:
+    """reason 선택이 먼저 일어난다. stage가 어긋나도 `context_repair`가 밀리지 않는다."""
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    repairing = factories.make_learning_item(db_session, lemma="修復")
+    due = factories.make_learning_item(db_session, lemma="期限")
+    repair_sentence = _ready_sentence(db_session, [repairing])
+    due_sentence = _ready_sentence(db_session, [due])
+    _learning_state(db_session, user, repairing, stage=ContextStage.ANCHOR)
+    _learning_state(db_session, user, due, stage=ContextStage.ANCHOR)
+    _schedule(db_session, user, repairing, next_review_at=clock.now() + timedelta(days=365))
+    _schedule(db_session, user, due, next_review_at=clock.now() - timedelta(days=9))
+    repair = _candidate(
+        db_session,
+        user,
+        repair_sentence,
+        role=REVIEW,
+        reason=CONTEXT_REPAIR,
+        targets=[repairing],
+        # state는 anchor이므로 이 candidate는 5번에서 지는 쪽이다.
+        stage=ContextStage.NEAR_ORIGINAL,
+    )
+    _candidate(db_session, user, due_sentence, role=REVIEW, reason=FSRS_DUE, targets=[due])
+
+    selection = _select(db_session, user, _study_session(db_session, user), clock.now())
+
+    assert selection is not None
+    assert selection.review_reason is CONTEXT_REPAIR
+    assert selection.candidate_id == repair.id
+
+
+@pytest.mark.integration
+def test_materialization_and_the_tie_break_start_the_ladder_at_the_same_stage(
+    db_session: Session,
+) -> None:
+    """ladder 시작점은 **한 사실**이다. 두 자리가 그것을 따로 선언한다.
+
+    materialization은 `user_item_learning_state` 행이 없는 item의 candidate를
+    ladder 시작 stage로 만들고(`_review_plans`), tie-break 5번은 같은 item의 판정
+    stage를 `INITIAL_CONTEXT_STAGE`로 읽는다(`_load_review_targets`). 두 값이
+    갈리면 **state 행이 없는 item의 candidate가 5번에서 영구히 불일치**가 되어,
+    자기 자신을 위해 만들어진 candidate가 낮은 우선순위로 밀린다. 값이 같은 지금은
+    무해하므로 어떤 동작 테스트도 이 결합을 보지 못한다 --- 그래서 여기서 두 값이
+    같다는 것 자체를 단언한다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    _ready_sentence(db_session, [item])
+    # `user_item_learning_state` 행을 **만들지 않는다.** 그 경우에만 두 선언이 쓰인다.
+    _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, item, clock.now())
+
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+
+    (candidate,) = _candidates_of(db_session, user, role=REVIEW)
+    assert candidate.context_stage is INITIAL_CONTEXT_STAGE, (
+        "materialization과 tie-break가 ladder 시작점을 다른 상수로 표현하면 안 된다"
+    )
 
 
 @pytest.mark.integration

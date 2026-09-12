@@ -33,6 +33,7 @@ from app.models import (
     User,
     UserItemLearningState,
     UserMastery,
+    UserSentenceCandidate,
 )
 from app.models.enums import (
     CandidateStatus,
@@ -45,6 +46,7 @@ from app.models.enums import (
 from app.services.content_flag import flag_content
 from app.services.events import server_client_event_id
 from app.services.interactions import (
+    EvidenceAlreadyRecordedError,
     ExplanationMissingError,
     ProbeNotFoundError,
     SentenceItemNotFoundError,
@@ -160,6 +162,29 @@ def _activate_target(db: Session, scene: Scene) -> None:
         )
     )
     db.flush()
+
+
+def _another_exposure(db: Session, scene: Scene) -> StudyPresentation:
+    """같은 item을 보여주는 **다른** presentation.
+
+    노출당 evidence는 1건이므로(07_SRS_SPEC.md) 한 item에 evidence를 두 번 남기려면
+    노출이 둘이어야 한다. 한 session에 열린 presentation은 하나이므로 session도 새로
+    만든다.
+    """
+    cfg = get_config()
+    study_session = factories.make_study_session(
+        db, scene.user, target_minutes=cfg.learning.default_session_minutes
+    )
+    candidate = db.get(UserSentenceCandidate, scene.presentation.candidate_id)
+    assert candidate is not None
+    return factories.make_presentation(
+        db,
+        scene.user,
+        study_session,
+        candidate,
+        scene.sentence,
+        presentation_role=scene.presentation.presentation_role,
+    )
 
 
 def _show_probe(db: Session, scene: Scene, clock: MutableClock) -> LearningEvent:
@@ -530,9 +555,11 @@ def test_known_on_an_item_already_in_srs_is_recorded(
 def test_the_mastery_alpha_comes_from_config(
     db_session: Session, study_clock: MutableClock
 ) -> None:
+    """두 신호는 **다른 노출**에 있어야 한다. 한 노출의 evidence는 1건이다(ADR-018)."""
     cfg = get_config()
     scene = _scene(db_session)
     _activate_target(db_session, scene)
+    later = _another_exposure(db_session, scene)
 
     self_report(
         db_session,
@@ -547,7 +574,7 @@ def test_the_mastery_alpha_comes_from_config(
     self_report(
         db_session,
         user_id=scene.user.id,
-        presentation_id=scene.presentation.id,
+        presentation_id=later.id,
         sentence_item_id=scene.sentence_item.id,
         signal=ExplicitSignal.UNKNOWN,
         client_event_id=uuid.uuid4(),
@@ -711,6 +738,224 @@ def test_a_probe_id_that_is_not_a_probe_event_is_rejected(
             now=study_clock.now(),
             cfg=cfg,
         )
+
+
+# --------------------------------------------------------------------------
+# 노출당 evidence 1건 (07_SRS_SPEC.md, ADR-018)
+# --------------------------------------------------------------------------
+
+
+def test_a_second_self_report_on_the_same_exposure_is_rejected(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """다른 UUIDv4로 보낸 2회차는 409이고 EMA도 `reps`도 다시 움직이지 않는다.
+
+    프론트에서 버튼을 잠그는 것으로는 재시도/두 탭/직접 호출에 뚫린다. 뚫린 결과가
+    mastery와 `review_states`에 조용히 남으므로 서버가 막는다.
+    """
+    cfg = get_config()
+    scene = _scene(db_session)
+    _activate_target(db_session, scene)
+    self_report(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        sentence_item_id=scene.sentence_item.id,
+        signal=ExplicitSignal.UNKNOWN,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    with pytest.raises(EvidenceAlreadyRecordedError):
+        self_report(
+            db_session,
+            user_id=scene.user.id,
+            presentation_id=scene.presentation.id,
+            sentence_item_id=scene.sentence_item.id,
+            signal=ExplicitSignal.KNOWN,
+            client_event_id=uuid.uuid4(),
+            now=study_clock.now(),
+            cfg=cfg,
+        )
+
+    mastery = _mastery(db_session, scene)
+    assert mastery is not None
+    assert mastery.evidence_count == 1
+    # 2회차로 덮어쓰지 않는다. `몰랐음`의 observation 0.0이 그 노출에 고정된다.
+    assert mastery.comprehension_mastery == 0.0
+    state = _review_state(db_session, scene)
+    assert state is not None
+    assert state.reps == 1
+    # event row 자체가 만들어지지 않는다. 기록해 놓고 효과만 건너뛰면 raw history가
+    # "두 번 답했다"로 남는다.
+    assert _events(db_session, user_id=scene.user.id, event_type=EventType.SELF_REPORT_KNOWN) == []
+
+
+def test_the_cap_counts_learning_items_not_sentence_items(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """판정 단위는 `learning_item`이다.
+
+    한 문장에 같은 learning item을 가리키는 sentence item이 둘 있을 때
+    `sentence_item` 단위로 세는 규칙은 evidence 2건을 통과시킨다.
+    """
+    cfg = get_config()
+    scene = _scene(db_session)
+    _activate_target(db_session, scene)
+    twin = factories.make_sentence_item(db_session, scene.sentence, scene.item, surface_form="任せ")
+    self_report(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        sentence_item_id=scene.sentence_item.id,
+        signal=ExplicitSignal.UNKNOWN,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    with pytest.raises(EvidenceAlreadyRecordedError):
+        self_report(
+            db_session,
+            user_id=scene.user.id,
+            presentation_id=scene.presentation.id,
+            sentence_item_id=twin.id,
+            signal=ExplicitSignal.KNOWN,
+            client_event_id=uuid.uuid4(),
+            now=study_clock.now(),
+            cfg=cfg,
+        )
+
+    mastery = _mastery(db_session, scene)
+    assert mastery is not None
+    assert mastery.evidence_count == 1
+
+
+def test_a_probe_answer_after_a_self_report_on_the_same_item_is_rejected(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """두 evidence 경로를 합쳐 센다. 한쪽만 막으면 상한이 성립하지 않는다.
+
+    probe 후보는 그 presentation의 target item이므로 이 순서는 실제로 도달 가능하다.
+    """
+    cfg = get_config()
+    scene = _scene(db_session)
+    _activate_target(db_session, scene)
+    probe = _show_probe(db_session, scene, study_clock)
+    self_report(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        sentence_item_id=scene.sentence_item.id,
+        signal=ExplicitSignal.KNOWN,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    with pytest.raises(EvidenceAlreadyRecordedError):
+        respond_to_probe(
+            db_session,
+            user_id=scene.user.id,
+            presentation_id=scene.presentation.id,
+            probe_id=probe.id,
+            signal=ExplicitSignal.UNKNOWN,
+            client_event_id=uuid.uuid4(),
+            now=study_clock.now(),
+            cfg=cfg,
+        )
+
+    mastery = _mastery(db_session, scene)
+    assert mastery is not None
+    assert mastery.evidence_count == 1
+    assert (
+        _events(db_session, user_id=scene.user.id, event_type=EventType.MASTERY_PROBE_UNKNOWN) == []
+    )
+    # 응답을 기록하지 않았으므로 `last_probe_at`도 움직이지 않는다.
+    learning_state = _learning_state(db_session, scene)
+    assert learning_state is not None
+    assert learning_state.last_probe_at is None
+
+
+def test_a_self_report_after_a_probe_skip_is_allowed(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """skip은 evidence가 아니므로 상한에 걸리지 않는다(02_LEARNING_POLICY.md의 `Skip`).
+
+    세는 집합에 `mastery_probe_skipped`가 들어가면 이 테스트가 빨개진다.
+    """
+    cfg = get_config()
+    scene = _scene(db_session)
+    _activate_target(db_session, scene)
+    probe = _show_probe(db_session, scene, study_clock)
+    respond_to_probe(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        probe_id=probe.id,
+        signal=None,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    self_report(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        sentence_item_id=scene.sentence_item.id,
+        signal=ExplicitSignal.UNKNOWN,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    mastery = _mastery(db_session, scene)
+    assert mastery is not None
+    assert mastery.evidence_count == 1
+    state = _review_state(db_session, scene)
+    assert state is not None
+    assert state.reps == 1
+
+
+def test_a_probe_skip_after_a_self_report_is_allowed(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """skip은 상한 때문에 거부되지도 않는다. 물어본 사실은 남아야 한다."""
+    cfg = get_config()
+    scene = _scene(db_session)
+    _activate_target(db_session, scene)
+    probe = _show_probe(db_session, scene, study_clock)
+    self_report(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        sentence_item_id=scene.sentence_item.id,
+        signal=ExplicitSignal.KNOWN,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    result = respond_to_probe(
+        db_session,
+        user_id=scene.user.id,
+        presentation_id=scene.presentation.id,
+        probe_id=probe.id,
+        signal=None,
+        client_event_id=uuid.uuid4(),
+        now=study_clock.now(),
+        cfg=cfg,
+    )
+
+    assert result.signal is None
+    learning_state = _learning_state(db_session, scene)
+    assert learning_state is not None
+    assert learning_state.probe_skip_count == 1
+    mastery = _mastery(db_session, scene)
+    assert mastery is not None
+    assert mastery.evidence_count == 1
 
 
 # --------------------------------------------------------------------------

@@ -34,7 +34,11 @@ from app.learning.exploration import (
     eligible_exploration_targets,
     exploration_sort_key,
 )
-from app.learning.progression import UNKNOWN_SIGNAL_EVENTS, stage_rank
+from app.learning.progression import (
+    INITIAL_CONTEXT_STAGE,
+    UNKNOWN_SIGNAL_EVENTS,
+    stage_rank,
+)
 from app.models.content import LearningItem, Sentence, SentenceItem, SentenceItemExplanation
 from app.models.enums import (
     CandidateStatus,
@@ -135,6 +139,9 @@ class _ReviewTarget:
     next_review_at: datetime
     deferred_until: datetime | None
     mastery: float | None
+    # `user_item_learning_state.context_stage`. candidate 단위 tie-break 5번의
+    # 판정값이며 여기서도 **읽기만** 한다(G5). 행이 없으면 ladder 시작점이다.
+    context_stage: ContextStage
 
     def eligible(self, now: datetime) -> bool:
         """Review Ordering 1단계. 무신호 review가 같은 세션에서 다시 뽑히지 않게 한다."""
@@ -145,7 +152,11 @@ class _ReviewTarget:
 
     @property
     def order_key(self) -> ReviewOrderKey:
-        """next_review_at ASC -> mastery ASC(NULL이 가장 낮다) -> learning_item_id ASC."""
+        """next_review_at ASC -> mastery ASC(NULL이 가장 낮다) -> learning_item_id ASC.
+
+        마지막 항이 `learning_item_id`이므로 **서로 다른 item의 order key는 절대
+        같지 않다.** dominant target(`_select_review`)의 유일성이 이 사실에 기댄다.
+        """
         mastery = _MASTERY_IS_NULL if self.mastery is None else (1, self.mastery)
         return (self.next_review_at, mastery, self.learning_item_id)
 
@@ -337,12 +348,20 @@ def _load_review_targets(
             ReviewState.next_review_at,
             ReviewState.deferred_until,
             UserMastery.comprehension_mastery,
+            UserItemLearningState.context_stage,
         )
         .outerjoin(
             UserMastery,
             sa.and_(
                 UserMastery.user_id == ReviewState.user_id,
                 UserMastery.learning_item_id == ReviewState.learning_item_id,
+            ),
+        )
+        .outerjoin(
+            UserItemLearningState,
+            sa.and_(
+                UserItemLearningState.user_id == ReviewState.user_id,
+                UserItemLearningState.learning_item_id == ReviewState.learning_item_id,
             ),
         )
         .where(ReviewState.user_id == user_id)
@@ -359,8 +378,11 @@ def _load_review_targets(
             next_review_at=next_review_at,
             deferred_until=deferred_until,
             mastery=mastery,
+            # 행이 없는 item은 materialization이 anchor로 다루므로(`_review_plans`)
+            # tie-break도 같은 값을 봐야 한다.
+            context_stage=INITIAL_CONTEXT_STAGE if stage is None else stage,
         )
-        for item_id, next_review_at, deferred_until, mastery in db.execute(statement).all()
+        for item_id, next_review_at, deferred_until, mastery, stage in db.execute(statement).all()
     }
 
 
@@ -1145,7 +1167,7 @@ def _select_review(
         item_ids=[item_id for items in targets.values() for item_id in items],
     )
 
-    buckets: dict[ReviewReason, list[tuple[ReviewOrderKey, int]]] = {}
+    buckets: dict[ReviewReason, list[tuple[ReviewOrderKey, int, int]]] = {}
     by_id = {candidate.id: candidate for candidate in candidates}
     for candidate in candidates:
         reason = candidate.review_reason
@@ -1160,15 +1182,25 @@ def _select_review(
             usable = [target for target in usable if target.due(now)]
         if not usable:
             continue
-        # candidate가 target 2개면 candidate의 키는 target 키들의 최소값이다.
+        # candidate가 target 2개면 candidate의 키는 usable target 키들의 **최소값**이고,
+        # 그 최소값을 만든 target이 dominant target이다. 한 candidate의 target은
+        # item마다 한 행이고(`uq user_sentence_candidate_targets(candidate_id,
+        # learning_item_id)`) order key의 마지막 항이 `learning_item_id`이므로 최소값은
+        # 유일하다 --- `min`이 동률에서 무엇을 고르는지에 기대지 않는다.
+        dominant = min(usable, key=lambda target: target.order_key)
+        # 규칙 5는 **선호이지 배제가 아니다.** 일치하는 candidate가 하나도 없으면 이
+        # 항이 전부 1이 되어 낮은 stage candidate가 그대로 선택된다 --- `Pool Fallback`
+        # 2단계가 의도적으로 허용한 anchor reinforcement 노출을 막지 않는다.
+        # stage **거리**로 정렬하지 않는다. 일치/불일치 두 값뿐이다.
+        matches_stage = candidate.context_stage is dominant.context_stage
         buckets.setdefault(reason, []).append(
-            (min(target.order_key for target in usable), candidate.id)
+            (dominant.order_key, 0 if matches_stage else 1, candidate.id)
         )
 
     reason = choose_review_reason(buckets, counters, cfg.reinforcement_min_share_of_review)
     if reason is None:
         return None
-    _, candidate_id = min(buckets[reason])
+    _, _stage_match, candidate_id = min(buckets[reason])
     return _selection_of(by_id[candidate_id], targets.get(candidate_id, []))
 
 

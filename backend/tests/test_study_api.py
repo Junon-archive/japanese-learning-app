@@ -38,6 +38,7 @@ from app.main import create_app
 from app.models import (
     ItemExposure,
     LearningEvent,
+    ReviewState,
     Sentence,
     StudyPresentation,
     StudySession,
@@ -741,6 +742,238 @@ def test_flagging_still_works_after_the_session_is_finished(
         assert exposure.invalidated_at is not None
     db_session.refresh(session)
     assert session.last_activity_at == last_activity_at
+
+
+# --------------------------------------------------------------------------
+# 노출당 evidence 상한 (05_API_SPEC.md, ADR-018)
+# --------------------------------------------------------------------------
+
+EVIDENCE_CONFLICT = {"detail": "This exposure already has recorded evidence"}
+
+
+def _self_report(
+    api: TestClient,
+    presentation_id: int,
+    *,
+    sentence_item_id: int,
+    value: str,
+    client_event_id: uuid.UUID | None = None,
+) -> httpx2.Response:
+    return api.post(
+        f"/api/study/presentations/{presentation_id}/self-report",
+        json={
+            "client_event_id": str(client_event_id or uuid.uuid4()),
+            "sentence_item_id": sentence_item_id,
+            "value": value,
+        },
+    )
+
+
+def _probe_response(
+    api: TestClient, presentation_id: int, *, probe_id: int, value: str
+) -> httpx2.Response:
+    return api.post(
+        f"/api/study/presentations/{presentation_id}/probe-response",
+        json={
+            "client_event_id": str(uuid.uuid4()),
+            "probe_id": probe_id,
+            "value": value,
+        },
+    )
+
+
+def _show_probe(db: Session, payload: dict[str, object], user: User, session_id: int) -> int:
+    """`/next`가 남기는 것과 같은 `mastery_probe_shown` event.
+
+    `choose_probe()`의 pacing 조건을 테스트가 손으로 맞추면 그 조건을 다시 구현하는
+    것이 되므로, event만 같은 모양으로 둔다.
+    """
+    presentation_id = cast(int, payload["presentation_id"])
+    items = cast(list[dict[str, int]], payload["tappable_items"])
+    learning_item_id = items[0]["learning_item_id"]
+    event = LearningEvent(
+        user_id=user.id,
+        study_session_id=session_id,
+        study_presentation_id=presentation_id,
+        sentence_id=cast(int, payload["sentence_id"]),
+        learning_item_id=learning_item_id,
+        event_type=EventType.MASTERY_PROBE_SHOWN,
+        client_event_id=server_client_event_id(
+            EventType.MASTERY_PROBE_SHOWN,
+            study_presentation_id=presentation_id,
+            learning_item_id=learning_item_id,
+        ),
+        created_at=factories.NOW,
+    )
+    db.add(event)
+    db.flush()
+    return event.id
+
+
+def _evidence_counters(db: Session, user: User) -> tuple[list[int], list[int]]:
+    """`(evidence_count 전부, reps 전부)`. 행이 늘어나는 것까지 보려고 목록으로 둔다."""
+    counts = list(
+        db.execute(
+            sa.select(UserMastery.evidence_count).where(UserMastery.user_id == user.id)
+        ).scalars()
+    )
+    reps = list(
+        db.execute(sa.select(ReviewState.reps).where(ReviewState.user_id == user.id)).scalars()
+    )
+    return counts, reps
+
+
+def test_a_second_self_report_on_the_same_exposure_answers_409(
+    api: TestClient, db_session: Session
+) -> None:
+    """열린 presentation에서도 같은 노출은 두 번 평가되지 않는다(07_SRS_SPEC.md).
+
+    detail 문구가 게이트 409와 달라야 한다. 같으면 client가 세션 재획득으로 응답하는데
+    이 409는 어떤 재시도로도 풀리지 않는다.
+    """
+    user = _login(api, db_session)
+    _seed_ready_sentence(db_session, user)
+    session_id = _start(api)
+    payload = _next(api, session_id).json()["presentation"]
+    presentation_id = payload["presentation_id"]
+    sentence_item_id = payload["tappable_items"][0]["sentence_item_id"]
+    assert (
+        _self_report(
+            api, presentation_id, sentence_item_id=sentence_item_id, value="unknown"
+        ).status_code
+        == 204
+    )
+    before = _evidence_counters(db_session, user)
+    assert before == ([1], [1])
+
+    response = _self_report(api, presentation_id, sentence_item_id=sentence_item_id, value="known")
+
+    assert response.status_code == 409
+    assert response.json() == EVIDENCE_CONFLICT
+    db_session.expire_all()
+    assert _evidence_counters(db_session, user) == before
+    # 2회차 event row가 만들어지지 않는다.
+    assert (
+        db_session.execute(
+            sa.select(sa.func.count())
+            .select_from(LearningEvent)
+            .where(
+                LearningEvent.user_id == user.id,
+                LearningEvent.event_type == EventType.SELF_REPORT_KNOWN,
+            )
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_resending_the_same_self_report_key_answers_204_not_409(
+    api: TestClient, db_session: Session
+) -> None:
+    """재전송 멱등성이 상한보다 먼저 판정된다(05_API_SPEC.md의 `판정 순서` 3 < 4).
+
+    순서를 뒤집으면 성공한 self-report의 네트워크 재시도가 자기가 만든 evidence에
+    걸려 409가 되고, client가 성공한 요청을 실패로 읽는다.
+    """
+    user = _login(api, db_session)
+    _seed_ready_sentence(db_session, user)
+    session_id = _start(api)
+    payload = _next(api, session_id).json()["presentation"]
+    presentation_id = payload["presentation_id"]
+    sentence_item_id = payload["tappable_items"][0]["sentence_item_id"]
+    key = uuid.uuid4()
+    assert (
+        _self_report(
+            api,
+            presentation_id,
+            sentence_item_id=sentence_item_id,
+            value="unknown",
+            client_event_id=key,
+        ).status_code
+        == 204
+    )
+
+    response = _self_report(
+        api,
+        presentation_id,
+        sentence_item_id=sentence_item_id,
+        value="unknown",
+        client_event_id=key,
+    )
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    assert _evidence_counters(db_session, user) == ([1], [1])
+
+
+def test_a_probe_answer_after_a_self_report_answers_409(
+    api: TestClient, db_session: Session
+) -> None:
+    """두 evidence 경로를 합쳐 센다. 한쪽만 막으면 상한이 성립하지 않는다."""
+    user = _login(api, db_session)
+    _seed_ready_sentence(db_session, user)
+    session_id = _start(api)
+    payload = _next(api, session_id).json()["presentation"]
+    presentation_id = payload["presentation_id"]
+    probe_id = _show_probe(db_session, payload, user, session_id)
+    assert (
+        _self_report(
+            api,
+            presentation_id,
+            sentence_item_id=payload["tappable_items"][0]["sentence_item_id"],
+            value="unknown",
+        ).status_code
+        == 204
+    )
+
+    response = _probe_response(api, presentation_id, probe_id=probe_id, value="known")
+
+    assert response.status_code == 409
+    assert response.json() == EVIDENCE_CONFLICT
+    db_session.expire_all()
+    assert _evidence_counters(db_session, user) == ([1], [1])
+
+
+def test_a_self_report_after_a_probe_skip_still_answers_204(
+    api: TestClient, db_session: Session
+) -> None:
+    """`mastery_probe_skipped`는 evidence가 아니다(02_LEARNING_POLICY.md의 `Skip`)."""
+    user = _login(api, db_session)
+    _seed_ready_sentence(db_session, user)
+    session_id = _start(api)
+    payload = _next(api, session_id).json()["presentation"]
+    presentation_id = payload["presentation_id"]
+    probe_id = _show_probe(db_session, payload, user, session_id)
+    assert _probe_response(api, presentation_id, probe_id=probe_id, value="skip").status_code == 200
+
+    response = _self_report(
+        api,
+        presentation_id,
+        sentence_item_id=payload["tappable_items"][0]["sentence_item_id"],
+        value="unknown",
+    )
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    assert _evidence_counters(db_session, user) == ([1], [1])
+
+
+def test_resending_a_probe_answer_answers_200_not_409(api: TestClient, db_session: Session) -> None:
+    """`probe_id` 기준 제한은 멱등성을 담당하므로 상한이 그것을 덮지 않는다."""
+    user = _login(api, db_session)
+    _seed_ready_sentence(db_session, user)
+    session_id = _start(api)
+    payload = _next(api, session_id).json()["presentation"]
+    presentation_id = payload["presentation_id"]
+    probe_id = _show_probe(db_session, payload, user, session_id)
+    first = _probe_response(api, presentation_id, probe_id=probe_id, value="unknown")
+    assert first.status_code == 200
+
+    response = _probe_response(api, presentation_id, probe_id=probe_id, value="known")
+
+    assert response.status_code == 200
+    assert response.json() == first.json()
+    db_session.expire_all()
+    assert _evidence_counters(db_session, user) == ([1], [1])
 
 
 def test_ownership_is_decided_before_the_state_gate(api: TestClient, db_session: Session) -> None:

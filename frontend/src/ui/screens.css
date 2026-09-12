@@ -1,0 +1,522 @@
+/*
+ * 화면 스타일. 색 토큰은 `styles.css`(reference mockup 출처)를 그대로 쓴다.
+ * pixel-perfect가 목표가 아니다 --- 모바일 한 손 조작과 44px 탭 타깃이 기준이다.
+ *
+ * `.token`(tappable span)은 **하나의 규칙만** 있다. target/incidental을 구분하는
+ * 변형을 추가하지 마라(03_UI_UX_SPEC.md의 `tappable span 표시`).
+ */
+
+.screen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 18px 28px;
+}
+
+/* --- 공통 버튼 --------------------------------------------------------- */
+
+button.primary {
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+button.secondary {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 15px;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+/* --- 안내 ------------------------------------------------------------- */
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+.notice-error {
+  background: #fff6df;
+}
+
+.notice-text {
+  flex: 1;
+  margin: 0;
+  min-width: 60%;
+}
+
+.notice-action {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+/* --- 진행 표시 --------------------------------------------------------- */
+
+.progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+}
+
+.progress-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.progress-readout {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.progress-bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  border-radius: 99px;
+  background: #edf0f4;
+  overflow: hidden;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+}
+
+/* --- 문장 ------------------------------------------------------------- */
+
+.sentence-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 24px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+}
+
+.sentence {
+  margin: 0;
+  font-family: 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-size: 24px;
+  line-height: 1.8;
+}
+
+/* tappable span. 전부 같은 모양이다. */
+.token {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid rgba(79, 109, 245, 0.22);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.token:active {
+  background: var(--accent-soft);
+}
+
+/* --- 세션 종료 --------------------------------------------------------- */
+
+.session-end {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.session-end-text {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.session-end-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.session-finished {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 18px;
+  text-align: center;
+}
+
+.session-finished-title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.session-finished-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* --- 로그인 ------------------------------------------------------------ */
+
+.login {
+  justify-content: center;
+  gap: 20px;
+}
+
+.login-title {
+  margin: 0;
+  font-size: 20px;
+  text-align: center;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.field input {
+  min-height: var(--tap-target);
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
+/* --- 상호작용 (설명 / 번역 / probe / 신고) ------------------------------- */
+
+.interactions {
+  display: grid;
+  gap: 12px;
+}
+
+/* 번역. 이 자리의 노드는 reveal 응답을 받은 뒤에 만들어진다 --- 숨겨 둔 것을 켜는
+   구조가 아니므로 `.translation`에 display 토글 규칙을 두지 않는다. */
+.translation {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+button.reveal-translation {
+  min-height: var(--tap-target);
+}
+
+.panel-failure {
+  margin: 0;
+  color: #8a4b00;
+  font-size: 13px;
+}
+
+/* 설명 패널 */
+.explain {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.jp-word {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.reading {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tag {
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.explain p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.explain .meaning {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.explain .nuance,
+.explain .example-translation {
+  color: var(--muted);
+}
+
+.explain .example {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f6f7f9;
+}
+
+/* self-report. 선택이므로 강조하지 않는다. */
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button.self-report,
+button.probe-option,
+button.flag-reason {
+  min-height: var(--tap-target);
+  flex: 1 1 30%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.feedback-done {
+  color: var(--muted);
+}
+
+button.explain-close,
+button.flag-open,
+button.flag-cancel {
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+/* probe. 세션의 중심 UI가 아니므로 문장·설명보다 조용하게 둔다. */
+.probe {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.probe-prompt {
+  margin: 0;
+  font-size: 14px;
+}
+
+.probe-expression {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.probe-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.probe-answered {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 신고 */
+.flag {
+  display: grid;
+  gap: 8px;
+}
+
+.flag-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.flag-note-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.flag-note {
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.flag-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flag-done {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* --- 데모 배너 --------------------------------------------------------- */
+
+.demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: #fff6df;
+  font-size: 13px;
+}
+
+.demo-banner-text {
+  flex: 1;
+  margin: 0;
+  min-width: 60%;
+}
+
+button.demo-exit {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+button.demo-enter {
+  min-height: var(--tap-target);
+}
+
+/* --- 학습 기록 --------------------------------------------------------- */
+
+button.history-link,
+button.logout {
+  justify-self: start;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-title {
+  margin: 0;
+  font-size: 20px;
+}
+
+button.history-back {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.history-body {
+  display: grid;
+  gap: 20px;
+}
+
+.history-heading {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.history-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.history-row .history-cell:first-child {
+  font-weight: 700;
+}
+
+.history-truncated,
+.history-empty {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
