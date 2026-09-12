@@ -10,7 +10,7 @@
     만드는 `client_event_id`(UUID) 하나뿐이다.
 
 offset은 응답에 싣지 않는다. frontend는 `render_segments`의 `text`를 순서대로 이어
-붙일 뿐 인덱스를 계산하지 않는다(`app/services/render.py`).
+붙일 뿐 인덱스를 계산하지 않는다(`app/render.py`).
 """
 
 from __future__ import annotations

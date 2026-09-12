@@ -1,4 +1,15 @@
-"""환경변수 전용 설정 (secret / 인프라). 학습 정책값은 `app.config`가 담당한다."""
+"""환경변수 전용 설정 (secret / 인프라). 학습 정책값은 `app.config`가 담당한다.
+
+**`LLM_PROVIDER` / `LLM_API_KEY`는 여기에 없다.** 이 두 값을 읽는 것은
+`scripts/run_worker.py` 하나뿐이다(`spec/04_SECURITY_AND_DATA.md`의
+`LLM provider 자격증명`, ADR-016의 `개정`). 필드로 올리면 두 가지가 무너진다.
+
+-   `Settings`의 모든 필드는 compose에서 **backend와 worker 양쪽에** 전달되어야
+    한다(`backend/tests/test_infra_compose.py`). 그 순간 API 컨테이너 환경에 provider
+    키가 놓이고, "키는 worker 프로세스에만"이라는 배포 경계가 사라진다.
+-   `app/`이 provider 설정을 읽을 수 있게 되면 request 경로에서 client를 만드는 데
+    한 줄이면 충분해진다(불변식 #1).
+"""
 
 from __future__ import annotations
 

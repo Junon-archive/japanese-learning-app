@@ -20,8 +20,11 @@ RUN useradd --create-home --uid 10001 appuser
 
 COPY backend ./backend
 COPY config ./config
+# 진입점은 backend/ 밖에 있다. 이 이미지에만 필요하다(API 이미지는 복사하지 않는다).
+COPY scripts ./scripts
 
 USER appuser
 
-# Worker 프로세스는 Wave 3에서 구현한다. 그때까지 이 이미지는 기동하지 않는다.
-CMD ["sh", "-c", "echo 'worker entrypoint is not implemented yet (Wave 3)' >&2; exit 1"]
+# 진입점이 LLM_PROVIDER / LLM_API_KEY를 읽어 provider를 만들고 worker loop에 넘긴다.
+# 값이 없거나 허용값이 아니면 예외로 즉시 종료한다(fail-closed, ADR-016의 개정).
+CMD ["python", "scripts/run_worker.py"]

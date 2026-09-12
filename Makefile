@@ -2,7 +2,7 @@ UV ?= $(shell command -v uv || echo $(HOME)/.local/bin/uv)
 # --env-file을 명시하지 않으면 compose가 infra/.env를 찾는다. 루트 .env를 쓴다.
 COMPOSE ?= docker compose --env-file .env -f infra/docker-compose.yml
 
-.PHONY: install lint format typecheck test test-unit frontend-build ci run db-up db-up-local db-down db-reset seed create-user
+.PHONY: install lint format typecheck test test-unit frontend-build ci run worker-run db-up db-up-local db-down db-reset seed create-user prompts
 
 install:
 	$(UV) sync
@@ -34,6 +34,11 @@ ci: lint typecheck test
 run:
 	$(UV) run uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
+# worker 프로세스. DATABASE_URL / LLM_PROVIDER / LLM_API_KEY는 셸에서 export 한다
+# (애플리케이션은 .env를 직접 읽지 않는다). 값이 없거나 허용값이 아니면 즉시 종료한다.
+worker-run:
+	$(UV) run python scripts/run_worker.py
+
 db-up:
 	$(COMPOSE) up -d postgres
 
@@ -59,3 +64,10 @@ create-user:
 # seed/의 starter set을 적재한다. 재적재는 지원하지 않는다 (seed/README.md).
 seed:
 	$(UV) run python scripts/load_seed.py $(ARGS)
+
+# prompt_versions 등록 (04_DB_SPEC.md의 등록 절차). worker는 task 3종에 active 행이
+# 없으면 부팅에 실패하므로 배포에서 이 타깃을 먼저 돌린다. version은 코드의 registry가,
+# provider/model은 운영자가 정한다 (08_LLM_SPEC.md).
+# 예: make prompts ARGS="--provider openai --model <모델명>"
+prompts:
+	$(UV) run python scripts/load_prompts.py $(ARGS)

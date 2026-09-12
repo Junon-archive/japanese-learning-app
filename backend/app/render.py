@@ -11,11 +11,18 @@ frontend는 받은 `text` 조각을 순서대로 이어 붙이기만 하고 인�
 
     "".join(segment.text for segment in segments) == japanese
 
+`validate_item_spans`는 적재/생성 시점의 검증이고 `build_render_segments`는 표시
+시점의 렌더링이다. 둘을 한 모듈에 두는 이유는 판정 기준이 갈리면 검증을 통과한
+문장이 렌더링에서 터지기 때문이다. 검증하는 쪽은 sentence_item 하나 안만 보고,
+**문장 전체의 tappable span이 서로 겹치는지는 `build_render_segments`를 그대로
+불러서** 확인한다(호출자 몫). 렌더링이 터지는 조건과 거부 조건이 정의상 같아진다.
+
 DB를 모른다. span row를 `SpanRef`로 바꿔 넘기는 것은 호출하는 service의 몫이다.
 """
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -38,6 +45,15 @@ class SpanRef:
     is_tappable: bool
     start_codepoint: int
     end_codepoint: int
+
+
+@dataclass(frozen=True)
+class ItemSpan:
+    """검증 전의 span 하나. 아직 어느 `sentence_item`에도 붙지 않았다."""
+
+    start_codepoint: int
+    end_codepoint: int
+    span_order: int
 
 
 @dataclass(frozen=True)
@@ -111,6 +127,67 @@ def build_tappable_items(spans: Sequence[SpanRef]) -> list[TappableItem]:
             ),
         )
     return [items[key] for key in sorted(items)]
+
+
+def validate_item_spans(japanese: str, surface_form: str, spans: Sequence[ItemSpan]) -> None:
+    """sentence_item 하나의 span 집합이 문장과 맞는지 확인한다.
+
+    offset이 `japanese`의 실제 code point index와 맞는지 본다. CPython의 `str`은
+    code point 열이므로(PEP 393) `list(japanese)`의 원소 하나가 code point 하나다.
+    이모지 같은 BMP 밖 문자도 여기서는 1칸이며 UTF-16 code unit 기준으로는 2칸이다.
+    그 둘이 섞이는 유일한 통로는 lone surrogate(UTF-16 index를 그대로 옮겨 적은
+    문자열)이므로 그런 문자열은 아예 거부한다.
+
+    **범위는 item 하나 안이다.** 서로 다른 item의 span이 겹치는지는 문장의 tappable
+    span 전부를 `build_render_segments`에 한 번에 넣어 확인한다. 여기의 overlap
+    검사는 그 검사가 보지 않는 non-tappable item까지 덮는다.
+    """
+    codepoints = list(japanese)
+    for offset, char in enumerate(codepoints):
+        if 0xD800 <= ord(char) <= 0xDFFF:
+            raise RenderSpanError(
+                f"'japanese' contains a lone surrogate at code point {offset}; "
+                "offsets must be Unicode code point indexes, not UTF-16 code units"
+            )
+
+    orders = sorted(span.span_order for span in spans)
+    if orders != list(range(len(spans))):
+        raise RenderSpanError(f"span_order must be 0..{len(spans) - 1} exactly once, got {orders}")
+
+    pieces: list[str] = []
+    for span in sorted(spans, key=lambda span: span.span_order):
+        if not 0 <= span.start_codepoint < span.end_codepoint <= len(codepoints):
+            raise RenderSpanError(
+                f"span [{span.start_codepoint}, {span.end_codepoint}) is out of range "
+                f"for a sentence of {len(codepoints)} code points"
+            )
+        pieces.append("".join(codepoints[span.start_codepoint : span.end_codepoint]))
+
+    _reject_overlapping_spans(spans)
+
+    covered = "".join(pieces)
+    if covered != surface_form:
+        raise RenderSpanError(f"spans cover {covered!r} but surface_form is {surface_form!r}")
+
+
+def _reject_overlapping_spans(spans: Sequence[ItemSpan]) -> None:
+    """서로 **겹치는** span을 거부한다.
+
+    금지하는 것은 overlap뿐이다. **떨어져 있는(disjoint) span은 정상이다** ---
+    `気が全然乗らない`처럼 하나의 표현이 문장 안에서 끊겨 나타나는 불연속 표현은
+    span 여러 개로 표현하는 것이 정상 데이터다. 사이의 빈칸은 검사하지 않는다.
+
+    겹치면 같은 code point가 같은 item의 두 span에 속하게 되어 같은 글자가
+    surface_form에 두 번 들어간다.
+    """
+    ordered = sorted(spans, key=lambda span: span.start_codepoint)
+    for previous, current in itertools.pairwise(ordered):
+        if current.start_codepoint < previous.end_codepoint:
+            raise RenderSpanError(
+                f"spans [{previous.start_codepoint}, {previous.end_codepoint}) and "
+                f"[{current.start_codepoint}, {current.end_codepoint}) overlap; "
+                "spans may be discontinuous but must not cover the same code point twice"
+            )
 
 
 def _validate(span: SpanRef, *, length: int) -> None:

@@ -21,7 +21,7 @@ cap해서가 아니라 `reinforcement` reason을 골라서 채운다. FSRS 컬�
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -148,6 +148,48 @@ class _ReviewTarget:
         """next_review_at ASC -> mastery ASC(NULL이 가장 낮다) -> learning_item_id ASC."""
         mastery = _MASTERY_IS_NULL if self.mastery is None else (1, self.mastery)
         return (self.next_review_at, mastery, self.learning_item_id)
+
+
+@dataclass(frozen=True)
+class ReviewContextGap:
+    """`stage -> sentence`가 문장을 찾지 못한 `(item, stage)` 하나.
+
+    `anchor_sentence_id`는 `GENERATE_REVIEW_CONTEXT` payload가 요구하는 값이므로
+    None이 아니다. anchor조차 없다면 그 item에 쓸 문장이 **아예 없다**는 뜻이고 그것은
+    Pool Fallback 3단계의 `GENERATE_SENTENCE_BATCH`가 맡는다(06_LEARNING_ENGINE.md의
+    `stage -> sentence`, 두 job의 경계).
+    """
+
+    learning_item_id: int
+    context_stage: ContextStage
+    anchor_sentence_id: int
+
+
+@dataclass
+class MaterializationGaps:
+    """materialization이 **만들지 못한** candidate의 사실 기록. job을 만들지는 않는다.
+
+    `app/learning/`(L1)은 `app/jobs/`(L2)를 import할 수 없다(ADR-015). 그래서
+    `GENERATE_SENTENCE_BATCH`가 `select_next`의 `None`을 호출부로 올리는 것과 같은
+    방식으로 이 두 gap도 **사실만** 위로 올리고, `generation_jobs` INSERT는 호출한
+    `services/`가 자기 트랜잭션 안에서 한다(09_BACKGROUND_JOBS.md의
+    `Enqueue 트리거와 idempotency key`).
+
+    dedupe에 `set`을 쓰지 않는다. enqueue 순서가 실행마다 달라지면 같은 입력이 매번
+    다른 job 순서를 만들고 실패를 그대로 재현할 수 없다.
+    """
+
+    unexplained_sentence_item_ids: list[int] = field(default_factory=list)
+    review_contexts: list[ReviewContextGap] = field(default_factory=list)
+
+    def record_unexplained(self, sentence_item_ids: Iterable[int]) -> None:
+        for sentence_item_id in sentence_item_ids:
+            if sentence_item_id not in self.unexplained_sentence_item_ids:
+                self.unexplained_sentence_item_ids.append(sentence_item_id)
+
+    def record_review_context(self, gap: ReviewContextGap) -> None:
+        if gap not in self.review_contexts:
+            self.review_contexts.append(gap)
 
 
 @dataclass(frozen=True)
@@ -339,11 +381,23 @@ def _valid_exposure_count(db: Session, *, user_id: int, learning_item_id: int) -
 # --------------------------------------------------------------------------
 
 
-def materialize_candidates(db: Session, *, user: User, now: datetime, cfg: LearningConfig) -> int:
+def materialize_candidates(
+    db: Session,
+    *,
+    user: User,
+    now: datetime,
+    cfg: LearningConfig,
+    gaps: MaterializationGaps | None = None,
+) -> int:
     """요청한 사용자 **한 명분**의 Ready Pool을 채우고 만든 candidate 수를 돌려준다.
 
     role별로 최대 `candidate_materialization_batch_size`개다. 상한이 없으면 첫
     세션 한 번에 seed 전체가 candidate로 복제된다.
+
+    `gaps`를 주면 만들지 못한 candidate의 사유를 그 객체에 모은다. 그것으로
+    `EXPLAIN_ITEM` / `GENERATE_REVIEW_CONTEXT`를 enqueue하는 것은 호출한 `services/`의
+    일이다(`MaterializationGaps`). 주지 않으면 아무것도 모으지 않고 동작은 같다 ---
+    job이 필요 없는 호출부(worker의 대상 선정 등)가 수집 비용을 내지 않는다.
 
     `status`는 곧바로 `ready`다. 대상이 이미 검증된 콘텐츠뿐이기 때문이다.
     `queued`는 **아직 콘텐츠가 없어 worker가 생성 중인** candidate의 값이며 Wave 3이
@@ -351,9 +405,15 @@ def materialize_candidates(db: Session, *, user: User, now: datetime, cfg: Learn
     """
     created = 0
     for role, plans in (
-        (PresentationRole.REVIEW, _review_plans(db, user_id=user.id, now=now, cfg=cfg)),
-        (PresentationRole.NEW, _new_plans(db, user_id=user.id, now=now)),
-        (PresentationRole.EXPLORATION, _exploration_plans(db, user=user, now=now, cfg=cfg)),
+        (
+            PresentationRole.REVIEW,
+            _review_plans(db, user_id=user.id, now=now, cfg=cfg, gaps=gaps),
+        ),
+        (PresentationRole.NEW, _new_plans(db, user_id=user.id, now=now, gaps=gaps)),
+        (
+            PresentationRole.EXPLORATION,
+            _exploration_plans(db, user=user, now=now, cfg=cfg, gaps=gaps),
+        ),
     ):
         created += _create_candidates(
             db,
@@ -462,8 +522,88 @@ def _has_review_state(db: Session, *, user_id: int, item_id: int) -> bool:
     )
 
 
+def unexplained_sentence_item_ids() -> sa.Select[tuple[int]]:
+    """Ready invariant를 깨는 `sentence_items.id`. `is_tappable`인데 validated explanation이 없다.
+
+    **Ready invariant 판정의 canonical SQL이다**(`06_LEARNING_ENGINE.md`의
+    `Candidate Materialization`, `08_LLM_SPEC.md`의 `Ready invariant와 같은 범위`).
+    materialization(아래 `_ready_sentences`)과 generation 영속화
+    (`jobs/persistence.py`)가 **같은 문장**을 쓴다 --- 세 곳이 다른 해석을 쓰면
+    생성은 통과했는데 candidate가 될 수 없는 문장이 조용히 쌓이고, 어느 지표에도
+    실패로 잡히지 않아 pool이 비는 이유가 보이지 않는다.
+
+    범위는 target item만이 아니라 그 문장의 `is_tappable = true`인 **모든** item이다.
+
+    문장 단위 판정(`unexplained_sentence_ids`)과 이 item 단위 판정이 **같은 한 쿼리**에서
+    나오는 이유는 `EXPLAIN_ITEM` payload가 `sentence_item_id`이기 때문이다. 둘을 따로
+    쓰면 "candidate가 못 되는 문장"과 "설명을 주문한 item"이 어긋나 job을 만들어도
+    그 문장이 영원히 ready가 되지 않는다.
+
+    `SentenceItem`이 FROM이므로 호출자가 `.where(SentenceItem.sentence_id == ...)`로
+    문장 하나에 좁힐 수 있다.
+    """
+    return (
+        sa.select(SentenceItem.id)
+        .outerjoin(
+            SentenceItemExplanation,
+            sa.and_(
+                SentenceItemExplanation.sentence_item_id == SentenceItem.id,
+                SentenceItemExplanation.status == ExplanationStatus.VALIDATED,
+            ),
+        )
+        .where(SentenceItem.is_tappable.is_(True), SentenceItemExplanation.id.is_(None))
+    )
+
+
+def unexplained_sentence_ids() -> sa.Select[tuple[int]]:
+    """Ready invariant를 깨는 **문장**의 id. 위 판정의 문장 단위 투영이다."""
+    return unexplained_sentence_item_ids().with_only_columns(SentenceItem.sentence_id)
+
+
+def has_ready_sentence(db: Session, *, learning_item_id: int) -> bool:
+    """그 item을 포함하면서 Ready invariant를 만족하는 문장이 하나라도 있는가.
+
+    `08_LLM_SPEC.md`의 `GENERATE_SENTENCE_BATCH 대상 선정`이 거는 추가 조건이다.
+    worker가 자기 판정을 따로 구현하면 "문장이 있는데도 계속 생성하는" 또는
+    "없는데 생성하지 않는" 쪽으로 조용히 갈린다.
+    """
+    return bool(_ready_sentences(db, learning_item_id=learning_item_id, unseen_by_user_id=None))
+
+
+def _examined_sentence_ids(
+    *, learning_item_id: int, unseen_by_user_id: int | None
+) -> sa.Select[tuple[int]]:
+    """이번 실행이 그 item에 대해 **검사하는** 문장. Ready invariant는 아직 적용하지 않는다.
+
+    `EXPLAIN_ITEM`을 "검사한 문장"에만 만들려면(09_BACKGROUND_JOBS.md) ready 판정과
+    gap 수집이 **같은 대상 집합**을 봐야 한다. 그래서 그 집합을 select 하나로 뽑아
+    아래 두 쿼리가 공유한다.
+    """
+    statement = (
+        sa.select(Sentence.id)
+        .join(SentenceItem, SentenceItem.sentence_id == Sentence.id)
+        .where(
+            SentenceItem.learning_item_id == learning_item_id,
+            Sentence.status == SentenceStatus.VALIDATED,
+        )
+    )
+    if unseen_by_user_id is not None:
+        statement = statement.where(
+            Sentence.id.not_in(
+                sa.select(StudyPresentation.sentence_id).where(
+                    StudyPresentation.user_id == unseen_by_user_id
+                )
+            )
+        )
+    return statement
+
+
 def _ready_sentences(
-    db: Session, *, learning_item_id: int, unseen_by_user_id: int | None
+    db: Session,
+    *,
+    learning_item_id: int,
+    unseen_by_user_id: int | None,
+    gaps: MaterializationGaps | None = None,
 ) -> list[tuple[int, int | None]]:
     """Ready invariant를 만족하는 문장 `(id, parent_sentence_id)`, id ASC.
 
@@ -475,48 +615,57 @@ def _ready_sentences(
     `unseen_by_user_id`가 주어지면 그 사용자에게 아직 **제시된 적 없는** 문장만
     남긴다. 판정 소스는 `study_presentations`다. `item_exposures`는 target item에
     대한 기록이라 target이 아닌 item을 품은 문장을 이미 보여준 사실을 놓친다.
+
+    `gaps`가 주어지면 explanation 누락으로 **제외된** 문장의 `sentence_item`을 그곳에
+    기록한다. `EXPLAIN_ITEM`의 트리거가 정확히 그 집합이고, 이번 실행에서 실제로
+    검사한 문장만 대상이다 --- 누락 explanation을 찾겠다고 corpus 전체를 훑지 않는다
+    (09_BACKGROUND_JOBS.md). enqueue는 `MaterializationGaps`를 받은 `services/`가 한다.
     """
-    unexplained = (
-        sa.select(SentenceItem.sentence_id)
-        .outerjoin(
-            SentenceItemExplanation,
-            sa.and_(
-                SentenceItemExplanation.sentence_item_id == SentenceItem.id,
-                SentenceItemExplanation.status == ExplanationStatus.VALIDATED,
-            ),
-        )
-        .where(SentenceItem.is_tappable.is_(True), SentenceItemExplanation.id.is_(None))
+    examined = _examined_sentence_ids(
+        learning_item_id=learning_item_id, unseen_by_user_id=unseen_by_user_id
     )
     statement = (
         sa.select(Sentence.id, Sentence.parent_sentence_id)
-        .join(SentenceItem, SentenceItem.sentence_id == Sentence.id)
         .where(
-            SentenceItem.learning_item_id == learning_item_id,
-            Sentence.status == SentenceStatus.VALIDATED,
-            Sentence.id.not_in(unexplained),
+            Sentence.id.in_(examined),
+            Sentence.id.not_in(unexplained_sentence_ids()),
         )
-        .distinct()
         .order_by(Sentence.id)
     )
-    if unseen_by_user_id is not None:
-        statement = statement.where(
-            Sentence.id.not_in(
-                sa.select(StudyPresentation.sentence_id).where(
-                    StudyPresentation.user_id == unseen_by_user_id
-                )
-            )
+    rows = [(sentence_id, parent_id) for sentence_id, parent_id in db.execute(statement).all()]
+    if gaps is not None:
+        gaps.record_unexplained(_missing_explanation_items(db, examined=examined))
+    return rows
+
+
+def _missing_explanation_items(db: Session, *, examined: sa.Select[tuple[int]]) -> list[int]:
+    """검사한 문장 중 설명이 빠진 tappable item의 id, id ASC."""
+    return list(
+        db.execute(
+            unexplained_sentence_item_ids()
+            .where(SentenceItem.sentence_id.in_(examined))
+            .order_by(SentenceItem.id)
         )
-    return [(sentence_id, parent_id) for sentence_id, parent_id in db.execute(statement).all()]
+        .scalars()
+        .all()
+    )
 
 
-def _first_unseen_sentence(db: Session, *, user_id: int, item_id: int) -> int | None:
+def _first_unseen_sentence(
+    db: Session, *, user_id: int, item_id: int, gaps: MaterializationGaps | None = None
+) -> int | None:
     """exploration과 new의 문장 규칙: 아직 노출되지 않은 validated 문장, id ASC."""
-    rows = _ready_sentences(db, learning_item_id=item_id, unseen_by_user_id=user_id)
+    rows = _ready_sentences(db, learning_item_id=item_id, unseen_by_user_id=user_id, gaps=gaps)
     return rows[0][0] if rows else None
 
 
 def _exploration_plans(
-    db: Session, *, user: User, now: datetime, cfg: LearningConfig
+    db: Session,
+    *,
+    user: User,
+    now: datetime,
+    cfg: LearningConfig,
+    gaps: MaterializationGaps | None = None,
 ) -> Iterator[_Plan]:
     """exploration target은 `Exploration Item 선정`의 후보 조건·정렬을 그대로 따른다.
 
@@ -536,12 +685,14 @@ def _exploration_plans(
         key=lambda item: exploration_sort_key(item, starting_level=user.starting_level),
     )
     for item in ordered:
-        sentence_id = _first_unseen_sentence(db, user_id=user.id, item_id=item.id)
+        sentence_id = _first_unseen_sentence(db, user_id=user.id, item_id=item.id, gaps=gaps)
         if sentence_id is not None:
             yield _Plan(item.id, sentence_id, ContextStage.ANCHOR, None)
 
 
-def _new_plans(db: Session, *, user_id: int, now: datetime) -> Iterator[_Plan]:
+def _new_plans(
+    db: Session, *, user_id: int, now: datetime, gaps: MaterializationGaps | None = None
+) -> Iterator[_Plan]:
     """`new` = 학습 target인데 **아직 한 번도 target으로 제시되지 않은** item (ADR-013).
 
     "아직 `review_states` 행이 없는 item"이라는 옛 정의는 철회됐다. `몰랐음 -> Again`이
@@ -576,8 +727,13 @@ def _new_plans(db: Session, *, user_id: int, now: datetime) -> Iterator[_Plan]:
             item_id=item_id,
             stage=ContextStage.ANCHOR,
             anchor_id=state.anchor_sentence_id,
+            gaps=gaps,
         )
         if picked is None:
+            # `GENERATE_REVIEW_CONTEXT`를 만들지 않는다. 그 job의 트리거는
+            # materialization의 **review 분기**이고(09_BACKGROUND_JOBS.md), 아직 한 번도
+            # 제시되지 않은 item에 문장이 없다는 것은 "이 stage에 맞는 문장이 없다"가
+            # 아니라 "쓸 문장이 아예 없다"다 --- Pool Fallback 3단계의 몫이다.
             continue
         if picked.anchor_to_record is not None:
             state.anchor_sentence_id = picked.anchor_to_record
@@ -586,7 +742,12 @@ def _new_plans(db: Session, *, user_id: int, now: datetime) -> Iterator[_Plan]:
 
 
 def _review_plans(
-    db: Session, *, user_id: int, now: datetime, cfg: LearningConfig
+    db: Session,
+    *,
+    user_id: int,
+    now: datetime,
+    cfg: LearningConfig,
+    gaps: MaterializationGaps | None = None,
 ) -> Iterator[_Plan]:
     """review candidate도 Wave 2가 만든다. 한 item에 reason은 **하나**다.
 
@@ -627,10 +788,19 @@ def _review_plans(
             item_id=target.learning_item_id,
             stage=stage,
             anchor_id=anchor_id,
+            gaps=gaps,
         )
         if picked is None:
             # 조건에 맞는 문장이 없다. 그 stage의 candidate를 만들지 않고 Pool
-            # Fallback으로 넘긴다. 문맥을 **생성**하는 것은 Wave 3의 일이다.
+            # Fallback으로 넘긴다. 문맥을 **생성**하는 것은 Wave 3의 일이므로
+            # `(item, stage)`를 gap에 올린다 --- enqueue는 `services/`가 한다.
+            _record_review_context_gap(
+                db,
+                gaps=gaps,
+                learning_item_id=target.learning_item_id,
+                stage=stage,
+                anchor_id=anchor_id,
+            )
             continue
         # materialization 쪽의 `anchor_sentence_id` 쓰기 지점이다(`_new_plans`와
         # 같은 규칙). 승격 시점의 기록은 `learning/progression.py`가 하고 둘 다
@@ -639,6 +809,39 @@ def _review_plans(
             state.anchor_sentence_id = picked.anchor_to_record
             state.updated_at = now
         yield _Plan(target.learning_item_id, picked.sentence_id, stage, reason)
+
+
+def _record_review_context_gap(
+    db: Session,
+    *,
+    gaps: MaterializationGaps | None,
+    learning_item_id: int,
+    stage: ContextStage,
+    anchor_id: int | None,
+) -> None:
+    """`GENERATE_REVIEW_CONTEXT`가 필요하다는 사실을 올린다. 두 경우는 올리지 않는다.
+
+    ``` text
+    anchor_sentence_id가 NULL      쓸 문장이 아예 없다 -> GENERATE_SENTENCE_BATCH의 몫
+    anchor가 quarantined           불변식 #7
+    ```
+
+    **불변식 #7**: 격리된 anchor를 기준으로 만든 문맥은 그 자체가 오염된 문맥이다.
+    handler도 그 경우를 `NothingToDo`로 끝내지만(`jobs/review_context.py`), 애초에
+    만들지 않는 편이 낫다 --- job 하나가 attempt와 관측 지표를 그대로 소모한다.
+    anchor 재지정은 request 경로(`_resolve_anchor`)의 소관이다.
+    """
+    if gaps is None or anchor_id is None:
+        return
+    if _is_quarantined(db, sentence_id=anchor_id):
+        return
+    gaps.record_review_context(
+        ReviewContextGap(
+            learning_item_id=learning_item_id,
+            context_stage=stage,
+            anchor_sentence_id=anchor_id,
+        )
+    )
 
 
 def _review_reason_for(
@@ -733,7 +936,13 @@ def _is_quarantined(db: Session, *, sentence_id: int) -> bool:
 
 
 def _stage_sentence(
-    db: Session, *, user_id: int, item_id: int, stage: ContextStage, anchor_id: int | None
+    db: Session,
+    *,
+    user_id: int,
+    item_id: int,
+    stage: ContextStage,
+    anchor_id: int | None,
+    gaps: MaterializationGaps | None = None,
 ) -> _StageSentence | None:
     """`stage -> sentence` 표 (06_LEARNING_ENGINE.md).
 
@@ -747,7 +956,7 @@ def _stage_sentence(
     않으므로 건드리지 않는다.
     """
     if stage in (ContextStage.ANCHOR, ContextStage.NEAR_ORIGINAL):
-        ready = _ready_sentences(db, learning_item_id=item_id, unseen_by_user_id=None)
+        ready = _ready_sentences(db, learning_item_id=item_id, unseen_by_user_id=None, gaps=gaps)
         resolved = _resolve_anchor(db, ready=ready, anchor_id=anchor_id)
         if resolved is None:
             return None
@@ -759,7 +968,7 @@ def _stage_sentence(
                 return _StageSentence(sentence_id, anchor_to_record)
         return None
 
-    ready = _ready_sentences(db, learning_item_id=item_id, unseen_by_user_id=user_id)
+    ready = _ready_sentences(db, learning_item_id=item_id, unseen_by_user_id=user_id, gaps=gaps)
     for sentence_id, _parent_id in ready:
         if sentence_id != anchor_id:
             return _StageSentence(sentence_id, None)
@@ -808,6 +1017,7 @@ def select_next(
     study_session_id: int,
     now: datetime,
     cfg: LearningConfig,
+    gaps: MaterializationGaps | None = None,
 ) -> Selection | None:
     """다음 presentation으로 쓸 candidate를 고른다. 고를 것이 없으면 None이다.
 
@@ -816,6 +1026,10 @@ def select_next(
     `app/learning/`은 L1이라 job을 import할 수 없다. 호출하는 `services/`가 같은
     트랜잭션 안에서 job row를 INSERT한다. **provider를 부르지 않는다** --- 모든
     pool이 비어도 세션을 LLM 응답 대기로 block하지 않는다(불변식 #1).
+
+    `gaps`도 같은 이유로 같은 방향이다: 0단계 materialization이 만들지 못한 candidate의
+    사유를 담아 올리고, `EXPLAIN_ITEM` / `GENERATE_REVIEW_CONTEXT` enqueue는 호출부가
+    한다(`MaterializationGaps`).
 
     `review_states`에 아무것도 쓰지 않는다. due item을 골라놓고 보여주지 못해도
     lapse도 실패도 아니고 그대로 due로 남는다.
@@ -830,7 +1044,7 @@ def select_next(
 
     # 0. Candidate Materialization 1회 (LLM 호출 없음). "Ready candidate가 없다"는
     #    대부분 콘텐츠가 없다가 아니라 아직 이 사용자에게 투영되지 않았다는 뜻이다.
-    materialize_candidates(db, user=user, now=now, cfg=cfg)
+    materialize_candidates(db, user=user, now=now, cfg=cfg, gaps=gaps)
 
     # 1. 같은 deficit 순서로 available category를 훑는다(첫 category 재시도 포함).
     for role in ranked:

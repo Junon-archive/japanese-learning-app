@@ -43,4 +43,10 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
-    environment: *app-env
+    environment:
+      <<: *app-env
+      # provider 자격증명은 **worker에만** 준다. FastAPI는 provider client를 만들지
+      # 않으므로 키가 필요 없고, 주지 않는 것이 그 경계를 배포 수준에서 한 번 더
+      # 강제한다 (spec/04_SECURITY_AND_DATA.md의 `LLM provider 자격증명`).
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_API_KEY: ${LLM_API_KEY}

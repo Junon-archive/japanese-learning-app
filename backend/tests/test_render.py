@@ -13,12 +13,14 @@ from collections.abc import Iterator
 
 import pytest
 
-from app.services.render import (
+from app.render import (
+    ItemSpan,
     RenderSegment,
     RenderSpanError,
     SpanRef,
     build_render_segments,
     build_tappable_items,
+    validate_item_spans,
 )
 
 # 표준 예시(06/05 명세). `気が` + `乗らない`가 한 item이고 사이에 `全然`이 낀다.
@@ -227,3 +229,81 @@ def test_a_negative_start_is_rejected() -> None:
 
 def test_a_sentence_without_spans_is_one_plain_segment() -> None:
     assert rendered(build_render_segments(DISCONTINUOUS, [])) == [(DISCONTINUOUS, None)]
+
+
+# --------------------------------------------------------------------------
+# item 단위 span 검증 (`validate_item_spans`)
+#
+# seed 적재와 생성 validation이 같이 쓰는 검사다. 각 테스트는 **특정 검사 한 줄을
+# 지우면 빨개지도록** 짰다.
+# --------------------------------------------------------------------------
+
+SENTENCE = "仕事を任せる。"  # 7 code points: 仕 事 を 任 せ る 。
+
+
+def item_spans(*triples: tuple[int, int, int]) -> tuple[ItemSpan, ...]:
+    return tuple(
+        ItemSpan(start_codepoint=start, end_codepoint=end, span_order=order)
+        for start, end, order in triples
+    )
+
+
+def test_span_order_must_be_zero_based_and_contiguous() -> None:
+    """span_order 검사를 지우면 빨개진다.
+
+    offset과 surface_form은 서로 맞으므로 span_order 검사만이 유일한 거부 사유다.
+    """
+    with pytest.raises(RenderSpanError, match="span_order"):
+        validate_item_spans(SENTENCE, "仕事", item_spans((0, 2, 1)))
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "surface_form"),
+    [
+        # 각 케이스의 surface_form은 "범위 검사를 지웠을 때 Python 슬라이싱이
+        # 실제로 만들어내는 문자열"이다. 검사를 지우면 surface_form 대조도
+        # 통과해버리므로 예외가 사라지고 테스트가 빨개진다.
+        (0, 99, SENTENCE),  # end가 문장 밖
+        (-1, 2, ""),  # 음수 start (슬라이싱은 뒤에서 세므로 조용히 빈 문자열)
+        (2, 2, ""),  # 빈 span
+    ],
+)
+def test_item_span_offsets_outside_the_sentence_are_rejected(
+    start: int, end: int, surface_form: str
+) -> None:
+    with pytest.raises(RenderSpanError, match="out of range"):
+        validate_item_spans(SENTENCE, surface_form, item_spans((start, end, 0)))
+
+
+def test_sentence_with_a_lone_surrogate_is_rejected() -> None:
+    """lone surrogate 검사를 지우면 빨개진다.
+
+    span은 문장과 정합하므로 그 검사가 사라지면 아무 예외도 나지 않는다.
+    lone surrogate는 offset이 code point가 아니라 UTF-16 code unit이라는 신호다.
+    """
+    japanese = "仕事\ud800を任せる。"
+    with pytest.raises(RenderSpanError, match="lone surrogate"):
+        validate_item_spans(japanese, "仕事", item_spans((0, 2, 0)))
+
+
+def test_overlapping_spans_within_one_item_are_rejected() -> None:
+    """overlap 검사를 지우면 빨개진다.
+
+    두 span이 `事`를 공유해도 이어붙인 결과가 surface_form과 같아서 다른 검사는
+    전부 통과한다. 12_TEST_PLAN.md의 Unit 항목이 요구하는 거부다.
+    """
+    with pytest.raises(RenderSpanError, match="overlap"):
+        validate_item_spans(SENTENCE, "仕事事を", item_spans((0, 2, 0), (1, 3, 1)))
+
+
+def test_discontinuous_spans_are_allowed() -> None:
+    """떨어져 있는(disjoint) span은 정상이다. 불연속 표현이 이 형태다.
+
+    overlap 거부가 "붙어 있지 않으면 거부"로 과잉 구현되면 빨개진다.
+    """
+    validate_item_spans("気が全然乗らない。", "気が乗らない", item_spans((0, 2, 0), (4, 8, 1)))
+
+
+def test_surface_form_is_compared_in_span_order_not_position() -> None:
+    """조각을 잇는 순서는 `span_order`다. 위치 순으로 이으면 빨개진다."""
+    validate_item_spans(SENTENCE, "任せる仕事", item_spans((3, 6, 0), (0, 2, 1)))

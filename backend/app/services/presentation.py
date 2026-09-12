@@ -31,11 +31,11 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig
-from app.jobs.replenishment import enqueue_replenishment
+from app.jobs.replenishment import enqueue_materialization_gaps, enqueue_replenishment
 from app.learning.exposure import count_valid_exposures, record_meaningful_exposure
 from app.learning.probe import choose_probe
 from app.learning.progression import UNKNOWN_SIGNAL_EVENTS, advance_context_stage, bump_no_signal
-from app.learning.selection import select_next
+from app.learning.selection import MaterializationGaps, select_next
 from app.models.content import Sentence, SentenceItem, SentenceItemSpan
 from app.models.enums import (
     CandidateStatus,
@@ -49,14 +49,14 @@ from app.models.enums import (
 from app.models.learning import ReviewState, UserSentenceCandidate, UserSentenceCandidateTarget
 from app.models.study import LearningEvent, StudyPresentation
 from app.models.user import User
-from app.services.events import record_event, server_client_event_id
-from app.services.render import (
+from app.render import (
     RenderSegment,
     SpanRef,
     TappableItem,
     build_render_segments,
     build_tappable_items,
 )
+from app.services.events import record_event, server_client_event_id
 from app.services.study_session import (
     StudySessionClosedError,
     StudySessionNotFoundError,
@@ -173,7 +173,15 @@ def next_presentation(
         db.commit()
         return view
 
-    selection = select_next(db, user=user, study_session_id=session.id, now=now, cfg=cfg.learning)
+    # Pool Fallback 0단계의 materialization이 만들지 못한 candidate의 사유를 받아
+    # job으로 바꾼다. **selection을 찾았더라도** enqueue한다 --- 트리거는 "검사한 문장에
+    # explanation이 없었다" / "그 stage의 문장이 없었다"는 사실 자체이고, 다른 category가
+    # 이번에 보여줄 문장을 찾은 것과 무관하다(09_BACKGROUND_JOBS.md).
+    gaps = MaterializationGaps()
+    selection = select_next(
+        db, user=user, study_session_id=session.id, now=now, cfg=cfg.learning, gaps=gaps
+    )
+    enqueue_materialization_gaps(db, user_id=user.id, gaps=gaps, now=now, cfg=cfg)
     if selection is None:
         _request_replenishment(db, user_id=user.id, now=now, cfg=cfg)
         db.commit()

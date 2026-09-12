@@ -1,9 +1,21 @@
-"""Ready Pool replenishment enqueue (09_BACKGROUND_JOBS.md, 06_LEARNING_ENGINE.md).
+"""request 경로의 `generation_jobs` enqueue (09_BACKGROUND_JOBS.md, 06_LEARNING_ENGINE.md).
+
+세 job_type의 트리거가 전부 여기 있다. `09_BACKGROUND_JOBS.md`의
+`Enqueue 트리거와 idempotency key` 표가 canonical이다.
+
+``` text
+GENERATE_SENTENCE_BATCH  Pool Fallback 3단계. role 하나당 1건
+GENERATE_REVIEW_CONTEXT  materialization의 review 분기가 그 stage의 문장을 못 찾음
+EXPLAIN_ITEM             materialization이 검사한 문장의 explanation 누락
+```
+
+한 모듈에 모으는 이유는 G12다(ADR-015): `app/jobs/` 밖에서 import할 수 있는 jobs
+모듈은 enqueue 모듈뿐이고, 그 allowlist를 늘리지 않는다.
 
 **이 모듈은 `generation_jobs`에 INSERT만 한다.** provider client를 만들지 않고
-`app.llm`을 import하지 않는다. request 경로(Pool Fallback 3단계)에서 불리므로, 여기에
-provider 호출이 한 줄이라도 생기면 모든 pool이 빈 사용자의 요청이 LLM 응답을 기다리게
-된다(불변식 #1). claim / retry backoff / provider 호출은 전부 Wave 3의 worker다.
+`app.llm`을 import하지 않는다. request 경로에서 불리므로, 여기에 provider 호출이 한
+줄이라도 생기면 모든 pool이 빈 사용자의 요청이 LLM 응답을 기다리게 된다(불변식 #1).
+claim / retry backoff / provider 호출은 전부 worker다.
 
 replenishment는 job_type이 아니다. `GENERATE_SENTENCE_BATCH`를 enqueue하는
 트리거다(09_BACKGROUND_JOBS.md).
@@ -15,12 +27,14 @@ commit하지 않는다. 부르는 service의 같은 트랜잭션 안에서 일�
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig
-from app.models.enums import GenerationJobStatus, JobType, PresentationRole
+from app.learning.selection import MaterializationGaps
+from app.models.enums import ContextStage, GenerationJobStatus, JobType, PresentationRole
 from app.models.jobs import GenerationJob
 
 
@@ -56,13 +70,136 @@ def enqueue_replenishment(
     `next_attempt_at = now`이므로 worker가 바로 집어갈 수 있다. 실패했을 때의 backoff는
     worker가 정한다(`retry_backoff_base_seconds`).
     """
+    return _enqueue(
+        db,
+        job_type=JobType.GENERATE_SENTENCE_BATCH,
+        payload={"user_id": user_id, "presentation_role": role.value},
+        idempotency_key=replenishment_idempotency_key(user_id=user_id, role=role, now=now),
+        now=now,
+        cfg=cfg,
+    )
+
+
+def explain_item_idempotency_key(*, sentence_item_id: int, now: datetime) -> str:
+    """`explain:{sentence_item_id}:{UTC 날짜}` (09_BACKGROUND_JOBS.md).
+
+    사용자가 들어가지 않는다. 설명은 global content이므로 같은 `sentence_item`을
+    두 사용자가 같은 날 만나면 job은 하나여야 한다.
+    """
+    return f"explain:{sentence_item_id}:{now:%Y-%m-%d}"
+
+
+def enqueue_explain_item(
+    db: Session, *, sentence_item_id: int, now: datetime, cfg: AppConfig
+) -> GenerationJob | None:
+    """materialization이 explanation 누락으로 건너뛴 `sentence_item` 하나에 1건.
+
+    이미 억제 창 안에 job이 있으면 None이다. 설명이 붙으면 그 문장이 Ready invariant를
+    다시 만족하고, **다음 materialization 실행에서** candidate가 된다(08_LLM_SPEC.md).
+    """
+    return _enqueue(
+        db,
+        job_type=JobType.EXPLAIN_ITEM,
+        payload={"sentence_item_id": sentence_item_id},
+        idempotency_key=explain_item_idempotency_key(sentence_item_id=sentence_item_id, now=now),
+        now=now,
+        cfg=cfg,
+    )
+
+
+def review_context_idempotency_key(
+    *, user_id: int, learning_item_id: int, context_stage: ContextStage, now: datetime
+) -> str:
+    """`review_ctx:{user_id}:{learning_item_id}:{context_stage}:{UTC 날짜}`.
+
+    stage가 키에 들어간다. 빠지면 `varied`가 비어서 만든 job이 같은 날 `new_context`의
+    생성을 막고, ladder를 올라간 item이 그날 내내 새 문맥을 못 얻는다.
+    """
+    return f"review_ctx:{user_id}:{learning_item_id}:{context_stage.value}:{now:%Y-%m-%d}"
+
+
+def enqueue_review_context(
+    db: Session,
+    *,
+    user_id: int,
+    learning_item_id: int,
+    context_stage: ContextStage,
+    anchor_sentence_id: int,
+    now: datetime,
+    cfg: AppConfig,
+) -> GenerationJob | None:
+    """`(item, stage)` 하나당 1건. anchor는 payload에 실린다(09_BACKGROUND_JOBS.md).
+
+    quarantined anchor를 걸러내는 것은 트리거 지점이다(`learning/selection.py`의
+    `_record_review_context_gap`, 불변식 #7). 여기서 다시 조회하면 같은 판정이 두
+    곳으로 갈린다.
+    """
+    return _enqueue(
+        db,
+        job_type=JobType.GENERATE_REVIEW_CONTEXT,
+        payload={
+            "user_id": user_id,
+            "learning_item_id": learning_item_id,
+            "context_stage": context_stage.value,
+            "anchor_sentence_id": anchor_sentence_id,
+        },
+        idempotency_key=review_context_idempotency_key(
+            user_id=user_id,
+            learning_item_id=learning_item_id,
+            context_stage=context_stage,
+            now=now,
+        ),
+        now=now,
+        cfg=cfg,
+    )
+
+
+def enqueue_materialization_gaps(
+    db: Session, *, user_id: int, gaps: MaterializationGaps, now: datetime, cfg: AppConfig
+) -> None:
+    """materialization이 올린 gap을 job으로 바꾼다. 호출부의 트랜잭션에 INSERT만 얹는다.
+
+    `app/learning/`(L1)이 이 모듈(L2)을 import할 수 없으므로 materialization은 사실만
+    모아 올리고 enqueue는 여기서 일어난다(ADR-015). `services/`가 materialization을
+    호출한 바로 그 자리에서 이 함수를 부른다 --- 학습 상태가 rollback되면 그에 대한
+    job도 함께 사라져야 한다(09_BACKGROUND_JOBS.md).
+    """
+    for sentence_item_id in gaps.unexplained_sentence_item_ids:
+        enqueue_explain_item(db, sentence_item_id=sentence_item_id, now=now, cfg=cfg)
+    for gap in gaps.review_contexts:
+        enqueue_review_context(
+            db,
+            user_id=user_id,
+            learning_item_id=gap.learning_item_id,
+            context_stage=gap.context_stage,
+            anchor_sentence_id=gap.anchor_sentence_id,
+            now=now,
+            cfg=cfg,
+        )
+
+
+def _enqueue(
+    db: Session,
+    *,
+    job_type: JobType,
+    payload: dict[str, Any],
+    idempotency_key: str,
+    now: datetime,
+    cfg: AppConfig,
+) -> GenerationJob | None:
+    """세 트리거가 공유하는 단 하나의 INSERT 지점. 중복이면 None이다.
+
+    `ON CONFLICT (idempotency_key) DO NOTHING`이 **여기 한 줄뿐**이어야 한다. 트리거마다
+    복제하면 한 곳에서 빠뜨리는 순간 그 job_type만 동시 요청에서 IntegrityError를 내고,
+    호출부의 학습 트랜잭션을 통째로 무효로 만든다(09_BACKGROUND_JOBS.md).
+    """
     statement = (
         pg_insert(GenerationJob)
         .values(
-            job_type=JobType.GENERATE_SENTENCE_BATCH,
+            job_type=job_type,
             status=GenerationJobStatus.QUEUED,
-            payload_json={"user_id": user_id, "presentation_role": role.value},
-            idempotency_key=replenishment_idempotency_key(user_id=user_id, role=role, now=now),
+            payload_json=payload,
+            idempotency_key=idempotency_key,
             max_attempts=cfg.jobs.max_job_attempts,
             next_attempt_at=now,
             created_at=now,

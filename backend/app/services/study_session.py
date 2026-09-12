@@ -18,8 +18,9 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.config import AppConfig, SessionConfig
+from app.jobs.replenishment import enqueue_materialization_gaps
 from app.learning.mastery import MASTERY_ALGORITHM_VERSION
-from app.learning.selection import materialize_candidates
+from app.learning.selection import MaterializationGaps, materialize_candidates
 from app.models.enums import EventType
 from app.models.study import StudyPresentation, StudySession
 from app.models.user import User
@@ -125,7 +126,7 @@ def start_or_resume(db: Session, *, user: User, now: datetime, cfg: AppConfig) -
         idle = now - open_session.last_activity_at
         if idle <= timedelta(minutes=cfg.session.study_session_idle_timeout_minutes):
             touch(open_session, now=now, cfg=cfg.session)
-            materialize_candidates(db, user=user, now=now, cfg=cfg.learning)
+            _materialize(db, user=user, now=now, cfg=cfg)
             db.commit()
             return SessionStart(session=open_session, resumed=True, timed_out_session_id=None)
         _expire_idle_session(db, session=open_session, now=now)
@@ -154,9 +155,23 @@ def start_or_resume(db: Session, *, user: User, now: datetime, cfg: AppConfig) -
         ),
         now=now,
     )
-    materialize_candidates(db, user=user, now=now, cfg=cfg.learning)
+    _materialize(db, user=user, now=now, cfg=cfg)
     db.commit()
     return SessionStart(session=session, resumed=False, timed_out_session_id=timed_out_session_id)
+
+
+def _materialize(db: Session, *, user: User, now: datetime, cfg: AppConfig) -> None:
+    """Candidate Materialization과 그것이 남긴 gap job을 **같은 트랜잭션**에서 처리한다.
+
+    materialization은 콘텐츠가 모자라 만들지 못한 candidate의 사유를 올린다. 그것을
+    `EXPLAIN_ITEM` / `GENERATE_REVIEW_CONTEXT`로 바꾸는 것이 이 한 줄이다 --- 없으면
+    누락 explanation과 빈 stage가 아무에게도 보고되지 않고 그 item이 조용히 굶는다
+    (09_BACKGROUND_JOBS.md의 `Enqueue 트리거`). enqueue는 INSERT뿐이고 provider를
+    부르지 않는다(불변식 #1).
+    """
+    gaps = MaterializationGaps()
+    materialize_candidates(db, user=user, now=now, cfg=cfg.learning, gaps=gaps)
+    enqueue_materialization_gaps(db, user_id=user.id, gaps=gaps, now=now, cfg=cfg)
 
 
 def finish(

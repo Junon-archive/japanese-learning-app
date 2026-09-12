@@ -18,8 +18,16 @@ class DatabaseComponent(BaseModel):
 
 
 class WorkerComponent(BaseModel):
-    status: Literal["unknown"]
+    # unknown = heartbeat 행이 없다(worker를 아직 띄우지 않았거나 DB를 못 봤다).
+    # 그 자체로 degraded가 아니고, stale은 degraded다 (05_API_SPEC.md).
+    status: Literal["unknown", "ok", "stale"]
     last_heartbeat_at: datetime | None = None
+
+    @field_serializer("last_heartbeat_at")
+    def _serialize_last_heartbeat_at(self, value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 class HealthComponents(BaseModel):

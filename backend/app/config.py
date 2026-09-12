@@ -109,6 +109,24 @@ class JobsConfig(BaseModel):
 
     max_job_attempts: int = Field(...)
     retry_backoff_base_seconds: int = Field(...)
+    # 아래 네 키는 양의 정수다 (14_CONFIGURATION.md).
+    poll_interval_seconds: int = Field(..., ge=1)
+    claim_lease_seconds: int = Field(..., ge=1)
+    heartbeat_interval_seconds: int = Field(..., ge=1)
+    heartbeat_stale_seconds: int = Field(..., ge=1)
+
+    @model_validator(mode="after")
+    def _check_heartbeat_threshold(self) -> JobsConfig:
+        # 임계값이 쓰기 간격보다 작거나 같으면 정상 동작 중인 worker가 주기적으로
+        # stale로 보고된다 (14_CONFIGURATION.md, 09_BACKGROUND_JOBS.md의
+        # Worker Heartbeat).
+        if self.heartbeat_stale_seconds <= self.heartbeat_interval_seconds:
+            raise ValueError(
+                "jobs.heartbeat_stale_seconds must be greater than "
+                f"jobs.heartbeat_interval_seconds, got {self.heartbeat_stale_seconds} "
+                f"<= {self.heartbeat_interval_seconds}"
+            )
+        return self
 
 
 class LlmConfig(BaseModel):
@@ -117,6 +135,9 @@ class LlmConfig(BaseModel):
     public_demo_generation_enabled: bool = Field(...)
     daily_request_limit: int | None = Field(...)
     daily_token_limit: int | None = Field(...)
+    # 둘 다 양의 정수다 (14_CONFIGURATION.md).
+    sentences_per_batch: int = Field(..., ge=1)
+    avoid_examples_per_item: int = Field(..., ge=1)
 
     @model_validator(mode="after")
     def _reject_public_demo_generation(self) -> LlmConfig:

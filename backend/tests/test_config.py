@@ -163,6 +163,65 @@ def test_missing_section_is_rejected(tmp_path: Path) -> None:
         load_config(_write(tmp_path, raw))
 
 
+def test_worker_loop_and_batch_keys_are_loaded() -> None:
+    # 14_CONFIGURATION.md의 jobs worker loop 키와 llm generation batch 키.
+    config = load_config(DEFAULT_CONFIG_FILE)
+    assert config.jobs.poll_interval_seconds == 5
+    assert config.jobs.claim_lease_seconds == 300
+    assert config.jobs.heartbeat_interval_seconds == 30
+    assert config.jobs.heartbeat_stale_seconds == 120
+    assert config.llm.sentences_per_batch == 5
+    assert config.llm.avoid_examples_per_item == 3
+
+
+@pytest.mark.parametrize(
+    ("section", "key"),
+    [
+        ("jobs", "poll_interval_seconds"),
+        ("jobs", "claim_lease_seconds"),
+        ("jobs", "heartbeat_interval_seconds"),
+        ("jobs", "heartbeat_stale_seconds"),
+        ("llm", "sentences_per_batch"),
+        ("llm", "avoid_examples_per_item"),
+    ],
+)
+def test_worker_loop_and_batch_keys_must_be_positive_integers(
+    tmp_path: Path, section: str, key: str
+) -> None:
+    # 14_CONFIGURATION.md: 여섯 키 모두 양의 정수다.
+    raw = _raw_default()
+    raw[section][key] = 0
+    with pytest.raises(ConfigError):
+        load_config(_write(tmp_path, raw))
+
+
+@pytest.mark.parametrize("stale", [30, 29])
+def test_heartbeat_stale_must_exceed_the_write_interval(tmp_path: Path, stale: int) -> None:
+    """14_CONFIGURATION.md / 09_BACKGROUND_JOBS.md: stale > interval.
+
+    같거나 작으면 정상 동작 중인 worker가 주기적으로 stale로 보고된다 --- heartbeat가
+    말하려던 것과 정반대의 신호가 된다.
+    """
+    raw = _raw_default()
+    raw["jobs"]["heartbeat_interval_seconds"] = 30
+    raw["jobs"]["heartbeat_stale_seconds"] = stale
+    with pytest.raises(ConfigError):
+        load_config(_write(tmp_path, raw))
+
+
+def test_worker_loop_and_batch_keys_are_outside_every_ratio_sum(tmp_path: Path) -> None:
+    # 비율 합 검증 대상은 learning의 두 세트뿐이다 (14_CONFIGURATION.md:
+    # "srs, session, user, content, jobs, llm 섹션의 키는 비율 합 검증 대상이 아니다").
+    raw = _raw_default()
+    raw["jobs"]["poll_interval_seconds"] = 1
+    raw["jobs"]["claim_lease_seconds"] = 60
+    raw["llm"]["sentences_per_batch"] = 1
+    config = load_config(_write(tmp_path, raw))
+    assert config.jobs.poll_interval_seconds == 1
+    assert config.jobs.claim_lease_seconds == 60
+    assert config.llm.sentences_per_batch == 1
+
+
 def test_null_llm_limits_load_as_none() -> None:
     llm = load_config(DEFAULT_CONFIG_FILE).llm
     assert llm.daily_request_limit is None

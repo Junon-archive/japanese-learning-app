@@ -11,7 +11,7 @@ from app.models.content import (
     SentenceItemExplanation,
     SentenceItemSpan,
 )
-from app.models.jobs import GenerationJob, PromptVersion
+from app.models.jobs import GenerationJob, PromptVersion, WorkerHeartbeat
 from app.models.learning import (
     ReviewState,
     UserItemLearningState,
@@ -48,4 +48,5 @@ __all__ = [
     "UserMastery",
     "UserSentenceCandidate",
     "UserSentenceCandidateTarget",
+    "WorkerHeartbeat",
 ]

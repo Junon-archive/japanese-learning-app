@@ -19,9 +19,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import itertools
-import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +42,14 @@ from app.models.enums import (
     SentenceSourceType,
     SentenceStatus,
 )
+from app.normalization import normalized_sentence_hash
+from app.render import (
+    ItemSpan,
+    RenderSpanError,
+    SpanRef,
+    build_render_segments,
+    validate_item_spans,
+)
 
 ITEMS_FILE = "items.yaml"
 SENTENCES_FILE = "sentences.yaml"
@@ -63,13 +68,6 @@ class SeedSummary:
 
 
 @dataclass(frozen=True)
-class _Span:
-    start_codepoint: int
-    end_codepoint: int
-    span_order: int
-
-
-@dataclass(frozen=True)
 class _Explanation:
     reading: str
     core_meaning: str
@@ -84,7 +82,7 @@ class _SentenceItem:
     item_seed_id: str
     surface_form: str
     is_tappable: bool
-    spans: tuple[_Span, ...]
+    spans: tuple[ItemSpan, ...]
     explanation: _Explanation
 
 
@@ -235,16 +233,16 @@ def _parse_explanation(entry: dict[str, object], where: str) -> _Explanation:
     )
 
 
-def _parse_spans(entry: dict[str, object], where: str) -> tuple[_Span, ...]:
+def _parse_spans(entry: dict[str, object], where: str) -> tuple[ItemSpan, ...]:
     raw = entry.get("spans")
     if not isinstance(raw, list) or not raw:
         raise SeedError(f"{where}: 'spans' must be a non-empty list")
-    spans: list[_Span] = []
+    spans: list[ItemSpan] = []
     for index, span_entry in enumerate(raw):
         inner = f"{where}.spans[{index}]"
         mapping = _mapping(span_entry, inner)
         spans.append(
-            _Span(
+            ItemSpan(
                 start_codepoint=_int(mapping, "start_codepoint", inner),
                 end_codepoint=_int(mapping, "end_codepoint", inner),
                 span_order=_int(mapping, "span_order", inner),
@@ -279,7 +277,10 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
                 )
             surface_form = _text(item_mapping, "surface_form", item_where)
             spans = _parse_spans(item_mapping, item_where)
-            _validate_spans(japanese, surface_form, spans, item_where)
+            try:
+                validate_item_spans(japanese, surface_form, spans)
+            except RenderSpanError as error:
+                raise SeedError(f"{item_where}: {error}") from error
             parsed_items.append(
                 _SentenceItem(
                     item_seed_id=item_seed_id,
@@ -290,6 +291,7 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
                 )
             )
 
+        _reject_cross_item_overlap(japanese, parsed_items, where)
         sentences.append(
             _Sentence(
                 seed_id=seed_id,
@@ -301,89 +303,40 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
     return sentences
 
 
-# --------------------------------------------------------------------------
-# span offset 검증
-# --------------------------------------------------------------------------
+def _reject_cross_item_overlap(japanese: str, items: list[_SentenceItem], where: str) -> None:
+    """서로 **다른** item의 tappable span이 겹치면 거부한다.
 
+    `validate_item_spans`는 item 하나 안만 본다. 문장의 tappable span **전부를**
+    `build_render_segments`에 한 번에 넣으면 그 함수가 span을 정렬한 뒤 이미 하는
+    `start < cursor` 검사가 cross-item overlap까지 잡는다. 판정을 여기서 다시
+    구현하지 않는 이유이기도 하다 --- 렌더링이 터지는 조건과 적재를 거부하는
+    조건이 정의상 같아진다(08_LLM_SPEC.md validation 8번, "ambiguous tappable
+    overlap 없음").
 
-def _validate_spans(japanese: str, surface_form: str, spans: tuple[_Span, ...], where: str) -> None:
-    """offset이 `japanese`의 실제 code point index와 맞는지 확인한다.
-
-    CPython의 `str`은 code point 열이므로(PEP 393) `list(japanese)`의 원소 하나가
-    code point 하나다. 이모지 같은 BMP 밖 문자도 여기서는 1칸이며 UTF-16 code unit
-    기준으로는 2칸이다. 그 둘이 섞이는 유일한 통로는 lone surrogate(UTF-16 index를
-    그대로 옮겨 적은 문자열)이므로 그런 문자열은 아예 거부한다.
+    `SpanRef.sentence_item_id`에는 아직 DB id가 없으므로 **문장 안 item의 순번**을
+    넣는다. 오류 메시지의 숫자는 그 순번이다.
     """
-    codepoints = list(japanese)
-    for offset, char in enumerate(codepoints):
-        if 0xD800 <= ord(char) <= 0xDFFF:
-            raise SeedError(
-                f"{where}: 'japanese' contains a lone surrogate at code point {offset}; "
-                "offsets must be Unicode code point indexes, not UTF-16 code units"
-            )
-
-    orders = sorted(span.span_order for span in spans)
-    if orders != list(range(len(spans))):
-        raise SeedError(
-            f"{where}: span_order must be 0..{len(spans) - 1} exactly once, got {orders}"
+    spans = [
+        SpanRef(
+            sentence_item_id=index,
+            learning_item_id=index,
+            is_tappable=True,
+            start_codepoint=span.start_codepoint,
+            end_codepoint=span.end_codepoint,
         )
-
-    pieces: list[str] = []
-    for span in sorted(spans, key=lambda span: span.span_order):
-        if not 0 <= span.start_codepoint < span.end_codepoint <= len(codepoints):
-            raise SeedError(
-                f"{where}: span [{span.start_codepoint}, {span.end_codepoint}) is out of range "
-                f"for a sentence of {len(codepoints)} code points"
-            )
-        pieces.append("".join(codepoints[span.start_codepoint : span.end_codepoint]))
-
-    _reject_overlapping_spans(spans, where)
-
-    covered = "".join(pieces)
-    if covered != surface_form:
-        raise SeedError(f"{where}: spans cover {covered!r} but surface_form is {surface_form!r}")
-
-
-def _reject_overlapping_spans(spans: tuple[_Span, ...], where: str) -> None:
-    """서로 **겹치는** span을 거부한다.
-
-    금지하는 것은 overlap뿐이다. **떨어져 있는(disjoint) span은 정상이다** ---
-    `気が全然乗らない`처럼 하나의 표현이 문장 안에서 끊겨 나타나는 불연속 표현은
-    span 여러 개로 표현하는 것이 정상 데이터다. 사이의 빈칸은 검사하지 않는다.
-
-    겹치면 같은 code point가 같은 item의 두 span에 속하게 되어 같은 글자가
-    surface_form에 두 번 들어간다.
-
-    **범위는 item 하나 안이다.** 이 함수는 item마다 따로 호출되므로 서로 다른
-    item의 span이 겹치는 경우는 검사하지 않는다(문장 전체의 span을 한 번에 보지
-    않는다). 그 경우 frontend의 tap 대상이 모호해지지만, 문장 단위 검증은
-    `08_LLM_SPEC.md`의 deterministic validation("ambiguous tappable overlap 없음")
-    이 담당하며 Wave 3에서 구현한다. 여기서 앞당겨 구현하지 않는다.
-    """
-    ordered = sorted(spans, key=lambda span: span.start_codepoint)
-    for previous, current in itertools.pairwise(ordered):
-        if current.start_codepoint < previous.end_codepoint:
-            raise SeedError(
-                f"{where}: spans [{previous.start_codepoint}, {previous.end_codepoint}) and "
-                f"[{current.start_codepoint}, {current.end_codepoint}) overlap; "
-                "spans may be discontinuous but must not cover the same code point twice"
-            )
+        for index, item in enumerate(items)
+        if item.is_tappable
+        for span in item.spans
+    ]
+    try:
+        build_render_segments(japanese, spans)
+    except RenderSpanError as error:
+        raise SeedError(f"{where}: {error}") from error
 
 
 # --------------------------------------------------------------------------
 # 적재
 # --------------------------------------------------------------------------
-
-
-def _normalized_hash(japanese: str) -> str:
-    """duplicate 검출용 해시.
-
-    `sentences.normalized_hash`가 NOT NULL이므로 seed도 값을 채워야 한다.
-    정규화 규칙 자체는 08_LLM_SPEC.md의 validation이 확정하며(MVP 명세에 아직 없다),
-    generation 경로가 생기면 그 구현과 하나로 합쳐야 한다.
-    """
-    normalized = "".join(unicodedata.normalize("NFKC", japanese).split())
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def _reject_if_already_seeded(session: Session) -> None:
@@ -445,7 +398,7 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
                 korean_translation=sentence.korean_translation,
                 source_type=SentenceSourceType.SEED,
                 source_id=sentence.seed_id,
-                normalized_hash=_normalized_hash(sentence.japanese),
+                normalized_hash=normalized_sentence_hash(sentence.japanese),
                 status=SentenceStatus.VALIDATED,
                 created_at=now,
             )

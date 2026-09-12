@@ -22,6 +22,7 @@ from app.models import (
     ItemExposure,
     LearningEvent,
     LearningItem,
+    PromptVersion,
     ReviewState,
     Sentence,
     SentenceItem,
@@ -45,12 +46,14 @@ from app.models.enums import (
     JobType,
     LearningItemOrigin,
     LearningItemType,
+    LlmTaskType,
     PresentationRole,
     ReviewReason,
     SentenceSourceType,
     SentenceStatus,
     StartingLevel,
 )
+from app.normalization import normalized_sentence_hash
 from tests.clock import DEFAULT_START
 
 # `created_at`에는 server_default가 없다(ADR-007). factory가 명시적으로 채운다.
@@ -110,15 +113,31 @@ def make_sentence(
     japanese: str | None = None,
     korean_translation: str | None = None,
     parent_sentence_id: int | None = None,
+    normalized_hash: str | None = None,
 ) -> Sentence:
+    """`normalized_hash`는 기본으로 `japanese`에서 계산한다.
+
+    자리 채우기 값(고유하지만 본문과 무관한 문자열)을 넣으면 duplicate 검사
+    (`08_LLM_SPEC.md` 11번, `jobs/persistence._store_one`)가 **발화할 수 없는 조건**이
+    된다 --- 같은 문장을 넣어도 hash가 달라 아무것도 잡히지 않고, 그 테스트는 조용히
+    통과한다. 프로덕션 경로(seed 적재, 생성)는 둘 다 `normalized_sentence_hash`로
+    이 열을 채우므로 factory도 같은 함수를 쓴다.
+
+    같은 `japanese`로 만든 두 행은 hash가 같다. 그것이 실제 DB 상태다
+    (`normalized_hash`에 UNIQUE가 없다 --- ADR-015). hash가 달라야 하는 테스트는
+    `normalized_hash`를 명시한다.
+    """
+    text = "それは君に任せる。" if japanese is None else japanese
     sentence = Sentence(
-        japanese="それは君に任せる。" if japanese is None else japanese,
+        japanese=text,
         korean_translation=(
             "그건 너에게 맡길게." if korean_translation is None else korean_translation
         ),
         source_type=SentenceSourceType.SEED,
         parent_sentence_id=parent_sentence_id,
-        normalized_hash=_unique("hash-"),
+        normalized_hash=(
+            normalized_sentence_hash(text) if normalized_hash is None else normalized_hash
+        ),
         status=SentenceStatus.VALIDATED,
         created_at=NOW,
     )
@@ -445,3 +464,32 @@ def make_learning_state(
     session.add(state)
     session.flush()
     return state
+
+
+def make_prompt_version(
+    session: Session,
+    *,
+    task_type: LlmTaskType,
+    version: str,
+    provider: str = "stub",
+    model: str = "test-model",
+    active: bool = True,
+) -> PromptVersion:
+    """`prompt_versions`의 active 행.
+
+    `provider = "stub"`은 **test double이 만든 콘텐츠**를 뜻하며
+    `LLM_PROVIDER`가 가질 수 있는 값이 아니다(08_LLM_SPEC.md). `version`은 코드에 본문이
+    있는 값이어야 하므로 기본값을 두지 않는다 --- `app.llm.prompts`의 VERSION을 넘긴다.
+    `model` 문자열도 여기서 오고 코드에 박히지 않는다.
+    """
+    row = PromptVersion(
+        task_type=task_type,
+        version=version,
+        provider=provider,
+        model=model,
+        active=active,
+        created_at=NOW,
+    )
+    session.add(row)
+    session.flush()
+    return row

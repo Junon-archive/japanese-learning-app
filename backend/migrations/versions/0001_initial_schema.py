@@ -1,6 +1,6 @@
 """initial schema
 
-04_DB_SPEC.md의 19개 테이블. 빈 DB에 대해 autogenerate한 뒤 손으로 검토했다.
+04_DB_SPEC.md의 20개 테이블. 빈 DB에 대해 autogenerate한 뒤 손으로 검토했다.
 
 Revision ID: 0001
 Revises:
@@ -137,6 +137,23 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "task_type", "version", name=op.f("uq_prompt_versions_task_type_version")
         ),
+    )
+    # partial unique: active는 task_type당 최대 하나다 (04_DB_SPEC.md의
+    # active 유일성). 전체 unique로 만들면 inactive 이력 행이 task_type당 하나로
+    # 제한되어 version 이력이 사라진다. 이름은 uq_user_sentence_candidates_active와
+    # 같은 방식으로 짧게 고정한다 (convention 이름은 ix_ 접두가 붙거나 63자에서 잘린다).
+    op.create_index(
+        "uq_prompt_versions_active",
+        "prompt_versions",
+        ["task_type"],
+        unique=True,
+        postgresql_where=sa.text("active"),
+    )
+    op.create_table(
+        "worker_heartbeats",
+        sa.Column("worker_name", sa.Text(), nullable=False),
+        sa.Column("last_heartbeat_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("worker_name", name=op.f("pk_worker_heartbeats")),
     )
     op.create_table(
         "users",
@@ -875,6 +892,8 @@ def downgrade() -> None:
     op.drop_index("ix_auth_sessions_user_id", table_name="auth_sessions")
     op.drop_table("auth_sessions")
     op.drop_table("users")
+    op.drop_table("worker_heartbeats")
+    op.drop_index("uq_prompt_versions_active", table_name="prompt_versions")
     op.drop_table("prompt_versions")
     op.drop_table("learning_items")
     op.drop_index("ix_generation_jobs_status_next_attempt_at", table_name="generation_jobs")

@@ -17,7 +17,10 @@ from app.settings import get_settings
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # `disable_existing_loggers`의 기본값은 True다. 그대로 두면 migration을 in-process로
+    # 돌린 뒤 **이미 만들어져 있던 로거가 전부 꺼진다** --- 테스트 세션이 alembic을 한 번
+    # 돌린 다음부터 `app.jobs` 로그가 조용히 사라지는 형태로 드러난다.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

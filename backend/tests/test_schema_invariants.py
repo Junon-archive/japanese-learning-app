@@ -16,7 +16,7 @@ from app.models import Base
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# 04_DB_SPEC.md의 테이블 목록(`## <table>` 절). 19개다.
+# 04_DB_SPEC.md의 테이블 목록(`## <table>` 절). 20개다.
 SPEC_TABLES = frozenset(
     {
         "users",
@@ -38,6 +38,7 @@ SPEC_TABLES = frozenset(
         "generation_jobs",
         "content_flags",
         "prompt_versions",
+        "worker_heartbeats",
     }
 )
 
@@ -102,7 +103,7 @@ def test_all_spec_tables_exist(db_engine: Engine) -> None:
     # 늘어나는 것을 둘 다 잡는다.
     tables = set(sa.inspect(db_engine).get_table_names(schema="public")) - {"alembic_version"}
     assert tables == set(SPEC_TABLES)
-    assert len(tables) == 19
+    assert len(tables) == 20
 
 
 @pytest.mark.integration
@@ -157,6 +158,45 @@ def test_unconsumed_candidate_uniqueness_is_a_partial_index(db_engine: Engine) -
         assert status in predicate, definition
     for status in ("shown", "consumed", "quarantined", "expired"):
         assert status not in predicate, definition
+
+
+@pytest.mark.integration
+def test_active_prompt_version_uniqueness_is_a_partial_index(db_engine: Engine) -> None:
+    """04_DB_SPEC.md: `UNIQUE (task_type) WHERE active`.
+
+    전체 unique면 task_type당 행이 하나뿐이라 version 이력을 남길 수 없고,
+    index가 아예 없으면 task당 active가 둘이 되어 어느 prompt로 생성했는지가
+    사후에 결정 불가능해진다. 거부/허용 동작은 test_db_constraints.py가 본다.
+    """
+    with db_engine.connect() as connection:
+        definition = connection.scalar(
+            sa.text(
+                "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = :name"
+            ),
+            {"name": "uq_prompt_versions_active"},
+        )
+    assert definition is not None, "uq_prompt_versions_active가 없다"
+    assert definition.startswith("CREATE UNIQUE INDEX"), definition
+    assert "(task_type)" in definition, definition
+    # WHERE 절이 없으면 전체 unique이고 inactive 이력 행이 서로 충돌한다.
+    assert " WHERE " in definition, definition
+    assert definition.split(" WHERE ", 1)[1].strip() == "active", definition
+
+
+@pytest.mark.integration
+def test_worker_heartbeats_has_only_the_two_spec_columns(db_engine: Engine) -> None:
+    """04_DB_SPEC.md / ADR-015: `(worker_name PK, last_heartbeat_at)`뿐이다.
+
+    사용자 종속 테이블이 아니므로 `user_id`가 없다.
+    """
+    columns = {
+        row.column_name: row for row in _columns(db_engine) if row.table_name == "worker_heartbeats"
+    }
+    assert set(columns) == {"worker_name", "last_heartbeat_at"}
+    assert columns["last_heartbeat_at"].data_type == "timestamp with time zone"
+    assert columns["worker_name"].is_nullable == "NO"
+    primary_key = sa.inspect(db_engine).get_pk_constraint("worker_heartbeats", schema="public")
+    assert primary_key["constrained_columns"] == ["worker_name"]
 
 
 @pytest.mark.integration

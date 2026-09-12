@@ -1,0 +1,31 @@
+# 서로 **다른** item의 tappable span이 `事`(code point 1)를 공유한다.
+# item 단위 검증은 둘 다 통과한다 --- 각 item 안에서는 span이 하나뿐이다.
+# 문장 단위 검증만이 이것을 거부한다.
+- seed_id: sn_overlap_0001
+  japanese: 仕事を任せる。
+  korean_translation: 일을 맡긴다.
+  items:
+    - item_seed_id: it_min_shigoto
+      surface_form: 仕事
+      is_tappable: true
+      spans:
+        - {start_codepoint: 0, end_codepoint: 2, span_order: 0}
+      explanation:
+        reading: しごと
+        core_meaning: 일
+        meaning_in_context: 넘길 수 있는 업무 한 건.
+        nuance: 집안일에도 쓴다.
+        example_sentence: 仕事が終わった。
+        example_translation: 일이 끝났다.
+    - item_seed_id: it_min_makaseru
+      surface_form: 事を
+      is_tappable: true
+      spans:
+        - {start_codepoint: 1, end_codepoint: 3, span_order: 0}
+      explanation:
+        reading: ことを
+        core_meaning: 일을
+        meaning_in_context: 앞 item과 `事`를 공유한다.
+        nuance: tap 대상이 모호해진다.
+        example_sentence: 事を任せる。
+        example_translation: 일을 맡긴다.

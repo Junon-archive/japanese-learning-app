@@ -64,6 +64,13 @@ jobs:
   # 22_ 결정
   max_job_attempts: 3
   retry_backoff_base_seconds: 60
+  # worker loop (09_BACKGROUND_JOBS.md)
+  poll_interval_seconds: 5
+  # running에 갇힌 job을 회수하는 임계값 (stale running 회수)
+  claim_lease_seconds: 300
+  # 생존 신호 쓰기 간격과 /api/health의 stale 판정 임계값 (Worker Heartbeat)
+  heartbeat_interval_seconds: 30
+  heartbeat_stale_seconds: 120
 
 llm:
   # Public Demo는 static frontend fixture이므로 API/worker를 사용하지
@@ -72,3 +79,8 @@ llm:
   # null = limit disabled. production에서 필요 시 integer를 설정한다.
   daily_request_limit: null
   daily_token_limit: null
+  # generation batch 1회가 요청하는 문장 수이자 대상 item 수 상한
+  # (08_LLM_SPEC.md의 GENERATE_SENTENCE_BATCH 대상 선정)
+  sentences_per_batch: 5
+  # 프롬프트에 싣는 item당 기존 문장 예시 수 (08_LLM_SPEC.md의 요청 context)
+  avoid_examples_per_item: 3

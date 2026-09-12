@@ -1,4 +1,4 @@
-"""ADR-007의 정적 guard G1~G10.
+"""ADR-007의 정적 guard G1~G10 + ADR-015의 G11~G13.
 
 `backend/app/` 전체를 AST로 훑어 모듈 경계와 시각 주입 규약을 강제한다. 주석은
 지켜지지 않는다 --- Wave 1의 `app/api/router.py`가 보여준 대로 **구조로 강제하고
@@ -45,6 +45,10 @@ COMMIT_ALLOWLIST: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
+# G7 (ADR-015의 확장): `app/jobs/` 안에서 commit/rollback이 허용되는 모듈.
+# claim/상태 전이는 queue.py, 콘텐츠 저장과 completed는 persistence.py다.
+JOBS_COMMIT_MODULES: frozenset[str] = frozenset({"jobs/queue.py", "jobs/persistence.py"})
+
 # G9: `clock.utc_now()`를 부를 수 있는 (모듈, 함수). 요청 경로의 진입점 하나뿐이다.
 # `app/jobs/`는 worker 진입점이라 별도로 허용한다(아래 CLOCK_READ_PACKAGES).
 CLOCK_READ_ALLOWLIST: frozenset[tuple[str, str]] = frozenset({("api/deps.py", "get_now")})
@@ -81,6 +85,47 @@ MASTERY_OWNER = "learning/mastery.py"
 # G6: 이 식별자는 컬럼 선언 한 곳에만 존재한다. MVP는 listening을 읽지도 쓰지도 않는다.
 LISTENING_MASTERY = "listening_mastery"
 LISTENING_MASTERY_OWNER = "models/learning.py"
+
+# G11(b) (ADR-015): app 내부 의존이 하나도 없는 L0 모듈. `app/llm/`(L1)이 재사용한다.
+PURE_MODULES: frozenset[str] = frozenset({"render.py", "normalization.py"})
+
+# G11(a) (ADR-015): `app/llm/*`는 DB를 모르는 L1이다. session도 ORM 모델도 보지
+# 않으므로 provider 호출 중에 트랜잭션이 열려 있을 수 없다.
+LLM_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
+    {
+        "sqlalchemy",
+        "app.db",
+        "app.models",
+        "app.services",
+        "app.api",
+        "app.jobs",
+        "app.learning",
+        "app.srs",
+    }
+)
+# 유일한 예외. enum 정의만 있고 sqlalchemy를 import하지 않는다.
+LLM_ALLOWED_MODELS_MODULE = "app.models.enums"
+
+# G12 (ADR-015): `app/jobs/` **밖에서** import할 수 있는 jobs 모듈. allowlist다.
+# `replenishment.py`는 request 경로(Pool Fallback 3단계)가 부르는 enqueue 지점이고
+# `generation_jobs` INSERT만 한다. 늘리려면 ADR-015를 먼저 고친다.
+#
+# `app/services/heartbeat.py`는 여기 없어도 된다 --- jobs 모듈이 아니라 `services/`의
+# L2이고(`api/health.py`가 읽는다), 이 guard는 `app.jobs.*` import만 본다.
+ENQUEUE_MODULES: frozenset[str] = frozenset({"jobs/replenishment.py"})
+
+# G12의 추가 조건: enqueue 모듈은 provider를 보지 않는다. 요청 경로에서 불리는 유일한
+# jobs 모듈이므로, 여기서 `app.llm`이 보이면 불변식 #1이 한 줄 거리로 되돌아온다.
+ENQUEUE_FORBIDDEN_IMPORTS: frozenset[str] = frozenset({"app.llm"})
+
+# G12: 응답 후 같은 프로세스에서 job을 돌리는 가장 흔한 오답. 식별자로 금지한다(G6과
+# 같은 방식). 응답 뒤라도 같은 프로세스·같은 세션이며 provider는 worker에서만 돈다.
+BACKGROUND_TASK_NAMES: frozenset[str] = frozenset({"BackgroundTasks", "add_task"})
+BACKGROUND_TASK_MODULE = "starlette.background"
+
+# G13: 동적 import는 AST에 보이지 않으므로 G4/G12를 통째로 우회한다. 그래서 수단 자체를
+# 없앤다.
+DYNAMIC_IMPORT_NAMES: frozenset[str] = frozenset({"importlib", "__import__"})
 
 # G3/G4: 외부 패키지를 부를 수 있는 자리.
 FSRS_PACKAGE = "fsrs"
@@ -262,6 +307,36 @@ def _report(violations: list[str]) -> str:
     return "\n".join(violations)
 
 
+def _jobs_module(imported: str) -> str | None:
+    """`app.jobs...` import가 가리키는 jobs 모듈 경로. jobs import가 아니면 None.
+
+    `from app.jobs.replenishment import enqueue_replenishment`는 `app.jobs.replenishment`
+    와 `app.jobs.replenishment.enqueue_replenishment`를 둘 다 내므로 세 번째 마디만 본다.
+    패키지만 import하는 `import app.jobs`도 allowlist에 없으므로 걸린다.
+    """
+    if not _imports_package(imported, "app.jobs"):
+        return None
+    parts = imported.split(".")
+    return f"jobs/{parts[2]}.py" if len(parts) >= 3 else "jobs/__init__.py"
+
+
+def _referenced_names(module: Module) -> Iterator[tuple[str, int]]:
+    """모듈이 이름으로 언급한 식별자 전부 (G6과 같은 방식).
+
+    `Name` / `Attribute` / 키워드 인자 / docstring이 아닌 문자열 상수를 본다. 문자열까지
+    보는 이유는 `getattr(obj, "add_task")`가 AST에서 이름이 아니기 때문이다.
+    """
+    for node in ast.walk(module.tree):
+        lineno = getattr(node, "lineno", 0)
+        if isinstance(node, ast.Name):
+            yield node.id, lineno
+        elif isinstance(node, ast.Attribute):
+            yield node.attr, lineno
+        elif isinstance(node, ast.keyword) and node.arg is not None:
+            yield node.arg, lineno
+    yield from _string_constants(module)
+
+
 # --------------------------------------------------------------------------
 # G1 / G2 --- 계층 import
 # --------------------------------------------------------------------------
@@ -434,6 +509,24 @@ def test_g7_api_commits_only_in_allowlisted_functions() -> None:
     assert violations == [], _report(violations)
 
 
+def test_g7_jobs_commit_only_in_queue_and_persistence() -> None:
+    """worker의 트랜잭션 경계도 두 지점뿐이다 (ADR-015의 G7 확장).
+
+    `runner.py`는 provider를 부르는 자리다. 거기에 commit이 하나라도 생기면 수 초짜리
+    HTTP가 열린 트랜잭션과 행 잠금을 붙든 채 흐르고, request 경로가 같은 pool에서
+    굶는다. `enqueue`(replenishment)가 커밋하면 호출한 학습 트랜잭션이 반쪽만
+    확정된다.
+    """
+    violations = [
+        f"{module.path}:{call.lineno} calls {_dotted(call.func)}"
+        for module in _modules()
+        if module.in_package("jobs") and module.path not in JOBS_COMMIT_MODULES
+        for call, _ in _calls(module.tree)
+        if _tail(_dotted(call.func), 1) in {"commit", "rollback"}
+    ]
+    assert violations == [], _report(violations)
+
+
 # --------------------------------------------------------------------------
 # G8 / G9 --- 시각 주입
 # --------------------------------------------------------------------------
@@ -502,6 +595,142 @@ def test_g10_no_sql_clock_anywhere_in_the_app() -> None:
 
 
 # --------------------------------------------------------------------------
+# G11(a) --- `app/llm/`은 DB를 모른다 (ADR-015)
+# --------------------------------------------------------------------------
+
+
+def test_g11a_llm_package_never_touches_the_database() -> None:
+    """`app/llm/*`는 session도 ORM 모델도 정책 모듈도 보지 않는다.
+
+    "provider 호출 중에 DB 트랜잭션을 열어 두지 않는다"의 구조적 형태다. 수 초짜리
+    HTTP가 커넥션과 행 잠금을 붙들면 request 경로가 같은 pool에서 굶는다. 세션을
+    **볼 수 없게** 만들어야 그 실수를 할 자리가 사라진다.
+
+    `learning/` / `srs/`를 막는 것은 별개 이유다. 같은 L1끼리 서로 import하지
+    않으며(계층표), LLM 응답이 정책 판단에 곧바로 먹이는 경로도 그만큼 줄어든다
+    --- 다만 그것을 정적으로 완전히 막지는 못한다(ADR-015의 `한계`).
+    """
+    violations = [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        if module.in_package("llm")
+        for imported, lineno in _imports(module)
+        if not _imports_package(imported, LLM_ALLOWED_MODELS_MODULE)
+        for package in LLM_FORBIDDEN_IMPORTS
+        if _imports_package(imported, package)
+    ]
+    assert violations == [], _report(violations)
+
+
+# --------------------------------------------------------------------------
+# G11(b) --- 순수 L0 모듈 (ADR-015)
+# --------------------------------------------------------------------------
+
+
+def test_g11b_pure_modules_have_no_app_internal_imports() -> None:
+    """`render` / `normalization`은 `app.*`를 하나도 import하지 않는다.
+
+    `app/llm/`(L1)이 span 검증과 정규화를 재사용한다. 이 모듈들이 `app.models`나
+    `app.services`를 보게 되면 L1이 L2를 import해야 하고 계층이 뒤집힌다. 그때
+    나오는 답은 대개 "llm 쪽에 하나 더 만들자"이고, 규칙이 둘이 되는 순간 seed
+    경로와 생성 경로가 서로 다른 판정을 내린다.
+    """
+    violations = [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        if module.path in PURE_MODULES
+        for imported, lineno in _imports(module)
+        if _imports_package(imported, "app")
+    ]
+    assert violations == [], _report(violations)
+
+
+# --------------------------------------------------------------------------
+# G12 --- jobs 모듈은 밖에서 보이지 않는다 (ADR-015)
+# --------------------------------------------------------------------------
+
+
+def test_g12_jobs_modules_are_imported_only_by_jobs_and_the_enqueue_allowlist() -> None:
+    """불변식 #1의 실제 구멍. G4만으로는 막히지 않는다.
+
+    G4는 `app.llm` import만 본다. `app/jobs/`는 그것을 **합법적으로** import하므로,
+    `api/`나 `services/`가 `app.jobs.runner`를 불러 "pool이 비었으니 지금 한 번 돌리자"를
+    하면 G4를 그대로 통과한다. 그 통로를 막는 것이 G12이고, denylist가 아니라 allowlist인
+    이유는 새 jobs 모듈이 조용히 빠져나가지 않게 하기 위해서다.
+
+    `scripts/run_worker.py`는 검사 범위 밖이다(별도 프로세스 진입점). 그래서 worker
+    loop와 runner를 부를 수 있는 자리는 그 파일 하나다.
+    """
+    violations = []
+    for module in _modules():
+        if module.in_package("jobs"):
+            continue
+        for imported, lineno in _imports(module):
+            target = _jobs_module(imported)
+            if target is not None and target not in ENQUEUE_MODULES:
+                violations.append(f"{module.path}:{lineno} imports {imported}")
+    assert violations == [], _report(violations)
+
+
+def test_g12_the_enqueue_module_never_sees_the_provider() -> None:
+    """allowlist에 있는 모듈은 request 경로에서 불린다. 거기에 provider가 보이면 안 된다."""
+    violations = [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        if module.path in ENQUEUE_MODULES
+        for imported, lineno in _imports(module)
+        for forbidden in ENQUEUE_FORBIDDEN_IMPORTS
+        if _imports_package(imported, forbidden)
+    ]
+    assert violations == [], _report(violations)
+
+
+def test_g12_no_background_tasks_anywhere_in_the_app() -> None:
+    """응답 후 실행도 같은 프로세스·같은 세션이다. provider는 worker에서만 돈다.
+
+    G12의 import 규칙만으로도 대개 막히지만 식별자로 함께 금지한다 --- `BackgroundTasks`는
+    "provider는 worker에서만"의 가장 흔한 오답이고, handler에 한 줄이면 들어온다.
+    """
+    violations = [
+        f"{module.path}:{lineno} refers to {name}"
+        for module in _modules()
+        for name, lineno in _referenced_names(module)
+        if name in BACKGROUND_TASK_NAMES
+    ]
+    violations += [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        for imported, lineno in _imports(module)
+        if _imports_package(imported, BACKGROUND_TASK_MODULE)
+    ]
+    assert violations == [], _report(violations)
+
+
+# --------------------------------------------------------------------------
+# G13 --- 동적 import (ADR-015)
+# --------------------------------------------------------------------------
+
+
+def test_g13_no_dynamic_imports_anywhere_in_the_app() -> None:
+    """정적 guard는 **모양**만 본다. `importlib.import_module("app.llm.provider")`는
+    AST에 import로 보이지 않으므로 G4와 G12를 통째로 우회한다. 그래서 수단 자체를 없앤다.
+    """
+    violations = [
+        f"{module.path}:{lineno} refers to {name}"
+        for module in _modules()
+        for name, lineno in _referenced_names(module)
+        if name in DYNAMIC_IMPORT_NAMES
+    ]
+    violations += [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        for imported, lineno in _imports(module)
+        if _imports_package(imported, "importlib")
+    ]
+    assert violations == [], _report(violations)
+
+
+# --------------------------------------------------------------------------
 # guard 자체가 살아 있는지
 # --------------------------------------------------------------------------
 
@@ -510,4 +739,11 @@ def test_the_guard_actually_sees_the_app() -> None:
     """빈 목록을 훑고 "위반 없음"이라 답하는 guard를 막는다."""
     paths = {module.path for module in _modules()}
     assert {"clock.py", "api/deps.py", "models/base.py"} <= paths
+    assert paths >= PURE_MODULES
+    # G11(a)가 빈 목록을 훑고 통과하지 않도록 `app/llm/`이 실제로 보이는지 본다.
+    assert {"llm/provider.py", "llm/validation.py"} <= paths
+    # G12의 allowlist가 실제 파일을 가리키는지. 이름이 바뀌면 allowlist가 조용히 비고,
+    # 그러면 "밖에서 import 가능한 jobs 모듈이 하나도 없다"가 통과해 버린다.
+    assert paths >= ENQUEUE_MODULES
+    assert {"jobs/runner.py", "jobs/worker.py"} <= paths
     assert len(_model_class_names()) >= 10

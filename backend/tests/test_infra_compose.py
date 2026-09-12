@@ -151,3 +151,39 @@ def test_app_services_do_not_receive_compose_only_secrets() -> None:
             key for key in services[name].get("environment", {}) if key.startswith("POSTGRES")
         ]
         assert leaked == [], (name, leaked)
+
+
+# --------------------------------------------------------------------------
+# provider 자격증명의 경계 (spec/04_SECURITY_AND_DATA.md)
+#
+# `Settings`에 없는 변수라서 위의 두 검사가 보지 못한다. 여기서 따로 못박는다.
+# --------------------------------------------------------------------------
+
+WORKER_ONLY_ENV_KEYS = ("LLM_PROVIDER", "LLM_API_KEY")
+
+
+def test_only_the_worker_receives_the_provider_credentials() -> None:
+    """API 컨테이너에 키를 넣으면 그 프로세스 환경에서 그대로 읽힌다.
+
+    FastAPI는 provider client를 만들지 않으므로(불변식 #1) 키가 필요 없고, 주지 않는
+    것이 그 경계를 배포 수준에서 한 번 더 강제한다.
+    """
+    services = _compose()["services"]
+    worker_env = services["worker"]["environment"]
+    for key in WORKER_ONLY_ENV_KEYS:
+        assert worker_env[key] == f"${{{key}}}", (key, worker_env.get(key))
+        assert key not in services["backend"]["environment"], key
+
+
+def test_the_worker_still_receives_every_app_setting() -> None:
+    """`<<: *app-env` 병합이 깨지면 worker가 DATABASE_URL 없이 뜬다."""
+    worker_env = _compose()["services"]["worker"]["environment"]
+    assert set(worker_env) >= APP_ENV_KEYS
+
+
+def test_the_worker_image_starts_the_real_entrypoint() -> None:
+    text = (REPO_ROOT / "infra" / "Dockerfile.worker").read_text(encoding="utf-8")
+    assert "scripts/run_worker.py" in text
+    assert "not implemented" not in text
+    # 진입점이 backend/ 밖에 있으므로 이미지에 함께 들어가야 한다.
+    assert "COPY scripts ./scripts" in text

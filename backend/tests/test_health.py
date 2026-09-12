@@ -2,17 +2,29 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from sqlalchemy.engine import URL
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.deps import get_now
+from app.config import get_config
+from app.db import get_engine
 from app.main import create_app
+from app.services.heartbeat import DEFAULT_WORKER_NAME, write_heartbeat
 from app.settings import get_settings
+from tests.clock import MutableClock
+from tests.conftest import override_config
 
 UNREACHABLE_DSN = "postgresql+psycopg://nc_test_user:nc_test_password@127.0.0.1:1/nc_test_db"
+
+# 기본값(120)이 아닌 값을 주입한다. 기본값으로 검사하면 config를 아예 읽지 않는
+# 구현도 통과한다 (13_ACCEPTANCE_CRITERIA.md의 `수치 취급 원칙`).
+STALE_SECONDS = 300
 
 
 def test_unknown_components_do_not_make_the_service_degraded(client: TestClient) -> None:
@@ -30,7 +42,8 @@ def test_unknown_components_do_not_make_the_service_degraded(client: TestClient)
     assert body["components"]["database"]["latency_ms"] is None
 
 
-def test_worker_is_unknown_in_wave_0(client: TestClient) -> None:
+def test_worker_is_unknown_without_a_database(client: TestClient) -> None:
+    """DB를 확인할 수 없으면 worker도 unknown이다. 그것만을 위해 별도 연결을 만들지 않는다."""
     body = client.get("/api/health").json()
     assert body["components"]["worker"] == {"status": "unknown", "last_heartbeat_at": None}
 
@@ -143,3 +156,100 @@ def test_openapi_and_docs_are_open_in_development(monkeypatch: pytest.MonkeyPatc
     with TestClient(create_app()) as client:
         for path in ("/openapi.json", "/docs", "/redoc"):
             assert client.get(path).status_code == 200, path
+
+
+# --------------------------------------------------------------------------
+# worker heartbeat (05_API_SPEC.md, ADR-017)
+#
+# `db_client`를 쓸 수 없다. health는 `get_db`를 거치지 않고 자기 커넥션으로 DB를
+# 확인하므로(그래야 DSN이 없을 때 unknown을 답할 수 있다) 롤백되는 테스트 세션의
+# 미확정 write를 보지 못한다. heartbeat는 커밋되어야 보인다.
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def heartbeat_client(
+    committed_db: sessionmaker[Session],
+    database_url: URL,
+    monkeypatch: pytest.MonkeyPatch,
+    study_clock: MutableClock,
+) -> Iterator[TestClient]:
+    monkeypatch.setenv("DATABASE_URL", database_url.render_as_string(hide_password=False))
+    get_settings.cache_clear()
+    app = create_app()
+    app.dependency_overrides[get_now] = study_clock.now
+    app.dependency_overrides[get_config] = lambda: override_config(
+        get_config(), jobs={"heartbeat_stale_seconds": STALE_SECONDS}
+    )
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+        engine = get_engine()
+        if engine is not None:
+            engine.dispose()
+
+
+def _worker_component(client: TestClient) -> dict[str, object]:
+    body = client.get("/api/health").json()
+    assert body["components"]["database"]["status"] == "ok", body
+    component: dict[str, object] = body["components"]["worker"]
+    return component
+
+
+@pytest.mark.integration
+def test_worker_is_unknown_before_the_first_heartbeat(
+    heartbeat_client: TestClient,
+) -> None:
+    """worker를 아직 띄우지 않은 환경. unknown은 그 자체로 degraded가 아니다."""
+    body = heartbeat_client.get("/api/health").json()
+    assert body["components"]["worker"] == {"status": "unknown", "last_heartbeat_at": None}
+    assert body["status"] == "ok"
+
+
+@pytest.mark.integration
+def test_a_recent_heartbeat_is_ok(
+    heartbeat_client: TestClient, committed_db: sessionmaker[Session], study_clock: MutableClock
+) -> None:
+    with committed_db() as db:
+        write_heartbeat(db, worker_name=DEFAULT_WORKER_NAME, now=study_clock.now())
+
+    # 기본 임계값(120)이라면 stale일 시점이지만 주입한 값은 300이다.
+    study_clock.advance(timedelta(seconds=STALE_SECONDS - 1))
+    component = _worker_component(heartbeat_client)
+
+    assert component["status"] == "ok"
+    assert component["last_heartbeat_at"] is not None
+    assert str(component["last_heartbeat_at"]).endswith("Z")
+    assert heartbeat_client.get("/api/health").json()["status"] == "ok"
+
+
+@pytest.mark.integration
+def test_a_stopped_worker_goes_stale_and_degrades_the_service(
+    heartbeat_client: TestClient, committed_db: sessionmaker[Session], study_clock: MutableClock
+) -> None:
+    """worker만 죽는 사고는 조용히 일어난다. 학습 세션은 pool로 계속 돌기 때문이다(ADR-017)."""
+    with committed_db() as db:
+        write_heartbeat(db, worker_name=DEFAULT_WORKER_NAME, now=study_clock.now())
+
+    study_clock.advance(timedelta(seconds=STALE_SECONDS + 1))
+    body = heartbeat_client.get("/api/health").json()
+
+    assert body["components"]["worker"]["status"] == "stale"
+    assert body["status"] == "degraded"
+
+
+@pytest.mark.integration
+def test_the_health_response_carries_no_threshold_or_worker_name(
+    heartbeat_client: TestClient, committed_db: sessionmaker[Session], study_clock: MutableClock
+) -> None:
+    """이 endpoint는 설정값을 노출하지 않는다 (05_API_SPEC.md)."""
+    with committed_db() as db:
+        write_heartbeat(db, worker_name=DEFAULT_WORKER_NAME, now=study_clock.now())
+
+    text = heartbeat_client.get("/api/health").text
+
+    for needle in (DEFAULT_WORKER_NAME, str(STALE_SECONDS), "openai", "provider"):
+        assert needle not in text, needle

@@ -34,13 +34,15 @@ import pytest
 import sqlalchemy as sa
 from fsrs import Card, Rating, Scheduler
 from fsrs import State as FsrsState
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import AppConfig, get_config
+from app.jobs import runner, worker
 from app.learning.exposure import count_valid_exposures
 from app.learning.mastery import OBSERVATION, ema, record_explicit_evidence
 from app.learning.probe import select_probe_target
 from app.learning.selection import materialize_candidates, select_next
+from app.llm.prompts import PROMPT_TEMPLATES
 from app.models import (
     GenerationJob,
     ItemExposure,
@@ -63,6 +65,7 @@ from app.models.enums import (
     EventType,
     ExplicitSignal,
     JobType,
+    LlmTaskType,
     PresentationRole,
     ReviewReason,
     SentenceStatus,
@@ -77,6 +80,8 @@ from tests.conftest import (
     no_outbound_network,
     override_config,
 )
+from tests.llm_fixtures import batch_response, item_payload, sentence_payload
+from tests.provider_double import RecordingProvider
 
 pytestmark = pytest.mark.integration
 
@@ -1096,6 +1101,89 @@ def test_scenario_e_another_available_category_carries_the_session(
     assert payload is not None
     assert payload["presentation_role"] == PresentationRole.EXPLORATION.value
     assert _jobs(db_session) == []
+
+
+def test_scenario_e_the_enqueued_job_refills_the_pool(
+    committed_api: StudyApi, committed_db: sessionmaker[Session]
+) -> None:
+    """Scenario E의 마지막 줄을 끝까지 본다: enqueue된 job이 소비되어 **pool이 회복된다.**
+
+    위 두 테스트는 "빈 pool이 오류가 아니고 job이 생긴다"까지다. 그것만으로는 job을
+    아무도 처리하지 않는 구현도 통과한다 --- 사용자에게는 pool이 영영 비어 있는 것과
+    같다. 그래서 여기서는 worker를 실제로 한 바퀴 돌려 `/next`가 그 문장을 제시하는
+    것까지 확인한다.
+
+    `study_api`가 아니라 `committed_api`를 쓴다. worker는 요청이 **커밋한** job을 다른
+    커넥션에서 보아야 하고, `db_session`은 커넥션 하나 안에서 끝난다(conftest의
+    fixture docstring).
+
+    주의: 여기서 `no_outbound_network()`는 **warm pool에 의존한다.** 그 헬퍼는
+    `socket.socket.connect`를 막으므로 unix socket인 테스트 DB 연결도 함께 막는다.
+    블록 안의 요청이 통과하는 것은 바로 위의 `/session`이 이미 커넥션을 pool에
+    올려 두었기 때문이고, 블록 안에서 **새 커넥션이 필요해지면** 이 테스트는
+    provider와 무관한 이유로 빨개진다(pool 크기 설정 변경, 요청당 세션 수 변경 등).
+    그때 고칠 곳은 구현이 아니라 이 블록이다 --- 불변식 #1의 non-fragile한 증명은
+    `test_no_provider_in_request_path.py`가 단일 커넥션(`study_api`)과 별도 프로세스로
+    따로 들고 있고, 여기서의 단정은 그 위에 얹는 보너스다.
+
+    provider는 인자로 주입한다. `LLM_PROVIDER`를 세팅하지 않는다 --- `stub`은 env 값이
+    아니라 provenance 값이다(ADR-016의 `개정`). job -> worker -> pool의 나머지 경우
+    (EXPLAIN_ITEM / GENERATE_REVIEW_CONTEXT / ceiling / 재실행)는
+    `test_worker_pool_integration.py`가 본다.
+    """
+    cfg = _cfg()
+    committed_api.use_config(cfg)
+    now = committed_api.clock.now()
+    with committed_db() as setup:
+        factories.make_learning_item(setup, lemma="仕方ない")
+        for template in PROMPT_TEMPLATES.values():
+            if template.task_type is LlmTaskType.GENERATE_SENTENCE_BATCH:
+                factories.make_prompt_version(
+                    setup, task_type=template.task_type, version=template.version
+                )
+        setup.commit()
+
+    started = committed_api.client.post("/api/study/session")
+    assert started.status_code == 200, started.text
+    session_id = started.json()["session"]["session_id"]
+
+    with no_outbound_network():
+        empty = committed_api.client.post(f"/api/study/session/{session_id}/next")
+    assert empty.status_code == 200, empty.text
+    assert empty.json() == {"presentation": None}
+    assert_no_provider_import()
+
+    with committed_db() as observer:
+        queued = _jobs(observer)
+    assert queued, "replenishment job이 없으면 회복될 것도 없다"
+    assert {job.job_type for job in queued} == {JobType.GENERATE_SENTENCE_BATCH}
+
+    japanese = "それは仕方ないと思う。"
+    provider = RecordingProvider(
+        responses=[
+            batch_response(sentence_payload(japanese, [item_payload("it0", "仕方ない", japanese)]))
+        ]
+    )
+    turns = 0
+    while worker.run_once(
+        session_factory=committed_db,
+        provider=provider,
+        run_job=runner.run_job,
+        cfg=cfg,
+        now=now,
+    ):
+        turns += 1
+        assert turns <= len(queued), "worker가 대기열을 비우지 않는다"
+
+    # 대상 item이 있는 role은 하나뿐이므로 나머지 job은 provider를 부르지 않는다.
+    assert provider.call_count == 1
+
+    refilled = committed_api.client.post(f"/api/study/session/{session_id}/next")
+
+    assert refilled.status_code == 200, refilled.text
+    shown = refilled.json()["presentation"]
+    assert shown is not None, "worker가 만든 문장이 Ready Pool로 돌아오지 않았다"
+    assert shown["japanese"] == japanese
 
 
 # --------------------------------------------------------------------------

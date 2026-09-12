@@ -16,8 +16,21 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import ItemExposure, LearningItem, Sentence, StudyPresentation, User
-from app.models.enums import CandidateStatus, ContextStage, ExposureModality, PresentationRole
+from app.models import (
+    ItemExposure,
+    LearningItem,
+    PromptVersion,
+    Sentence,
+    StudyPresentation,
+    User,
+)
+from app.models.enums import (
+    CandidateStatus,
+    ContextStage,
+    ExposureModality,
+    LlmTaskType,
+    PresentationRole,
+)
 from tests import factories
 
 pytestmark = pytest.mark.integration
@@ -26,6 +39,8 @@ SESSION_MINUTES_FILLER = 1
 MAX_ATTEMPTS_FILLER = 1
 ALGORITHM_VERSION_FILLER = "test"
 FSRS_PARAMS_VERSION_FILLER = "test"
+PROVIDER_FILLER = "stub"
+MODEL_FILLER = "test-model"
 
 
 def _presentation_fixture(
@@ -356,3 +371,72 @@ def test_the_same_candidate_key_for_another_user_is_allowed(db_session: Session)
             db_session, user, sentence, status=CandidateStatus.READY
         )
         assert candidate.id is not None
+
+
+def _make_prompt_version(
+    db_session: Session,
+    *,
+    version: str,
+    active: bool,
+    task_type: LlmTaskType = LlmTaskType.GENERATE_SENTENCE_BATCH,
+) -> PromptVersion:
+    row = PromptVersion(
+        task_type=task_type,
+        version=version,
+        provider=PROVIDER_FILLER,
+        model=MODEL_FILLER,
+        created_at=factories.NOW,
+        active=active,
+    )
+    db_session.add(row)
+    db_session.flush()
+    return row
+
+
+def test_two_active_prompt_versions_for_one_task_are_rejected(db_session: Session) -> None:
+    """04_DB_SPEC.md: active는 task_type당 최대 하나다.
+
+    둘이 되면 `sentences.provenance_json.prompt_version`이 어느 prompt에서 나온
+    것인지 사후에 결정할 수 없다.
+    """
+    _make_prompt_version(db_session, version="sentence_gen_v1", active=True)
+
+    with pytest.raises(IntegrityError):
+        _make_prompt_version(db_session, version="sentence_gen_v2", active=True)
+
+
+def test_deactivating_a_version_frees_the_active_slot(db_session: Session) -> None:
+    """partial인 이유. 전체 unique로 만들면 이 rollback/전환이 불가능하다."""
+    first = _make_prompt_version(db_session, version="sentence_gen_v1", active=True)
+
+    first.active = False
+    db_session.flush()
+
+    second = _make_prompt_version(db_session, version="sentence_gen_v2", active=True)
+    assert second.id != first.id
+
+
+def test_inactive_versions_of_one_task_coexist(db_session: Session) -> None:
+    """version 이력이 남아야 옛 version으로 되돌릴 수 있다 (04_DB_SPEC.md)."""
+    for version in ("sentence_gen_v1", "sentence_gen_v2", "sentence_gen_v3"):
+        _make_prompt_version(db_session, version=version, active=False)
+
+    count = db_session.scalar(
+        sa.select(sa.func.count())
+        .select_from(PromptVersion)
+        .where(PromptVersion.task_type == LlmTaskType.GENERATE_SENTENCE_BATCH)
+    )
+    assert count == 3
+
+
+def test_each_task_type_may_have_its_own_active_version(db_session: Session) -> None:
+    """index key는 task_type이다. 더 넓게 걸면 task 하나만 active를 가질 수 있다."""
+    for task_type in LlmTaskType:
+        _make_prompt_version(
+            db_session, version=f"{task_type.value}_v1", active=True, task_type=task_type
+        )
+
+    count = db_session.scalar(
+        sa.select(sa.func.count()).select_from(PromptVersion).where(PromptVersion.active)
+    )
+    assert count == len(LlmTaskType)

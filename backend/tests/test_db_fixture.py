@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import User
 from tests import factories
@@ -18,6 +18,7 @@ pytestmark = pytest.mark.integration
 
 # 두 테스트가 같은 login_id를 쓴다. 롤백이 안 되면 두 번째에서 unique 위반이 난다.
 SHARED_LOGIN_ID = "rollback.probe"
+COMMITTED_LOGIN_ID = "truncate.probe"
 
 
 @pytest.mark.parametrize("run", [1, 2])
@@ -46,3 +47,39 @@ def test_health_endpoint_reports_a_real_database(db_client: TestClient) -> None:
     assert body["components"]["database"]["status"] == "ok"
     assert body["components"]["database"]["latency_ms"] is not None
     assert body["status"] == "ok"
+
+
+# --------------------------------------------------------------------------
+# committed_db (Wave 3)
+#
+# 이 fixture는 진짜로 commit하므로 롤백으로 치울 수 없다. TRUNCATE가 한 번이라도
+# 걸러지면 다음 테스트가 남은 행 위에서 **조용히** 오염된다. 그래서 먼저 검사한다.
+# --------------------------------------------------------------------------
+
+
+def test_a_committed_row_is_visible_from_another_connection(
+    committed_db: sessionmaker[Session],
+) -> None:
+    """`db_session`과 정반대다. 여기서는 commit이 SAVEPOINT로 바뀌지 않는다.
+
+    worker claim 테스트가 성립하려면 이 성질이 필요하다 --- 다른 커넥션이 보지
+    못하는 "커밋"으로는 두 worker가 겹치는 순간을 재현할 수 없다.
+    """
+    with committed_db() as writer:
+        factories.make_user(writer, login_id=COMMITTED_LOGIN_ID)
+        writer.commit()
+
+    with committed_db() as reader:
+        assert reader.scalar(sa.select(sa.func.count()).select_from(User)) == 1
+
+
+@pytest.mark.parametrize("run", [1, 2])
+def test_the_truncate_leaves_nothing_for_the_next_test(
+    committed_db: sessionmaker[Session], run: int
+) -> None:
+    """두 실행이 같은 login_id를 커밋한다. 정리가 걸러지면 두 번째가 unique 위반이다."""
+    with committed_db() as session:
+        count = sa.select(sa.func.count()).select_from(User)
+        assert session.scalar(count) == 0, f"앞선 테스트의 커밋이 남아 있다 (run={run})"
+        factories.make_user(session, login_id=COMMITTED_LOGIN_ID)
+        session.commit()
