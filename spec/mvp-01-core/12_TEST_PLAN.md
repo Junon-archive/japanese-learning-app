@@ -31,6 +31,16 @@ FSRS wrapper, validation, duplicate, auth.
 -   server 발급 `client_event_id`가 결정론적이다: 같은 자연키로
     `uuid5`를 두 번 계산하면 같은 값이 나온다
     (`05_API_SPEC.md`의 `event idempotency key`)
+-   `context_stage` 전이(`07_SRS_SPEC.md`의 `전이 규칙`): 무신호/`애매함`/
+    `알고 있었음` exposure는 한 칸 올리고 explicit `몰랐음`은 한 칸 내린다.
+    `anchor`에서의 `몰랐음`은 `anchor`에 머물고 `new_context`에서의 성공은
+    `new_context`에 머문다. 낮은 stage의 presentation이 이미 진행한 stage를
+    끌어내리지 않는다(`max`/`min`)
+-   explicit review 기록이 `deferred_until`을 `NULL`로 지운다
+    (`07_SRS_SPEC.md`의 `deferral 해제`)
+-   client 발급 `client_event_id`는 **UUIDv4만** 통과한다. v5(=server 발급
+    형식)·v1·v7을 body에 넣으면 422이고 event가 기록되지 않는다
+    (`05_API_SPEC.md`의 `키 공간 분리`)
 
 ## Integration
 
@@ -58,8 +68,34 @@ Alembic from empty DB.
     생성하지 않는다.
 -   `probe-response`가 다른 presentation의 `probe_id`를 받으면 400이고,
     같은 `probe_id`에 두 번 응답하면 첫 응답 결과가 유지된다.
+-   server 발급 키를 client가 선점할 수 없다:
+    `uuid5(NC_EVENT_NAMESPACE, "session_finished:{sid}")`를 `/extend` body로
+    보내면 422이고, 이어진 `/finish`가 정상 200이며 idle timeout 뒤의
+    `POST /api/study/session`도 정상 동작한다
+    (`05_API_SPEC.md`의 `키 공간 분리`).
+-   상태 게이트(`05_API_SPEC.md`의 `세션·presentation 상태 게이트`):
+    `/finish` 뒤 그 session의 presentation에 대한 click /
+    explanation-revealed / translation reveal / self-report / probe-response가
+    **전부 409**이고, `UserMastery` 행이 생기지 않으며 `last_activity_at`이
+    움직이지 않는다. 같은 presentation의 `/complete`는 200(기존 결과)이다.
+-   `/flag`는 게이트의 예외다: 완료된 presentation에 flag하면 성공하고 그
+    presentation의 `item_exposures`가 `invalidated_at`으로 무효화되며
+    `meaningful_exposure_count`가 다시 계산된다. 닫힌 session에 flag해도
+    그 session의 `last_activity_at`은 움직이지 않는다.
+-   열린 session에서도 `/complete` 뒤의 self-report는 409다 --- 같은 노출이
+    두 번 평가되지 않는다.
 -   Demo isolation: demo API endpoint가 존재하지 않고, demo frontend
     fixture가 backend로 네트워크 요청을 하지 않는다.
+-   contextual repetition이 실제로 진행한다: 같은 item을 연속 세션에서
+    실패 없이 반복 제시하면 제시 문장이 `anchor` 한 문장에 고정되지 않고
+    `context_stage`가 ladder를 따라 올라간다.
+-   `context_repair`가 도달 가능하다: 높은 stage에서 explicit `몰랐음` →
+    다음 materialization이 `context_repair` reason의 candidate를 만들고,
+    그 노출이 일어난 뒤에는 더 만들지 않는다.
+-   target이 아닌 item에 `몰랐음`을 주면 `new` pool이 생긴다: 그
+    presentation은 그 item의 `item_exposures`를 만들지 않고,
+    `anchor_sentence_id`가 그 문장으로 기록되며, 이어진 materialization이
+    `presentation_role = new` candidate를 **같은 문장**으로 만든다.
 
 ## Core E2E Scenario
 
@@ -119,6 +155,11 @@ Alembic from empty DB.
 -   click만으로 SRS에 등록되지 않는다.
 -   `몰랐음`/`애매함` explicit 입력 시 learning state가 활성화된다.
 -   `알고 있었음`이면 신규 item으로 강제 등록되지 않는다.
+-   그 presentation은 이 item의 `item_exposures`를 만들지 않고
+    `context_stage`도 움직이지 않는다 (`07_SRS_SPEC.md`의
+    `target item의 canonical 정의`).
+-   `anchor_sentence_id`가 그 문장으로 기록되고, 이 item이 `new` pool에
+    들어가 첫 `new` presentation이 **같은 문장**을 제시한다.
 
 ### Scenario G --- probe 계속 skip
 

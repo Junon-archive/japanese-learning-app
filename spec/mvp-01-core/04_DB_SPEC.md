@@ -209,7 +209,8 @@ FSRS scheduling 상태를 저장한다. mastery score와 **별도 테이블**이
 -   lapses
 -   fsrs_params_version (파라미터 변경 시 재현용)
 -   deferred_until nullable (무신호 passive review 후 단기 재노출 방지.
-    FSRS memory state와 무관)
+    FSRS memory state와 무관. 설정과 **해제**의 canonical 정의는
+    `07_SRS_SPEC.md`의 `No-signal review`와 `deferral 해제`)
 -   meaningful_exposure_count (denormalized cache. **canonical source는
     `item_exposures`다**)
 
@@ -234,8 +235,10 @@ Context progression과 probe 상태를 사용자별로 추적한다.
 
 -   user_id
 -   learning_item_id
--   anchor_sentence_id nullable (최초 학습 문맥)
+-   anchor_sentence_id nullable (최초 학습 문맥. 지정 규칙은
+    `07_SRS_SPEC.md`의 `anchor_sentence_id 지정`)
 -   context_stage: `anchor | near_original | varied | new_context`
+    (전이 규칙은 `07_SRS_SPEC.md`의 `Context Progression`)
 -   passive_no_signal_count
 -   last_probe_at nullable
 -   probe_skip_count
@@ -394,6 +397,12 @@ client_event_id = 이 event의 idempotency key (UUID)
 **event_type별 발급 주체와 자연키의 canonical 표는
 `05_API_SPEC.md`의 `event idempotency key`에 둔다.** 두 문서에 표를
 중복해 두지 않는다.
+
+두 주체가 **같은 unique 공간**을 쓰므로 키 형식으로 공간을 가른다: server
+발급은 `uuid5`(version 5), client 발급은 **UUIDv4만** 받는다. 그래서 client가
+서버 자연키를 선점할 수 없다. canonical 서술은 `05_API_SPEC.md`의
+`키 공간 분리 (server = v5, client = v4)`이며, **컬럼과 unique 제약은 바뀌지
+않는다**(검증은 API 경계에서 한다).
 
 컬럼 이름은 `client_event_id`로 유지한다. 이름을 바꾸면 migration과 이미
 작성된 model/테스트가 따라 움직이는데, 얻는 것은 이름 하나의 정확도뿐이다.

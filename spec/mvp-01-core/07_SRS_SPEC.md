@@ -132,6 +132,27 @@ passive exposure + temporary deferral
 
 이다. `next_review_at`은 그대로 유지되며 due 상태도 유지된다.
 
+### deferral 해제
+
+`deferred_until`은 **explicit evidence가 그 item의 FSRS review로 기록되는
+순간 `NULL`로 지운다.** 해제 지점은 rating을 기록하는 그 자리 하나다.
+
+``` text
+explicit review 기록 (self-report 3종 | probe 응답 3종)
+    -> review_states.deferred_until = NULL
+```
+
+deferral의 존재 이유는 "이 review에 증거가 없었다" 하나뿐이다. 증거가
+도착하면 FSRS가 `next_review_at`을 다시 계산하므로 그때부터는 스케줄이 곧
+답이고, deferral을 남겨 두면 `Again` 직후 몇 분 뒤로 잡힌 due를 12시간 동안
+가린다. 그것은 `06_LEARNING_ENGINE.md`가 말하는 "스케줄 준수"가 아니라 스케줄
+무시다.
+
+해제해도 무한 due loop는 돌아오지 않는다. loop를 막는 것은 deferral의
+**지속**이 아니라 무신호 presentation마다 다시 거는 동작이고, 증거가 있는
+presentation은 애초에 loop의 대상이 아니다. 다음 presentation이 또 무신호이면
+그 시점에 다시 걸린다.
+
 ## Minimum 5 Exposures와 FSRS의 분리
 
 **minimum meaningful exposure 5회는 FSRS scheduling을 왜곡해서 달성하지
@@ -195,6 +216,33 @@ FSRS 상태에 영향을 주는 계산은 전부 `item_exposures`를 센다. cac
     완료했다.
 3.  해당 presentation이 invalid/quarantined content가 아니다.
 
+### target item의 canonical 정의
+
+**조건 1의 `target item`은 그 presentation의
+`user_sentence_candidate_targets` row다.** materialization 시점에 고정되며
+(`06_LEARNING_ENGINE.md`), 화면에 보인 `is_tappable` item 전체가 아니다.
+
+따라서 target이 **아닌** item을 눌러 `몰랐음`/`애매함`을 고른 경우, 그
+evidence는 mastery와 FSRS에 그대로 기록되지만
+(`02_LEARNING_POLICY.md`의 `Incidental Item Click`) **그 presentation은
+그 item의 exposure를 만들지 않는다.** 같은 이유로 `context_stage` 전이와
+`context_repair` 판정도 그 item에는 적용하지 않는다.
+
+근거:
+
+-   exposure는 "엔진이 그 item을 위해 고른 문맥을 몇 번 경험했는가"를 세는
+    값이다. 문장의 모든 item을 세면 "단순히 스쳐 지나간 것을 모두 exposure로
+    세지 않는다"가 무너지고, 한 문장에 tappable이 10개면 9개가 공짜 노출을
+    얻는다.
+-   다른 item을 위해 고른 문맥의 `context_stage`가 이 item의 ladder를 움직이면
+    progression이 자기 item의 노출 이력과 무관해진다. 최초 만남이 곧바로
+    `new_context` 실패로 기록되는 것이 그 예다.
+-   **그 문맥이 버려지는 것은 아니다.** 그 self-report는 item을 학습 target으로
+    승격시키면서 그 문장을 `anchor_sentence_id`로 남기므로(아래 `Context
+    Progression`), 그 item의 첫 `new` presentation이 **같은 문장**을 anchor로
+    다시 제시한다(`06_LEARNING_ENGINE.md`의 `role별 규칙`). 최초 문맥은 5회
+    중 1회로 정상 계상되며 그 시점이 한 presentation 뒤로 밀릴 뿐이다.
+
 ### 중복 집계 금지
 
 ``` text
@@ -218,7 +266,14 @@ Context progression은 `user_item_learning_state`로 추적한다
 context_stage: anchor | near_original | varied | new_context
 ```
 
-초기 progression 기본 정책:
+ladder 순서는 다음이며, `06_LEARNING_ENGINE.md`의 `context_repair` 판정도
+같은 순서를 쓴다.
+
+``` text
+anchor < near_original < varied < new_context
+```
+
+실패가 한 번도 없을 때의 기본 진행:
 
 ``` text
 Exposure 1 -> anchor
@@ -227,9 +282,6 @@ Exposure 3 -> near_original 또는 varied
 Exposure 4 -> varied / new_context
 Exposure 5 -> new_context
 ```
-
-이는 rigid한 exact sequence가 아니라 Learning Engine의 기본 정책이며
-config로 조정 가능하다.
 
 예 (`任せる`):
 
@@ -241,6 +293,92 @@ config로 조정 가능하다.
 ```
 
 `2회 성공하면 종료` 같은 규칙은 사용하지 않는다.
+
+### 전이 규칙 (MVP 확정)
+
+**`context_stage`를 누가 언제 바꾸는지의 canonical 정의는 이 절이다.** 위 표의
+"또는"은 여기서 결정론적으로 해소된다.
+
+주체와 시점:
+
+``` text
+주체   presentation을 닫는 단일 경로 (`/complete` 와 `/finish` 가 공유한다)
+시점   meaningful exposure를 기록하는 바로 그 트랜잭션
+대상   그 presentation에서 exposure가 기록된 item
+       (= 이 문서의 `target item의 canonical 정의`를 만족하는 item)
+```
+
+exposure를 만들지 않는 presentation(quarantined content)은 stage도 바꾸지
+않는다. 이미 닫힌 presentation을 다시 닫아도 바뀌지 않는다. 전이는 exposure
+기록과 **같은 idempotency를 공유한다.**
+
+전이:
+
+``` text
+S_shown = 그 presentation의 context_stage
+          (= 방금 기록된 item_exposures.context_stage)
+S_cur   = user_item_learning_state.context_stage
+
+그 (presentation, item)에 explicit `몰랐음`이 있으면
+   (self_report_unknown | mastery_probe_unknown)
+        S_cur <- min(S_cur, one_step_down(S_shown))     # 바닥은 anchor
+아니면
+        S_cur <- max(S_cur, one_step_up(S_shown))       # 천장은 new_context
+```
+
+`알고 있었음` / `애매함` / **무신호**는 모두 올린다. 위 표의 단위가 signal이
+아니라 exposure 수이기 때문이다. 내리는 것은 explicit `몰랐음` 하나뿐이며,
+그것이 아래 `New-context Failure`가 말하는 실패다.
+
+왜 이 규칙인가:
+
+-   실패가 없는 경로를 따라가면 위 표의 exact sequence와 같은 결과가 나온다
+    (anchor → near_original → varied → new_context → new_context). `任せる`
+    예시와 정확히 일치한다.
+-   `Exposure 2 -> anchor 또는 near_original`의 "또는"은 **첫 노출에서
+    실패했는가**였다. 첫 문맥에서 `몰랐음`이면 같은 anchor를 한 번 더 보고,
+    아니면 near_original로 간다.
+-   `min` / `max`를 쓰는 이유는 **이미 진행한 ladder를 낮은 stage의
+    presentation이 끌어내리지 않게** 하기 위해서다. Ready Pool에 남아 있던
+    낮은 stage candidate나 `Pool Fallback` 2단계의 anchor reinforcement는
+    성공해도 stage를 되돌리지 않는다. 반대로 실패는 **실제로 본 문맥**을
+    기준으로 한 단계 내려간다.
+-   `anchor`에서 `몰랐음`이면 내려갈 곳이 없어 anchor에 머문다. 같은 anchor
+    문장이 반복되는 이 상태는 `01_PRODUCT_PRINCIPLES.md`가 금지한 "문맥 없는
+    반복"이 아니다. 전이 규칙이 없어서가 아니라 **증거가 계속 실패를 가리켜서**
+    일어나며, 한 번이라도 `몰랐음`이 아닌 결과가 나오면 즉시 ladder를 오른다.
+
+이 ladder에는 **config 키를 두지 않는다.** "config로 조정 가능하다"던 v0.2
+서술은 철회한다. 조정 대상이 될 만한 값은 "한 stage에 몇 번 머무는가"인데,
+그것을 키로 두려면 *현재 stage에서 몇 번 노출했는가*를 알아야 하고
+`user_item_learning_state`에 새 컬럼이 필요하다(직전 stage 변경 시각이
+없으므로 `item_exposures`만으로는 복원되지 않는다). MVP는 새 컬럼을 만들지
+않으므로, ladder를 바꾸는 것은 config 변경이 아니라 **이 절의 명세 변경**이다.
+노출 총량을 조정하는 키는 `minimum_meaningful_exposures` 하나로 충분하다
+(`14_CONFIGURATION.md`).
+
+### anchor_sentence_id 지정
+
+`anchor_sentence_id`는 그 item의 **최초 학습 문맥**이다(`04_DB_SPEC.md`).
+값이 NULL인 동안 다음 두 시점 중 먼저 오는 쪽이 기록한다.
+
+``` text
+1. 그 item이 explicit `몰랐음`/`애매함`으로 학습 target이 되는 시점
+   -> 그 self-report가 일어난 presentation의 sentence_id
+      (02_LEARNING_POLICY.md의 Incidental Item Click)
+
+2. materialization이 `anchor` stage 문장을 고르는 시점
+   -> 06_LEARNING_ENGINE.md의 `stage → sentence` 표
+```
+
+1이 필요한 이유는, 사용자가 실제로 만나 물어본 문장이 그 item의 최초 학습
+문맥이기 때문이다. 1이 없으면 사용자가 A 문장에서 누른 item의 anchor가
+`sentences.id ASC`로 뽑힌 낯선 B 문장이 되고, `anchor`와 `near_original` 노출이
+전부 사용자가 본 적 없는 계열로 채워진다.
+
+이미 값이 있으면 **덮어쓰지 않는다.** 유일한 예외는 quarantine 재지정이며 그
+규칙의 canonical 정의는 `06_LEARNING_ENGINE.md`의
+`anchor 문장을 더는 쓸 수 없을 때`다.
 
 ## New-context Failure
 
@@ -257,6 +395,18 @@ config로 조정 가능하다.
 FSRS evidence      (기록)
 다음 context 선택   (Learning Engine)
 ```
+
+**"한 단계 쉬운 context"는 `context_stage`의 한 단계 하강을 뜻한다.** 같은
+stage 안에서 다른 문장을 고르는 것이 아니다. 상태 전이 자체는 위 `전이 규칙`이
+정의하며 **결정론적이고 조건부가 아니다** --- explicit `몰랐음`이면 stage는
+언제나 내려간다(바닥 `anchor`). `할 수 있다`가 걸리는 것은 그 다음
+presentation이 실제로 `context_repair`가 되는지이고, 그 판정과 우선순위는
+`06_LEARNING_ENGINE.md`(`review candidate: reason 판정`, `Review Reason 선택`)가
+canonical이다. 되돌린 stage의 노출이 실제로 일어나면 repair 조건이 스스로
+꺼진다.
+
+stage가 이미 `anchor`면 내려갈 곳이 없으므로 `context_repair`도 생기지 않는다.
+anchor보다 쉬운 문맥은 MVP에 없다.
 
 콘텐츠가 flag/quarantine되면 그 presentation에서 파생된 negative
 evidence는 무효화할 수 있다(`10_ERROR_HANDLING.md`).

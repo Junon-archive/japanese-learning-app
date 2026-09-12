@@ -139,20 +139,39 @@ exploration
 
 new
   target item   is_active_learning_target = true 이면서
-                아직 review_states 행이 없는 item
-                (incidental click 승격 경로. 02_LEARNING_POLICY.md)
+                invalidated_at IS NULL 인 item_exposures가 아직 0건인 item
+                (= 아직 한 번도 target으로 제시되지 않았다.
+                 incidental click 승격 경로. 02_LEARNING_POLICY.md)
   role          new
   review_reason NULL
   context_stage anchor
-  sentence      exploration과 같은 규칙
+  sentence      아래 `stage → sentence` 표의 `anchor` 행과 같다
+                (승격 시점에 기록된 anchor_sentence_id가 있으면 그 문장)
 
 review
-  target item   review_states 행이 있는 item
+  target item   review_states 행이 있고
+                invalidated_at IS NULL 인 item_exposures가 1건 이상인 item
+                (0건이면 위 `new`가 가져간다 --- 그 item의 첫 제시는 new다)
   role          review
   review_reason 아래 표
   context_stage 아래 표
   sentence      아래 `stage → sentence` 표
 ```
+
+`new`를 "아직 `review_states` 행이 없는 item"으로 정의하던 서술은
+**철회한다.** `07_SRS_SPEC.md`의 `몰랐음 -> Again`은 explicit signal을 즉시
+FSRS에 기록하므로 승격시킨 바로 그 self-report가 `review_states` 행을 만들고,
+그 정의의 집합은 **항상 공집합**이었다. 그러면 Category Mix의 new 축이 영구히
+굶는다. 두 조항 중 FSRS mapping이 더 핵심적이고 `12_TEST_PLAN.md`의 Core E2E
+7단계가 그 동작을 검증하므로, 고치는 쪽은 `new`의 정의다.
+
+새 기준은 **"이미 target으로 제시된 적이 있는가"**이고 판정 소스는 이 엔진의
+다른 모든 노출 판정과 같은 `item_exposures`다. target이 아닌 item의
+self-report는 exposure를 만들지 않으므로(`07_SRS_SPEC.md`의
+`target item의 canonical 정의`) 승격 직후의 item은 exposure 0건이고, 첫 `new`
+presentation이 닫히면 1건이 되어 그 다음부터 `review`다. 이 조건으로 `new`와
+`review`는 배타적이며, `exploration`과는 `is_active_learning_target`으로
+갈린다.
 
 문장당 target item 수는 `max_new_items_per_sentence` 이하여야 한다
 (`14_CONFIGURATION.md`). 한 문장에 붙일 대상이 상한보다 많으면 **상한까지만
@@ -172,8 +191,15 @@ Cold start에서는 `user_item_learning_state` 행이 없으므로 new와 review
 pool이 비고 **exploration만 생긴다.** 이는 Cold Start 절의 "Category
 pool이 없으면 available category만 사용한다"와 일치하며, 사용자가 첫
 `몰랐음`/`애매함`을 누르는 순간 그 item이 active learning target이 되고
-review_states가 생겨 review/new pool이 자라기 시작한다. 신규 사용자에게
-review 70%를 강제로 만들지 않는다.
+review_states가 생겨 pool이 자라기 시작한다. 어느 pool로 가는지는 그 item이
+그 presentation의 target이었는지로 갈린다.
+
+``` text
+target item에 self-report      그 presentation이 닫히며 exposure 1건 -> review pool
+target이 아닌 item에 self-report  exposure 0건                        -> new pool
+```
+
+신규 사용자에게 review 70%를 강제로 만들지 않는다.
 
 ### review candidate: reason 판정
 
@@ -188,9 +214,11 @@ Scenario A~D를 Wave 2에서 재현할 수 없다.
 
 ``` text
 1. context_repair
-   a. 해당 item의 가장 최근 explicit `몰랐음` event
-      (self_report_unknown | mastery_probe_unknown)가 붙은 presentation의
-      context_stage를 S_fail이라 한다
+   a. 해당 item이 **target이었던** presentation 중 가장 최근 explicit `몰랐음`
+      event(self_report_unknown | mastery_probe_unknown)가 붙은 것을 찾아
+      그 presentation의 context_stage를 S_fail이라 한다
+      판정 소스는 그 (presentation, item)의 invalidated_at IS NULL 인
+      item_exposures row다 --- 그 row가 없으면 실패로 보지 않는다
    b. user_item_learning_state.context_stage < S_fail  (실패 후 한 단계 내려감)
    c. 그 이후로 현재 stage의 invalidated_at IS NULL 인 item_exposures row가
       아직 없다                                        (되돌린 노출이 아직 안 일어남)
@@ -228,6 +256,19 @@ cache를 읽어도 되는 조건은 `07_SRS_SPEC.md`의 `Meaningful Exposure
 문맥의 노출이 실제로 일어나면 조건 1-c가 자동으로 거짓이 되므로
 "repair를 아직 했는가"를 따로 저장할 필요가 없다.
 
+조건 1-a가 `item_exposures`를 거치는 이유는 둘이다.
+
+-   target이 아닌 item을 눌러 `몰랐음`을 고른 경우 그 presentation의
+    `context_stage`는 **다른 item을 위해 고른 값**이다. 그것을 S_fail로 쓰면
+    최초로 만난 item이 곧바로 `new_context` 실패로 기록된다
+    (`07_SRS_SPEC.md`의 `target item의 canonical 정의`).
+-   flag/quarantine으로 무효화된 노출에서 나온 negative evidence는 repair를
+    유발하지 않아야 한다(`10_ERROR_HANDLING.md`). `invalidated_at IS NULL`
+    조건이 그것을 그대로 처리한다.
+
+조건 1-b가 성립하려면 stage가 실제로 내려가야 한다. **그 하강은
+`07_SRS_SPEC.md`의 `전이 규칙`이 수행하며 이 문서는 결과만 읽는다.**
+
 ### review candidate: stage → sentence
 
 ``` text
@@ -240,6 +281,9 @@ anchor         user_item_learning_state.anchor_sentence_id
                NULL이면 그 item을 포함한 validated 문장 중 sentences.id ASC
                첫 번째를 고르고 anchor_sentence_id에 기록한다
                기록된 anchor를 더는 쓸 수 없으면 아래 규칙을 따른다
+               (지정 규칙 전체의 canonical 정의는 07_SRS_SPEC.md의
+                `anchor_sentence_id 지정`이고, 여기 id ASC 선택은 그 2번이다.
+                승격 시점에 이미 기록됐으면 그 값을 그대로 쓴다)
 near_original  anchor sentence 자신, 또는 parent_sentence_id = anchor 인
                validated 문장
 varied         anchor가 아니고 그 사용자에게 아직 노출되지 않은 validated 문장
@@ -252,6 +296,13 @@ new_context    varied와 같은 조건
 (`07_SRS_SPEC.md`)이 담당한다. 목적에 맞는 문맥을 실제로 **생성**하는
 것은 Wave 3의 `GENERATE_REVIEW_CONTEXT`이며, 조건에 맞는 문장이 하나도
 없으면 그 stage의 candidate를 만들지 않고 `Pool Fallback`으로 넘어간다.
+
+이때 **stage는 그대로 남는다.** 전이는 오직 exposure로만 일어나므로
+(`07_SRS_SPEC.md`의 `전이 규칙`) candidate를 만들지 못한 것 자체는 ladder를
+움직이지 않고, `Pool Fallback` 2단계가 대신 보여주는 anchor/near-original
+reinforcement 노출도 성공하는 한 ladder를 되돌리지 않는다(전이 규칙의
+`max`). `new_context`에서 쓸 문장이 떨어진 item은 그 fallback으로 최소 노출을
+채우다가, Wave 3이 새 문맥을 공급하면 그대로 `new_context`에서 이어간다.
 
 ### anchor 문장을 더는 쓸 수 없을 때
 
@@ -638,7 +689,8 @@ difficulty_distance가 동률이 되어 `frequency_rank`가 순서를 결정한�
     `user_item_learning_state` 행이 없어 실제로는 **exploration만**
     생긴다. 사용자가 첫 `몰랐음`/`애매함`을 누르면 그 item이 active
     learning target이 되고 `review_states`가 생겨 new/review pool이
-    자라기 시작한다(`Candidate Materialization`의 `role별 규칙`).
+    자라기 시작한다. 두 pool 중 어디로 가는지는 그 item이 그 presentation의
+    target이었는지로 갈린다(`Candidate Materialization`의 `role별 규칙`).
 
 초기 학습 item 공급을 위해 **작은 version-controlled starter seed
 set**을 둔다.

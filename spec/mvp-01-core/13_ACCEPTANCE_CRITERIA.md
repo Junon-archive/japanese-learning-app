@@ -17,7 +17,15 @@
 -   세션 시작이 seed 콘텐츠로 Ready Pool을 만들어, background worker 없이
     첫 세션이 성립함
 -   presentation 제시 / 완료 / probe 제시가 재시도로 중복 기록되지 않음
--   contextual progression을 DB에서 재현 가능
+-   client가 보낸 event key로 서버 경로를 막을 수 없음 (server 발급 키와
+    client 발급 키의 공간이 겹치지 않아, 한 번의 요청으로 세션 종료나 새
+    세션 생성이 영구히 불가능해지는 상태가 만들어지지 않음)
+-   종료된 세션과 이미 완료된 문장에는 학습 상호작용이 기록되지 않음 (같은
+    노출이 두 번 평가되지 않음). 콘텐츠 신고만 예외로 계속 받고, 이미 만들어진
+    노출을 무효화함
+-   contextual progression을 DB에서 재현 가능 (실패 없이 반복 노출하면
+    context ladder가 올라가고, explicit `몰랐음` 뒤에는 한 단계 내려간다)
+-   incidental click에서 승격된 item이 `new` category로 실제 공급된다
 -   item explanation을 DB에서 조회 가능
 -   tap마다 live LLM 불필요
 -   모든 provider 호출이 worker에서만 발생

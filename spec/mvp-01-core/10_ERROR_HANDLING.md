@@ -55,6 +55,11 @@ sentence / candidate -> quarantined
 -   이미 생성된 `item_exposures`는 `invalidated_at`을 설정하여 재계산 시
     제외할 수 있게 한다.
 
+그래서 `/flag`는 **닫힌 session과 이미 완료된 presentation에서도 받는다.**
+exposure는 presentation을 닫을 때 생기므로 위 항목이 참이 되는 순간이 완료
+이후뿐이기 때문이다. 다른 상호작용 endpoint는 그 상태에서 409다
+(`05_API_SPEC.md`의 `세션·presentation 상태 게이트`가 canonical).
+
 Admin UI는 Future지만 **quarantine 동작 자체는 MVP 필수**다
 (`spec/future/ADMIN_AND_DATA.md`).
 

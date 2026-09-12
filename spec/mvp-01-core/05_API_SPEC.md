@@ -137,6 +137,41 @@ body를 늘리면 client가 endpoint마다 UUID를 만들어 재시도 간 보�
 아니라 아래 `열린 presentation 불변식`으로 막는다. 근거는
 `docs/decisions/ADR-008-event-idempotency-key.md`.
 
+### 키 공간 분리 (server = v5, client = v4)
+
+두 발급 주체는 **같은 `(user_id, client_event_id)` unique 공간**을 쓴다.
+server 자연키 형식은 위 표에 공개돼 있으므로, 아무 제약이 없으면 client가
+서버가 나중에 쓸 키를 **먼저 점유**할 수 있다. 그러면 서버 경로가 영구히
+막힌다: `session_finished:{sid}`를 점유하면 `/finish`가 계속 409이고, idle
+timeout 만료도 같은 키를 쓰므로 `POST /api/study/session`까지 막혀 세션이
+끝나지도 새로 생기지도 않는다. DB를 직접 고치지 않으면 복구되지 않는다.
+
+그래서 **두 키 공간을 UUID version으로 분리한다.**
+
+``` text
+server 발급   uuid5(NC_EVENT_NAMESPACE, 자연키)   -> 항상 version 5
+client 발급   반드시 UUIDv4 (random)              -> version 4
+```
+
+-   서버는 request body의 `client_event_id`가 **UUIDv4가 아니면 거부한다.**
+    body 검증 실패이므로 응답은 **422**이고, event는 기록되지 않는다. 검증은
+    `client_event_id`를 받는 요청 schema **한 곳**에서 한다 --- endpoint마다
+    붙이면 하나를 빠뜨린 곳이 그대로 구멍이 된다.
+-   `uuid5` 결과는 version nibble이 항상 5이므로 client가 보낼 수 있는 값과
+    **구조적으로 겹치지 않는다.** 점유는 시도 자체가 성립하지 않는다.
+    namespace를 숨기거나 하나 더 두는 방식과 달리, 상수를 알아내도 우회할 수
+    없다.
+-   browser의 `crypto.randomUUID()`가 v4를 낸다. client 비용은 없다.
+-   그럼에도 **server 발급 경로**가 다른 `event_type`의 기존 행을 만나면 그것은
+    client 잘못이 아니라 **서버 불변식 위반**이다. 409가 아니라 **500**으로
+    응답하고 로그를 남긴다. 409는 "당신이 보낸 key가 이미 다른 event에 쓰였다"는
+    뜻인데 이 경로에는 client가 보낸 key가 없다.
+-   **client 발급 키끼리**의 충돌(한 UUID를 두 endpoint에 재사용)은 그대로
+    **409**다. client가 새 UUID로 재시도하면 복구되므로 영구 상태가 아니다.
+
+근거와 버린 대안은 `docs/decisions/ADR-008-event-idempotency-key.md`의
+`후속 결정 --- 키 공간 분리`.
+
 ## Authentication
 
 ``` text
@@ -201,6 +236,69 @@ POST /api/study/session/{id}/extend    +5분 연장  body: {client_event_id}
     0단계로 materialization을 **요청당 1회** 실행하고, 그 뒤 같은 deficit
     순서로 category를 다시 훑는다. 순서의 canonical 정의는
     `06_LEARNING_ENGINE.md`의 `Pool Fallback`이다.
+
+### 세션·presentation 상태 게이트
+
+**닫힌 session과 이미 완료된 presentation에서 무엇이 허용되는지는 여기가
+canonical이다.** study endpoint 12개가 이 표 하나를 따른다.
+
+``` text
+endpoint                             session.ended_at IS NOT NULL   presentation.completed_at IS NOT NULL
+-----------------------------------  -----------------------------  -------------------------------------
+GET  /session                        해당 없음 (열린 것만 반환)      -
+POST /session                        해당 없음 (resume 또는 신규)    -
+POST /session/{id}/next              409                            -
+POST /session/{id}/extend            409                            -
+POST /session/{id}/finish            200 (같은 session, event 추가 없음)  -
+POST /presentations/{pid}/complete   409 (*)                        200 (기존 결과 그대로)
+click / explanation-revealed /
+translation/reveal / self-report /
+probe-response                       409                            409
+POST /presentations/{pid}/flag       허용 (**)                      허용 (**)
+```
+
+`(*)` `/complete`는 **presentation이 아직 열려 있는데 session이 닫혀 있을
+때만** 409다. 이미 완료된 presentation이면 session 상태와 무관하게 200을
+돌려준다 --- 성공한 `/complete`의 네트워크 재시도가 그 사이 도착한 `/finish`
+때문에 실패로 보이면 안 된다.
+
+`(**)` `/flag`만 상태와 무관하게 허용한다. flag는 evidence를 **만드는** 것이
+아니라 **되돌리는** endpoint다. `10_ERROR_HANDLING.md`의 `Content Flag 동작`은
+"이미 생성된 `item_exposures`는 `invalidated_at`을 설정"하라고 요구하는데,
+exposure는 presentation을 닫을 때 생기므로 그 조항이 참이 되는 순간은 **완료
+이후**뿐이다. flag까지 막으면 canonical 조항 하나가 도달 불가능해진다. 대신
+**닫힌 session의 flag는 `last_activity_at`을 갱신하지 않는다** --- 끝난 세션의
+길이를 바꾸지 않는다. (MVP UI는 현재 문장에서만 flag를 제공한다. 지난 문장을
+신고하는 화면은 Future다.)
+
+판정 순서는 **소유권(404) -> 상태 게이트(409) -> 그 밖의 검증(`probe_id`
+400 등)** 이다. 남의 presentation은 상태와 무관하게 404다.
+
+거부하는 이유:
+
+-   **같은 노출이 두 번 다르게 평가되는 것을 막는다.** presentation을 닫을 때
+    exposure 확정과 무신호 처리(`deferred_until`)가 끝난다
+    (`07_SRS_SPEC.md`의 `No-signal review`). 그 뒤에 도착한 self-report나
+    probe 응답은 이미 내려진 판정 위에 explicit evidence를 덧붙이고, 끝난
+    세션에 새 mastery/`review_states` 행까지 만든다.
+-   닫힌 session의 상호작용은 그 session의 `last_activity_at`을 계속 밀어
+    세션 길이와 `active_seconds`를 오염시킨다.
+-   **idle timeout 때문에 사용자가 화면을 보는 도중 409를 받는 일은 없다.**
+    모든 상호작용이 `last_activity_at`을 갱신하고, 만료는
+    `POST /api/study/session`이 도착할 때 그 시점에만 적용된다. 409를 받는
+    화면은 이미 다른 경로로(직접 종료 / 다른 탭에서 새 세션 시작) 끝난
+    session의 화면이다.
+
+idle timeout으로 닫힌 session에 남은 **미완료 presentation은 영원히 미완료로
+남는다.** 이 게이트가 `/complete`를 막고 `/finish`는 이미 그 session을 닫았기
+때문이다. 의도한 결과다 --- 부재를 완료로 추론해 exposure를 만들지 않는다
+(불변식 #2). `열린 presentation 불변식`은 session 하나 안의 규칙이므로 닫힌
+session에 남은 행은 그것을 깨지 않는다.
+
+client 동작: 409를 받으면 그 화면의 상호작용을 멈추고 `POST /api/study/session`
+으로 현재 session을 다시 얻은 뒤 `/next`로 진행한다. **거부된 상호작용을
+재전송하지 않는다** --- 그 노출의 평가는 이미 끝났다. 버린 대안은
+`docs/decisions/ADR-014-closed-session-interaction-gate.md`.
 
 ## Sentence Presentation Payload
 
@@ -297,6 +395,10 @@ POST /api/study/presentations/{pid}/flag
 POST /api/study/presentations/{pid}/complete
      -> sentence_completed 기록, meaningful exposure 확정
 ```
+
+위 7개 endpoint는 전부 `세션·presentation 상태 게이트`를 먼저 통과한다.
+닫힌 session이나 이미 완료된 presentation이면 409이고, `/complete`만 예외
+규칙을 가진다.
 
 `/complete`는 `Next`를 누를 때 client가 **명시적으로** 호출한다
 (`열린 presentation 불변식`). idempotency key는 presentation id 기반

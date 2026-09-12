@@ -110,6 +110,13 @@ backlog 모드의 비율 키(`backlog_review_ratio`, `backlog_new_ratio`,
 `srs`, `session`, `user`, `content`, `jobs`, `llm` 섹션의 키는 비율 합
 검증 대상이 아니다.
 
+`context_stage` progression ladder(`anchor -> near_original -> varied ->
+new_context`)의 전이 조건도 **이 파일에 두지 않는다.** 조정 대상이 될 만한
+값은 "한 stage에 몇 번 머무는가"인데, 그것을 키로 두려면 *현재 stage에서 몇 번
+노출했는가*를 저장할 새 컬럼이 필요하고 MVP는 새 컬럼을 만들지 않는다. ladder
+변경은 config 변경이 아니라 `07_SRS_SPEC.md`의 `전이 규칙` 변경이다. 노출
+총량을 조절하는 키는 `minimum_meaningful_exposures` 하나다.
+
 인증 session cookie의 이름·속성·수명은 **이 파일에 두지 않는다.** 학습
 정책이 아니라 배포·보안 설정이므로 `APP_ENV`와 같은 취급이다. canonical
 정의는 `spec/04_SECURITY_AND_DATA.md`의 `Session Cookie (MVP 확정)`이고,

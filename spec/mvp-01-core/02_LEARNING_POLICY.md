@@ -188,6 +188,23 @@ probe budget 축소는 **MVP에서 구현하지 않는다.** 같은 item을 다�
 학습 상태에 활성화하고 신규 learning target으로 등록한다
 (`user_item_learning_state.is_active_learning_target`).
 
+그 시점에 일어나는 일은 정확히 다음 넷이다.
+
+``` text
+is_active_learning_target = true
+anchor_sentence_id        = 그 presentation의 sentence_id   (NULL이었을 때만)
+FSRS                      07_SRS_SPEC.md의 mapping대로 즉시 기록한다
+item_exposures            만들지 않는다
+                          (그 item은 이 presentation의 target이 아니다)
+```
+
+그 결과 이 item은 **exposure 0건인 학습 target**이 되어 `new` pool에 들어가고,
+첫 `new` presentation에서 **사용자가 그것을 만났던 바로 그 문장**을 anchor로
+다시 본다(`06_LEARNING_ENGINE.md`의 `role별 규칙`). 최초 문맥을 잃지 않으면서도
+"스쳐 지나간 것을 exposure로 세지 않는다"를 지키는 방법이 이것이다. canonical
+정의는 `07_SRS_SPEC.md`의 `target item의 canonical 정의`와
+`anchor_sentence_id 지정`이다.
+
 `알고 있었음`이면 SRS 신규 item으로 강제 등록하지 않는다.
 
 클릭 후 아무 self-report 없이 넘어가면 candidate evidence로만 남기고
@@ -211,7 +228,9 @@ Review 70 / New 20 / Exploration 10. backlog가 많으면 review↑ new↓.
 원문/near-original → 약간 다른 문맥 → 새로운 일상 문맥.
 
 meaningful exposure의 판정 규칙과 canonical source는
-`07_SRS_SPEC.md`와 `04_DB_SPEC.md`의 `item_exposures`를 따른다.
+`07_SRS_SPEC.md`와 `04_DB_SPEC.md`의 `item_exposures`를 따른다. 이 문맥
+사다리를 **언제 한 칸 올리고 내리는지**(`context_stage` 전이)의 canonical
+정의도 `07_SRS_SPEC.md`의 `Context Progression`이다.
 
 MVP에는 audio가 없으므로 listening exposure는 Future다
 (`spec/future/LISTENING.md`).

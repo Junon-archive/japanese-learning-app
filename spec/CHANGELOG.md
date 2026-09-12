@@ -423,3 +423,122 @@ Wave 2 구현 중 보고된 명세 모순 2건과 공백 4건을 확정했다. �
     자연키로 기존 event를 조회해 같은 `probe_id`를 반환한다.
 
 새 ADR: `docs/decisions/ADR-011-probe-target-priority.md`.
+
+#### Wave 2 검증 보고 반영 (같은 후속 보완)
+
+Wave 2 verifier가 보고한 도달 불가능 조항 3건과 공백 2건을 확정했다. 새 버전
+번호를 만들지 않는다. **새 테이블·새 컬럼·새 config 키는 없다.**
+
+-   **[A] `context_stage` 전이 규칙 부재**
+    (`07_SRS_SPEC.md`의 `Context Progression` → `전이 규칙`이 canonical,
+    ADR-012): `context_stage`에 값을 쓰는 지점이 행 생성 시 `anchor` 대입
+    하나뿐이라, 최소 5회 노출이 전부 같은 anchor 문장으로 채워지고
+    `near_original`/`varied`/`new_context` 분기가 한 번도 실행되지 않았다.
+    전이는 **presentation을 닫을 때 meaningful exposure와 같은 트랜잭션**에서
+    일어나고, 대상은 그 presentation에서 exposure가 기록된 item이다.
+    explicit `몰랐음`이면 `min(S_cur, down(S_shown))`, 아니면
+    `max(S_cur, up(S_shown))`이다. v0.2 표의 `또는`은 **실패 여부**였다 ---
+    실패 없는 경로를 따라가면 표의 exact sequence와 `任せる` 예시가 그대로
+    재현된다. 무신호와 `애매함`은 올리고 explicit `몰랐음`만 내린다.
+    `max`/`min`은 Ready Pool에 남은 낮은 stage candidate와 `Pool Fallback`
+    2단계의 anchor reinforcement가 이미 올라간 ladder를 끌어내리지 않게 한다.
+-   **[A-config] "config로 조정 가능하다"를 철회**
+    (`07_SRS_SPEC.md`, `14_CONFIGURATION.md`): 조정 대상이 될 값은 "한
+    stage에 몇 번 머무는가"인데, 하강이 있는 이상 `item_exposures`의 stage별
+    건수로는 복원되지 않아(되돌아온 stage의 옛 노출이 즉시 재승급시킨다)
+    **새 컬럼**이 필요하다. MVP 제약을 넘으므로 키를 만들지 않고 그 문장을
+    철회했다. ladder 변경은 config 변경이 아니라 명세 변경이다.
+-   **[B] `context_repair`가 도달 불가능**
+    (`07_SRS_SPEC.md`의 `New-context Failure`, `06_LEARNING_ENGINE.md`의
+    `review candidate: reason 판정`): "한 단계 쉬운 context"가 **stage
+    하강**임을 확정했다. 같은 stage 안에서 다른 문장을 고르는 것이 아니다.
+    stage 하강은 [A]의 전이 규칙이 수행하므로 조건 b가 실제로 참이 될 수
+    있다. 하강 자체는 결정론적이고, `할 수 있다`가 걸리는 것은 다음
+    presentation이 실제로 `context_repair`가 되는지다. 조건 1-a의 S_fail
+    소스를 **그 (presentation, item)의 `invalidated_at IS NULL` item_exposures
+    row**로 한정했다 --- target이 아닌 item의 self-report와 flag로 무효화된
+    노출이 repair를 유발하지 않게 한다.
+-   **[C] `new` role pool이 항상 빔 (명세 내부 충돌)**
+    (`06_LEARNING_ENGINE.md`의 `role별 규칙`, ADR-013): `new`를 "아직
+    `review_states` 행이 없는 item"으로 정의하던 서술을 **철회**했다.
+    `07_SRS_SPEC.md`의 `몰랐음 -> Again`이 승격과 동시에 `review_states`를
+    만들므로 그 집합은 공집합이었다. FSRS mapping이 더 핵심적이고 Core E2E
+    7단계가 그것을 검증하므로 `new`의 정의를 고쳤다. 새 기준은 **"아직
+    target으로 제시된 적이 있는가"**이고 판정 소스는 다른 모든 노출 판정과
+    같은 `item_exposures`다. `review`는 exposure 1건 이상으로 좁혀 두 pool을
+    배타적으로 유지했다.
+-   **[D] 승격된 incidental item이 exposure를 못 받음**
+    (`07_SRS_SPEC.md`의 `target item의 canonical 정의`, ADR-013):
+    `target item`은 그 presentation의 `user_sentence_candidate_targets`
+    row라고 확정했다(materialization 시점 고정). 문장의 모든 tappable로
+    넓히면 "스쳐 지나간 것을 모두 세지 않는다"가 무너지고 [C]의 `new` 기준도
+    함께 무너진다. 대신 승격 시점에 `anchor_sentence_id`를 **그 문장**으로
+    기록해(`anchor_sentence_id 지정`), 그 item의 첫 `new` presentation이 같은
+    문장을 anchor로 다시 제시하게 했다. 최초 문맥은 5회 중 1회로 정상
+    계상되고 시점만 한 presentation 뒤로 밀린다.
+-   **[E] explicit review 후 `deferred_until` 미해제**
+    (`07_SRS_SPEC.md`의 `deferral 해제`): explicit evidence가 FSRS review로
+    기록되는 순간 `deferred_until = NULL`로 지운다. deferral의 근거는 "증거가
+    없다" 하나뿐이고, 남겨 두면 `Again` 직후 몇 분 뒤의 due를 12시간 가려
+    스케줄 준수가 아니라 스케줄 무시가 된다. 무한 due loop는 deferral의
+    지속이 아니라 무신호 presentation마다 다시 거는 동작이 막는다.
+
+교차 참조·서술을 맞춘 문서: `02_LEARNING_POLICY.md`(`Incidental Item Click`이
+승격 시 일어나는 일 4줄과 canonical 참조, `Exposure`에 전이 규칙 참조),
+`06_LEARNING_ENGINE.md`(`stage → sentence` 표의 anchor 지정 참조, 문장이 없을
+때 stage가 움직이지 않는다는 명시, Cold Start 서술),
+`14_CONFIGURATION.md`(ladder에 키를 두지 않는 이유),
+`12_TEST_PLAN.md`(unit 2건 + integration 3건), `13_ACCEPTANCE_CRITERIA.md`
+(수치 없는 기준 2줄).
+
+새 ADR: `docs/decisions/ADR-012-context-stage-progression.md`,
+`docs/decisions/ADR-013-exposure-target-and-new-role.md`.
+
+#### security review 반영 --- event key 선점과 상태 게이트 (같은 후속 보완)
+
+security reviewer가 **실제 요청으로 익스플로잇한 결함 1건**과 명세 공백 1건을
+확정했다. 새 버전 번호를 만들지 않는다. **새 테이블·새 컬럼·새 config 키는
+없다.**
+
+-   **[F] client가 server 발급 event key를 선점해 세션을 영구 브릭**
+    (`05_API_SPEC.md`의 `키 공간 분리 (server = v5, client = v4)`가 canonical,
+    ADR-008의 `후속 결정`): server 발급 키는 공개된 자연키의 `uuid5`인데
+    client 발급 키와 **같은 `(user_id, client_event_id)` unique 공간**에
+    들어갔다. `/extend` body에 `uuid5(NS, "session_finished:{sid}")`를 보내면
+    `/finish`가 영구 409이고, idle timeout 만료가 같은 키를 쓰므로
+    `POST /api/study/session`까지 영구 500이 되어 DB 직접 수정 없이는 복구되지
+    않았다. ADR-008은 발급 주체만 정하고 두 공간이 겹친다는 사실을 다루지
+    않았다 --- 수용된 위험이 아니라 누락이다. **client 발급 키를 UUIDv4로
+    제한**해 공간을 version으로 가른다. `uuid5`는 항상 version 5이므로 선점이
+    구조적으로 불가능하고, `crypto.randomUUID()`가 v4를 내므로 client 비용이
+    없다. v4가 아니면 body 검증 실패(422)다. server 발급 경로가 그럼에도 다른
+    `event_type`의 행을 만나면 client 잘못이 아니므로 409가 아니라 500 +
+    로그다. 버린 대안(server 전용 namespace 추가 = obscurity, 발급 주체 컬럼
+    추가 = 새 컬럼 비용, event 기록 생략 = audit 공백)은 ADR-008에 있다.
+-   **[G] 종료된 세션의 presentation 상호작용 7종이 그대로 허용됨**
+    (`05_API_SPEC.md`의 `세션·presentation 상태 게이트`가 canonical, ADR-014):
+    `/next`와 `/extend`만 409였고 나머지는 동작해, 끝난 세션의 self-report가
+    **새 mastery 행을 만들고** `last_activity_at`을 계속 밀었다. 더 중요한
+    것은 `/complete` 시점에 exposure 확정과 무신호 처리가 끝난 presentation에
+    뒤늦게 explicit evidence가 붙어 **같은 노출이 두 번 다르게 평가**된 점이다.
+    상호작용 5종(click, explanation-revealed, translation reveal,
+    self-report, probe-response)은 **session이 닫혔거나 presentation이
+    완료됐으면 409**로 통일한다. 예외는 둘이다. `/complete`는 이미 완료된
+    presentation이면 200이고(성공한 `/complete`의 재시도가 `/finish`와 겹쳐
+    실패로 보이면 안 된다) 열린 presentation인데 session이 닫혔으면 409다.
+    **`/flag`는 상태와 무관하게 허용한다** --- `10_ERROR_HANDLING.md`가
+    요구하는 "이미 생성된 `item_exposures` 무효화"는 완료 이후의 flag만
+    참으로 만들 수 있어서, 막으면 그 조항이 도달 불가능해진다. 대신 닫힌
+    session의 flag는 `last_activity_at`을 갱신하지 않는다. 판정 순서는
+    소유권(404) → 상태(409) → 그 밖의 검증(400)이다. idle timeout으로 닫힌
+    session에 남은 미완료 presentation은 영원히 미완료로 남는다(의도된 결과.
+    부재를 완료로 추론하지 않는다). idle timeout은
+    `POST /api/study/session` 시점에만 적용되고 모든 상호작용이
+    `last_activity_at`을 갱신하므로, 사용자가 화면을 보는 도중 409를 받는
+    경로는 없다.
+
+교차 참조를 맞춘 문서: `04_DB_SPEC.md`(`client_event_id 발급 주체`에 키 공간
+분리 한 문단, 컬럼·unique는 불변), `12_TEST_PLAN.md`(unit 1건 + integration
+3건), `13_ACCEPTANCE_CRITERIA.md`(수치 없는 기준 2줄).
+
+새 ADR: `docs/decisions/ADR-014-closed-session-interaction-gate.md`.
