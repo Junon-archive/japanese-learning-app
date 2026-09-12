@@ -44,6 +44,21 @@ class EventKeyConflictError(Exception):
     client가 한 UUID를 여러 endpoint에 재사용한 경우다. 기존 event를 그대로 돌려주면
     호출부는 "내 요청이 처리됐다"고 읽지만 실제로 기록된 것은 다른 행위다. 잘못된
     응답을 돌려주느니 거부한다.
+
+    client가 새 UUID로 재시도하면 복구되므로 영구 상태가 아니다.
+    """
+
+
+class ServerEventKeyConflictError(Exception):
+    """**server 발급** key가 다른 `event_type`의 기존 행을 만났다 (HTTP 500).
+
+    `EventKeyConflictError`의 형제이고 상속 관계가 아니다. 둘을 한 타입으로 묶으면
+    호출부가 반드시 하나의 상태 코드를 고르게 되는데, 두 경우는 책임 주체가 다르다.
+
+    409는 "당신이 보낸 key가 이미 다른 event에 쓰였다"는 뜻인데 이 경로에는 client가
+    보낸 key가 없다. `uuid5(NC_EVENT_NAMESPACE, 자연키)`는 서버가 계산했고, client
+    key는 v4만 허용되므로(05_API_SPEC.md의 `키 공간 분리`) 이 충돌은 client가 만들 수
+    없다. 남는 원인은 서버 불변식 위반뿐이라 500으로 응답하고 로그를 남긴다.
     """
 
 
@@ -132,8 +147,14 @@ def record_event(
     if inserted_id is not None:
         return event, True
     if event.event_type is not event_type:
-        raise EventKeyConflictError(
+        detail = (
             f"client_event_id is already recorded as {event.event_type.value}, "
             f"not {event_type.value}"
         )
+        # 어느 쪽이 key를 발급했는지가 곧 누구의 잘못인지다(05_API_SPEC.md의
+        # `키 공간 분리`). server 발급 경로의 충돌은 client가 만들 수 없으므로
+        # 409로 client에게 되돌려 주면 고칠 수 없는 요청을 재시도하게 만든다.
+        if event_type in SERVER_ISSUED_NATURAL_KEY:
+            raise ServerEventKeyConflictError(detail)
+        raise EventKeyConflictError(detail)
     return event, False

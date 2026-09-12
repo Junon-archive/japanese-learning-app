@@ -5,9 +5,13 @@ from __future__ import annotations
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import health
 from app.api.router import ROOT_DEPENDENCIES, assert_fail_closed, install_routes
@@ -16,6 +20,19 @@ from app.settings import get_settings
 # OpenAPI/docs는 private API 표면을 그대로 드러낸다. 05_API_SPEC.md에서 인증 없이
 # 호출 가능한 경로는 /api/health 하나뿐이므로 개발 환경에서만 연다.
 DOCS_APP_ENV = "development"
+
+# 422 본문에서 지우는 pydantic 오류 키.
+#
+# `input`은 **거부된 값 그 자체**다. FastAPI 기본 handler는 그것을 그대로 반향하고,
+# pydantic은 필드 하나가 어긋나면 body 전체를 `input`으로 싣는다
+# (`{"type":"missing","loc":["body","login_id"],"input":{...제출한 body 전부...}}`).
+# 즉 client가 `loginId`처럼 이름 하나만 틀려도, 또는 body를 배열로 감싸도, 평문
+# password가 응답 본문에 실려 나간다. 그 본문은 터널/프록시 로그와 브라우저 HAR에
+# 남는다. `ctx`도 값에서 파생된 내용을 담을 수 있어 같이 지운다.
+#
+# `loc`/`type`/`msg`는 남긴다. **무엇이** 잘못됐는지는 진단에 필요하고, 그 셋은
+# 스키마 선언에서 나온 정보라 client가 보낸 값을 포함하지 않는다.
+_ECHOED_ERROR_KEYS = frozenset({"input", "ctx"})
 
 # scheme://host[:port] 만 허용한다. path/trailing slash/query가 있거나 "null"
 # 같은 opaque origin이면 CORS 허용 목록으로 쓸 수 없다
@@ -32,6 +49,23 @@ def _validated_cors_origins(origins: list[str]) -> list[str]:
         if not _ORIGIN_PATTERN.fullmatch(origin):
             raise ValueError(f"CORS_ALLOW_ORIGINS contains an invalid origin: {origin!r}")
     return origins
+
+
+async def _validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """제출된 값을 지운 422. 상태 코드와 `{"detail": [...]}` 모양은 기본 동작 그대로다.
+
+    app 레벨 handler라 **모든 endpoint**에 걸린다. endpoint마다 붙이는 방식이면
+    하나를 빠뜨린 곳이 그대로 유출 경로다.
+    """
+    errors = exc.errors() if isinstance(exc, RequestValidationError) else []
+    sanitized: list[dict[str, Any]] = [
+        {key: value for key, value in error.items() if key not in _ECHOED_ERROR_KEYS}
+        for error in errors
+    ]
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content=jsonable_encoder({"detail": sanitized}),
+    )
 
 
 @asynccontextmanager
@@ -61,6 +95,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs_enabled else None,
         openapi_url="/openapi.json" if docs_enabled else None,
     )
+
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
 
     origins = _validated_cors_origins(settings.cors_origins)
     if origins:

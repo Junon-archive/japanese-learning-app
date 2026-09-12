@@ -216,6 +216,65 @@ def test_an_explicit_review_stamps_the_params_version(db_session: Session) -> No
     assert _reload(db_session, state).fsrs_params_version == FSRS_PARAMS_VERSION
 
 
+@pytest.mark.integration
+def test_an_explicit_review_clears_the_deferral(db_session: Session) -> None:
+    """증거가 도착하면 deferral을 지운다 (07_SRS_SPEC.md의 `deferral 해제`).
+
+    남겨 두면 `Again` 직후 몇 분 뒤로 잡힌 due를 deferral이 몇 시간 동안 가린다.
+    그것은 스케줄 준수가 아니라 스케줄 무시다. 무한 due loop를 막는 것은 deferral의
+    지속이 아니라 무신호 presentation마다 다시 거는 동작이다.
+    """
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    config = get_config()
+    clock = MutableClock()
+    record_explicit_review(
+        db_session,
+        user_id=user.id,
+        learning_item_id=item.id,
+        signal=ExplicitSignal.UNCERTAIN,
+        now=clock.now(),
+        config=config,
+    )
+    deferred = record_no_signal_review(
+        db_session,
+        user_id=user.id,
+        learning_item_id=item.id,
+        now=clock.advance(timedelta(days=30)),
+        config=config,
+    )
+    assert deferred is not None and deferred.deferred_until is not None
+
+    state = record_explicit_review(
+        db_session,
+        user_id=user.id,
+        learning_item_id=item.id,
+        signal=ExplicitSignal.UNKNOWN,
+        now=clock.advance(timedelta(minutes=1)),
+        config=config,
+    )
+
+    assert _reload(db_session, state).deferred_until is None
+
+
+@pytest.mark.integration
+def test_a_first_explicit_review_starts_without_a_deferral(db_session: Session) -> None:
+    """새로 만든 스케줄에도 deferral이 남지 않는다. 해제 지점은 rating 기록 한 곳이다."""
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+
+    state = record_explicit_review(
+        db_session,
+        user_id=user.id,
+        learning_item_id=item.id,
+        signal=ExplicitSignal.UNKNOWN,
+        now=DEFAULT_START,
+        config=get_config(),
+    )
+
+    assert _reload(db_session, state).deferred_until is None
+
+
 # --------------------------------------------------------------------------
 # no-signal review (불변식 #2)
 # --------------------------------------------------------------------------

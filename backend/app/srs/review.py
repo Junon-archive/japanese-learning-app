@@ -52,6 +52,13 @@ def record_explicit_review(
 
     `reps` / `lapses` 증가는 애플리케이션 카운터이며(ADR-003) **이 함수 한 곳에만**
     존재한다. 다른 경로에서 올리면 lapse 수가 explicit evidence 수와 갈린다.
+
+    같은 자리에서 `deferred_until`을 `NULL`로 지운다(07_SRS_SPEC.md의 `deferral 해제`).
+    deferral의 존재 이유는 "이 review에 증거가 없었다" 하나뿐이고, 증거가 도착하면
+    FSRS가 `next_review_at`을 다시 계산하므로 그때부터는 스케줄이 곧 답이다. 남겨
+    두면 `Again` 직후 몇 분 뒤로 잡힌 due를 deferral이 몇 시간 동안 가린다. 무한 due
+    loop를 막는 것은 deferral의 지속이 아니라 무신호 presentation마다 다시 거는
+    동작이므로, 지워도 loop는 돌아오지 않는다.
     """
     state = _locked_review_state(db, user_id=user_id, learning_item_id=learning_item_id)
     rating = rating_for_signal(signal)
@@ -70,6 +77,7 @@ def record_explicit_review(
         db.add(state)
 
     write_card(state, reviewed)
+    state.deferred_until = None
     state.fsrs_params_version = FSRS_PARAMS_VERSION
     state.reps += 1
     if rating is Rating.Again:

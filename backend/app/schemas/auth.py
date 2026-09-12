@@ -20,11 +20,12 @@ class LoginRequest(BaseModel):
     # (scripts/create_user.py, 상한 없음)와 어긋나서 "만들 수는 있는데 로그인은
     # 422로 영구 차단되는" password가 생긴다.
     #
-    # 그리고 pydantic `max_length`는 **제출된 평문 password를 응답 본문에 반향한다.**
-    # 상한이 있던 시절 실측: 초과 입력에 FastAPI가
-    # `{"type":"string_too_long", ..., "input":"<평문 password>"}`를 422로 돌려줬다.
-    # 그 본문은 프록시/터널 로그와 브라우저 HAR에 그대로 남는다. 상한을 다시 넣으면
-    # 이 유출 경로도 함께 돌아온다. 다시 넣지 않는다.
+    # 평문 password가 422 본문에 실려 나가는 것은 **여기서 막히지 않는다.** 막는 것은
+    # `app/main.py`의 `_validation_error_handler`이고, 그것이 오류에서 `input`(제출된
+    # 값 그 자체)을 지운다. 상한을 없앤 것으로 닫힌 것은 `string_too_long` 하나뿐이고,
+    # `missing`(client가 `loginId`처럼 이름을 틀린 경우)과 `model_attributes_type`
+    # (body가 배열로 감싸인 경우)은 그대로 body 전체를 반향하고 있었다. 스키마 쪽에서
+    # 유출을 막을 수 있다고 여기지 마라 --- 반향을 지우는 곳은 handler 한 곳이다.
     password: str
 
 

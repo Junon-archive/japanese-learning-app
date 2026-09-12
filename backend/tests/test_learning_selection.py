@@ -13,13 +13,14 @@ Ready Pool을 만드는 경로(materialization)는 손으로 INSERT하지 않고
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.config import get_config
+from app.learning.progression import STAGE_LADDER, stage_rank
 from app.learning.selection import (
     Selection,
     SessionCounters,
@@ -51,11 +52,13 @@ from app.models.enums import (
     ContextStage,
     EventType,
     ExplanationStatus,
+    ExplicitSignal,
     ExposureModality,
     PresentationRole,
     ReviewReason,
     SentenceStatus,
 )
+from app.srs.review import record_explicit_review
 from tests import factories
 from tests.clock import MutableClock
 
@@ -255,6 +258,26 @@ def test_no_available_reason_means_pool_fallback() -> None:
 
 
 # --------------------------------------------------------------------------
+# context ladder (순수)
+# --------------------------------------------------------------------------
+
+
+def test_the_repair_comparison_and_the_transition_share_one_ladder() -> None:
+    """`context_repair`의 `context_stage < S_fail` 비교와 전이가 같은 순서를 본다.
+
+    선언이 둘이면 한쪽만 뒤집혀도 아무도 눈치채지 못한 채 repair가 영영 참이거나
+    영영 거짓이 된다. canonical 선언은 `learning/progression.py` 하나다(ADR-012).
+    """
+    assert STAGE_LADDER == (
+        ContextStage.ANCHOR,
+        ContextStage.NEAR_ORIGINAL,
+        ContextStage.VARIED,
+        ContextStage.NEW_CONTEXT,
+    )
+    assert [stage_rank(stage) for stage in STAGE_LADDER] == [0, 1, 2, 3]
+
+
+# --------------------------------------------------------------------------
 # DB 헬퍼
 # --------------------------------------------------------------------------
 
@@ -401,7 +424,8 @@ def _presentation(
 
 
 def _expose(db_session: Session, user: User, item: LearningItem, now: datetime) -> None:
-    """`item_exposures` 한 건. 조건 3(최근 노출)의 판정 소스다."""
+    """`item_exposures` 한 건. 조건 3(최근 노출)의 판정 소스이고, **그 item을 `new`
+    pool에서 `review` pool로 옮기는 조건**이기도 하다(ADR-013)."""
     sentence = _ready_sentence(db_session, [item])
     study_session = _study_session(db_session, user)
     candidate = _candidate(
@@ -425,6 +449,39 @@ def _expose(db_session: Session, user: User, item: LearningItem, now: datetime) 
         )
     )
     db_session.flush()
+
+
+def _exposure(
+    db_session: Session,
+    user: User,
+    item: LearningItem,
+    presentation: StudyPresentation,
+    *,
+    stage: ContextStage,
+    now: datetime,
+) -> None:
+    """이미 만든 presentation에 유효 exposure 1건을 붙인다.
+
+    `context_repair`의 S_fail은 `study_presentations`가 아니라 이 row에서 읽는다
+    (06_LEARNING_ENGINE.md의 조건 1-a).
+    """
+    db_session.add(
+        ItemExposure(
+            user_id=user.id,
+            learning_item_id=item.id,
+            study_presentation_id=presentation.id,
+            sentence_id=presentation.sentence_id,
+            modality=ExposureModality.READING,
+            context_stage=stage,
+            created_at=now,
+        )
+    )
+    db_session.flush()
+
+
+def _utc(moment: datetime) -> datetime:
+    """DB가 돌려주는 시각에는 세션 timezone이 붙어 있다. 같은 순간을 UTC로 옮긴다."""
+    return moment.astimezone(UTC)
 
 
 def _candidates_of(
@@ -673,6 +730,50 @@ def test_an_active_learning_target_becomes_new_and_not_exploration(
 
 
 @pytest.mark.integration
+def test_a_promoted_item_stays_new_until_it_has_been_shown(db_session: Session) -> None:
+    """`new`의 기준은 `review_states` 유무가 아니라 **유효 exposure 0건**이다 (ADR-013).
+
+    `몰랐음 -> Again`이 승격시킨 바로 그 self-report가 스케줄을 만들므로, "아직
+    `review_states` 행이 없는 item"이라는 옛 정의의 집합은 항상 공집합이었고
+    Category Mix의 new 축이 영구히 굶었다. 문장은 승격 시점에 기록된 anchor다 ---
+    사용자가 실제로 물어본 그 문장을 다시 제시한다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    anchor = _ready_sentence(db_session, [item])
+    _ready_sentence(db_session, [item])
+    _learning_state(db_session, user, item, active=True, anchor_sentence_id=anchor.id)
+    _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+
+    (candidate,) = _candidates_of(db_session, user)
+    assert candidate.presentation_role is NEW
+    assert candidate.review_reason is None
+    assert candidate.context_stage is ContextStage.ANCHOR
+    assert candidate.sentence_id == anchor.id
+
+
+@pytest.mark.integration
+def test_the_first_exposure_moves_an_item_from_new_to_review(db_session: Session) -> None:
+    """제시된 적이 있으면 `new`가 아니라 `review`다. 두 pool은 배타적이다 (ADR-013)."""
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    anchor = _ready_sentence(db_session, [item])
+    _learning_state(db_session, user, item, active=True, anchor_sentence_id=anchor.id)
+    _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, item, clock.now())
+
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+
+    (candidate,) = _candidates_of(db_session, user)
+    assert candidate.presentation_role is REVIEW
+    assert candidate.review_reason is FSRS_DUE
+
+
+@pytest.mark.integration
 def test_a_due_item_gets_an_fsrs_due_candidate(db_session: Session) -> None:
     clock = MutableClock()
     user = factories.make_user(db_session)
@@ -680,6 +781,8 @@ def test_a_due_item_gets_an_fsrs_due_candidate(db_session: Session) -> None:
     sentence = _ready_sentence(db_session, [item])
     _learning_state(db_session, user, item, anchor_sentence_id=sentence.id)
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    # 이미 한 번 제시된 적이 있어야 `review`다. 0건이면 그 item은 `new`의 몫이다.
+    _expose(db_session, user, item, clock.now())
 
     materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
 
@@ -699,6 +802,7 @@ def test_an_item_below_the_minimum_exposures_gets_a_reinforcement_candidate(
     sentence = _ready_sentence(db_session, [item])
     _learning_state(db_session, user, item, anchor_sentence_id=sentence.id)
     _schedule(db_session, user, item, next_review_at=clock.now() + timedelta(days=30))
+    _expose(db_session, user, item, clock.now())
 
     materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
 
@@ -715,6 +819,7 @@ def test_the_anchor_sentence_is_recorded_when_it_was_missing(db_session: Session
     sentence = _ready_sentence(db_session, [item])
     state = _learning_state(db_session, user, item, anchor_sentence_id=None)
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, item, clock.now())
 
     materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
 
@@ -738,6 +843,7 @@ def test_a_quarantined_anchor_is_replaced_and_the_item_keeps_learning(
     replacement = _ready_sentence(db_session, [item])
     state = _learning_state(db_session, user, item, anchor_sentence_id=anchor.id)
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, item, clock.now())
     anchor.status = SentenceStatus.QUARANTINED
     db_session.flush()
 
@@ -767,6 +873,7 @@ def test_a_quarantined_anchor_is_replaced_at_the_near_original_stage(
         anchor_sentence_id=anchor.id,
     )
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, item, clock.now())
     anchor.status = SentenceStatus.QUARANTINED
     db_session.flush()
 
@@ -793,6 +900,7 @@ def test_an_anchor_awaiting_explanation_repair_is_not_replaced(db_session: Sessi
     _ready_sentence(db_session, [item])
     state = _learning_state(db_session, user, item, anchor_sentence_id=anchor.id)
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, item, clock.now())
 
     created = materialize_candidates(
         db_session, user=user, now=clock.now(), cfg=get_config().learning
@@ -887,6 +995,8 @@ def test_context_repair_follows_a_failure_at_a_higher_stage(db_session: Session)
             created_at=clock.now(),
         )
     )
+    # S_fail은 presentation이 아니라 그 (presentation, item)의 유효 exposure에서 읽는다.
+    _exposure(db_session, user, item, presentation, stage=ContextStage.VARIED, now=clock.now())
     db_session.flush()
 
     materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
@@ -939,6 +1049,7 @@ def test_a_repaired_stage_stops_asking_for_context_repair(db_session: Session) -
             created_at=clock.now(),
         )
     )
+    _exposure(db_session, user, item, failure, stage=ContextStage.VARIED, now=clock.now())
     repaired_on = _candidate(
         db_session,
         user,
@@ -1075,6 +1186,7 @@ def test_an_fsrs_due_candidate_is_not_chosen_before_its_target_is_due(
     sentence = _ready_sentence(db_session, [item])
     _learning_state(db_session, user, item, anchor_sentence_id=sentence.id)
     _schedule(db_session, user, item, next_review_at=clock.now() + timedelta(days=3))
+    _expose(db_session, user, item, clock.now())
     _candidate(db_session, user, sentence, role=REVIEW, reason=FSRS_DUE, targets=[item])
     study_session = _study_session(db_session, user)
 
@@ -1125,10 +1237,51 @@ def test_a_deferred_target_is_not_chosen(db_session: Session) -> None:
         next_review_at=clock.now() - timedelta(days=1),
         deferred_until=clock.now() + timedelta(hours=12),
     )
+    _expose(db_session, user, item, clock.now())
     _candidate(db_session, user, sentence, role=REVIEW, reason=FSRS_DUE, targets=[item])
     study_session = _study_session(db_session, user)
 
     assert _select(db_session, user, study_session, clock.now()) is None
+
+
+@pytest.mark.integration
+def test_an_explicit_review_lifts_the_deferral(db_session: Session) -> None:
+    """증거가 도착하면 deferral이 풀리고 스케줄이 다시 답이 된다 (07_SRS_SPEC.md의 `deferral 해제`).
+
+    deferral의 존재 이유는 "이 review에 증거가 없었다" 하나뿐이다. 남겨 두면 방금
+    `몰랐음`을 받아 몇 분 뒤로 잡힌 due를 12시간 동안 가린다 --- 그것은 스케줄 준수가
+    아니라 스케줄 무시다. rating을 기록하는 자리가 그것을 지운다.
+    """
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    sentence = _ready_sentence(db_session, [item])
+    _learning_state(db_session, user, item, anchor_sentence_id=sentence.id)
+    _schedule(
+        db_session,
+        user,
+        item,
+        next_review_at=clock.now() - timedelta(days=1),
+        deferred_until=clock.now() + timedelta(hours=12),
+    )
+    _expose(db_session, user, item, clock.now())
+    _candidate(db_session, user, sentence, role=REVIEW, reason=FSRS_DUE, targets=[item])
+    study_session = _study_session(db_session, user)
+    assert _select(db_session, user, study_session, clock.now()) is None
+
+    state = record_explicit_review(
+        db_session,
+        user_id=user.id,
+        learning_item_id=item.id,
+        signal=ExplicitSignal.UNKNOWN,
+        now=clock.now(),
+        config=get_config(),
+    )
+
+    assert state.deferred_until is None
+    selection = _select(db_session, user, study_session, _utc(state.next_review_at))
+    assert selection is not None, "deferral이 풀렸는데도 due item을 고르지 못했다"
+    assert selection.target_item_ids == (item.id,)
 
 
 @pytest.mark.integration

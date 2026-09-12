@@ -21,6 +21,7 @@ from app.models.enums import EventType, ExplicitSignal
 from app.services.events import (
     NC_EVENT_NAMESPACE,
     EventKeyConflictError,
+    ServerEventKeyConflictError,
     record_event,
     server_client_event_id,
 )
@@ -277,6 +278,39 @@ def test_reusing_one_key_for_another_event_type_is_refused(
             event_type=EventType.EXPLANATION_REVEALED,
             client_event_id=client_event_id,
             learning_item_id=item.id,
+            now=study_clock.now(),
+        )
+
+
+@pytest.mark.integration
+def test_a_server_issued_key_that_collides_is_a_server_fault_not_a_conflict(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """server 발급 경로의 충돌은 409가 아니라 500이다 (05_API_SPEC.md의 `키 공간 분리`).
+
+    409는 "당신이 보낸 key가 이미 다른 event에 쓰였다"는 뜻인데 이 경로에는 client가
+    보낸 key가 없다. client에게 되돌려 주면 고칠 수 없는 요청을 재시도하게 만든다.
+    """
+    user, study_session, _ = _fixture(db_session)
+    server_key = server_client_event_id(
+        EventType.SESSION_FINISHED, study_session_id=study_session.id
+    )
+    record_event(
+        db_session,
+        user_id=user.id,
+        study_session_id=study_session.id,
+        event_type=EventType.SESSION_EXTENDED,
+        client_event_id=server_key,
+        now=study_clock.now(),
+    )
+
+    with pytest.raises(ServerEventKeyConflictError):
+        record_event(
+            db_session,
+            user_id=user.id,
+            study_session_id=study_session.id,
+            event_type=EventType.SESSION_FINISHED,
+            client_event_id=server_key,
             now=study_clock.now(),
         )
 

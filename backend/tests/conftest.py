@@ -1,20 +1,28 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+import socket
+import sys
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.engine import URL, Engine
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_now
-from app.config import get_config
+from app.config import AppConfig, get_config
 from app.db import _build_engine, get_engine
 from app.main import create_app
+from app.models.user import User
+from app.services.auth import hash_password
 from app.settings import get_settings
-from tests import db_support
+from tests import db_support, factories
 from tests.clock import MutableClock
 
 # `app.settings.Settings`의 모든 필드가 여기에 있어야 한다. 하나라도 빠지면 셸에
@@ -177,5 +185,111 @@ def db_client(
             engine.dispose()
 
 
-# auth fixture(로그인한 사용자, 인증된 client)는 auth 구현이 끝난 뒤
-# 이 자리에 추가한다. 지금 추측으로 만들지 않는다.
+# --------------------------------------------------------------------------
+# 정책 주입 (13_ACCEPTANCE_CRITERIA.md의 `수치 취급 원칙`)
+#
+# 시나리오/E2E는 "엔진이 configured 값을 따르는가"를 본다. 기본값에 기대어
+# 숫자를 단정하면 config를 아예 읽지 않는 구현도 통과한다.
+# --------------------------------------------------------------------------
+
+
+def override_config(cfg: AppConfig, **sections: Mapping[str, Any]) -> AppConfig:
+    """섹션 단위로 정책값을 갈아 끼운 새 `AppConfig`.
+
+    `model_copy`가 아니라 `model_validate`로 다시 만든다 --- copy는 검증기를 건너뛰어
+    비율 합 같은 규칙을 우회한 config가 테스트에만 존재하게 된다.
+    """
+    data = cfg.model_dump()
+    for name, values in sections.items():
+        section = data[name]
+        if not isinstance(section, dict):  # pragma: no cover - 섹션 이름 오타
+            raise KeyError(f"{name} is not a config section")
+        data[name] = {**section, **values}
+    return AppConfig.model_validate(data)
+
+
+# --------------------------------------------------------------------------
+# provider 호출 감시 (불변식 #1)
+#
+# import 정적 검사(`test_module_boundaries.py`의 G4)와 방향이 다르다. 이쪽은
+# "지금 이 요청이 실제로 무엇을 했는가"를 본다.
+# --------------------------------------------------------------------------
+
+PROVIDER_MODULES = ("openai", "anthropic")
+
+
+@contextmanager
+def no_outbound_network() -> Iterator[None]:
+    """이 블록 안에서 바깥으로 소켓을 열면 실패한다.
+
+    DB 커넥션은 `db_session`이 이미 열어 둔 것을 재사용하므로 request 경로에 새
+    소켓이 필요할 이유가 없다. provider를 동기 호출하는 구현은 여기에 걸린다.
+    """
+
+    def _refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError("request 경로가 바깥으로 연결을 열었다")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(socket.socket, "connect", _refuse)
+        patch.setattr(socket, "create_connection", _refuse)
+        yield
+
+
+def assert_no_provider_import() -> None:
+    """provider SDK가 요청 처리 중에 끌려 들어오지 않았는지 본다."""
+    loaded = [name for name in PROVIDER_MODULES if name in sys.modules]
+    assert loaded == [], f"provider SDK가 import됐다: {loaded}"
+
+
+# --------------------------------------------------------------------------
+# 인증된 HTTP client
+#
+# `db_client`는 base_url이 http라서 `Secure` 쿠키가 httpx jar에 저장되지 않는다 ---
+# 로그인은 200인데 이후 요청이 401이 되는 형태로 조용히 실패한다(그 fixture의
+# docstring). 시나리오/E2E는 HTTP 계약까지 함께 밟아야 하므로 https client를 둔다.
+# --------------------------------------------------------------------------
+
+STUDY_ORIGIN = "https://app.test"
+STUDY_PASSWORD = "correct horse battery staple"
+
+
+@dataclass(frozen=True)
+class StudyApi:
+    """로그인된 client + 그 app + 이 테스트의 시계."""
+
+    client: TestClient
+    app: FastAPI
+    clock: MutableClock
+    user: User
+
+    def use_config(self, cfg: AppConfig) -> None:
+        """이 app이 보는 정책값을 바꾼다. 요청 경로는 `Depends(get_config)`로만 읽는다."""
+        self.app.dependency_overrides[get_config] = lambda: cfg
+
+
+@pytest.fixture
+def study_api(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, study_clock: MutableClock
+) -> Iterator[StudyApi]:
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", STUDY_ORIGIN)
+    _clear_caches()
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_now] = study_clock.now
+
+    user = factories.make_user(db_session)
+    user.password_hash = hash_password(STUDY_PASSWORD)
+    db_session.flush()
+
+    try:
+        with TestClient(
+            app, base_url="https://testserver", headers={"Origin": STUDY_ORIGIN}
+        ) as client:
+            response = client.post(
+                "/api/auth/login",
+                json={"login_id": user.login_id, "password": STUDY_PASSWORD},
+            )
+            assert response.status_code == 200, response.text
+            yield StudyApi(client=client, app=app, clock=study_clock, user=user)
+    finally:
+        app.dependency_overrides.clear()

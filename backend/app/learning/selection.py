@@ -34,11 +34,11 @@ from app.learning.exploration import (
     eligible_exploration_targets,
     exploration_sort_key,
 )
+from app.learning.progression import UNKNOWN_SIGNAL_EVENTS, stage_rank
 from app.models.content import LearningItem, Sentence, SentenceItem, SentenceItemExplanation
 from app.models.enums import (
     CandidateStatus,
     ContextStage,
-    EventType,
     ExplanationStatus,
     PresentationRole,
     ReviewReason,
@@ -62,19 +62,8 @@ TIE_ORDER: Mapping[PresentationRole, int] = {
     PresentationRole.EXPLORATION: 2,
 }
 
-# context_stage ladder. context_repair 판정(`uils.context_stage < S_fail`)이 쓴다.
-STAGE_LADDER: Mapping[ContextStage, int] = {
-    ContextStage.ANCHOR: 0,
-    ContextStage.NEAR_ORIGINAL: 1,
-    ContextStage.VARIED: 2,
-    ContextStage.NEW_CONTEXT: 3,
-}
-
-# explicit `몰랐음`. click이나 probe 제시는 여기 없다 --- 무신호는 실패가 아니다.
-UNKNOWN_EVENTS: tuple[EventType, ...] = (
-    EventType.SELF_REPORT_UNKNOWN,
-    EventType.MASTERY_PROBE_UNKNOWN,
-)
+# ladder 순서와 `몰랐음` event 목록의 canonical 선언은 `learning/progression.py`다.
+# 전이를 수행하는 쪽과 그 결과를 읽는 쪽(`context_repair` 판정)이 같은 값을 봐야 한다.
 
 # deficit 비교 전 반올림 자릿수. 0.7*12-8 과 0.2*12-2 는 수학적으로 같은 0.4인데
 # IEEE 754에서는 1e-16만큼 다르다. 반올림하지 않으면 명세가 정한 tie-break
@@ -363,7 +352,7 @@ def materialize_candidates(db: Session, *, user: User, now: datetime, cfg: Learn
     created = 0
     for role, plans in (
         (PresentationRole.REVIEW, _review_plans(db, user_id=user.id, now=now, cfg=cfg)),
-        (PresentationRole.NEW, _new_plans(db, user_id=user.id)),
+        (PresentationRole.NEW, _new_plans(db, user_id=user.id, now=now)),
         (PresentationRole.EXPLORATION, _exploration_plans(db, user=user, now=now, cfg=cfg)),
     ):
         created += _create_candidates(
@@ -552,32 +541,48 @@ def _exploration_plans(
             yield _Plan(item.id, sentence_id, ContextStage.ANCHOR, None)
 
 
-def _new_plans(db: Session, *, user_id: int) -> Iterator[_Plan]:
-    """`new`는 incidental click으로 승격됐지만 아직 FSRS 스케줄이 없는 item이다."""
-    item_ids = (
+def _new_plans(db: Session, *, user_id: int, now: datetime) -> Iterator[_Plan]:
+    """`new` = 학습 target인데 **아직 한 번도 target으로 제시되지 않은** item (ADR-013).
+
+    "아직 `review_states` 행이 없는 item"이라는 옛 정의는 철회됐다. `몰랐음 -> Again`이
+    승격시킨 바로 그 self-report에서 스케줄을 만들므로 그 집합은 항상 공집합이었고,
+    Category Mix의 new 축이 영구히 굶었다. 판정 소스는 이 엔진의 다른 모든 노출
+    판정과 같은 `item_exposures`의 `invalidated_at IS NULL` 건수다.
+
+    문장은 `stage -> sentence` 표의 `anchor` 행과 같다. 승격 시점에 기록된
+    `anchor_sentence_id`가 있으면 **사용자가 실제로 만난 그 문장**을 다시 제시한다
+    (`_first_unseen_sentence`를 쓰면 그 문맥이 낯선 문장으로 바뀐다).
+    """
+    states = (
         db.execute(
-            sa.select(UserItemLearningState.learning_item_id)
-            .outerjoin(
-                ReviewState,
-                sa.and_(
-                    ReviewState.user_id == UserItemLearningState.user_id,
-                    ReviewState.learning_item_id == UserItemLearningState.learning_item_id,
-                ),
-            )
+            sa.select(UserItemLearningState)
             .where(
                 UserItemLearningState.user_id == user_id,
                 UserItemLearningState.is_active_learning_target.is_(True),
-                ReviewState.id.is_(None),
             )
             .order_by(UserItemLearningState.learning_item_id)
         )
         .scalars()
         .all()
     )
-    for item_id in item_ids:
-        sentence_id = _first_unseen_sentence(db, user_id=user_id, item_id=item_id)
-        if sentence_id is not None:
-            yield _Plan(item_id, sentence_id, ContextStage.ANCHOR, None)
+    for state in states:
+        item_id = state.learning_item_id
+        if _valid_exposure_count(db, user_id=user_id, learning_item_id=item_id) > 0:
+            # 이미 제시된 적이 있다. 그 item은 `review`의 몫이다.
+            continue
+        picked = _stage_sentence(
+            db,
+            user_id=user_id,
+            item_id=item_id,
+            stage=ContextStage.ANCHOR,
+            anchor_id=state.anchor_sentence_id,
+        )
+        if picked is None:
+            continue
+        if picked.anchor_to_record is not None:
+            state.anchor_sentence_id = picked.anchor_to_record
+            state.updated_at = now
+        yield _Plan(item_id, picked.sentence_id, ContextStage.ANCHOR, None)
 
 
 def _review_plans(
@@ -601,10 +606,17 @@ def _review_plans(
     }
 
     for target in sorted(targets.values(), key=lambda item: item.order_key):
+        exposures = _valid_exposure_count(
+            db, user_id=user_id, learning_item_id=target.learning_item_id
+        )
+        if exposures == 0:
+            # 아직 한 번도 target으로 제시되지 않았다. 그 item의 첫 제시는 `new`의
+            # 몫이고 두 pool은 배타적이다(ADR-013).
+            continue
         state = states.get(target.learning_item_id)
         stage = ContextStage.ANCHOR if state is None else state.context_stage
         reason = _review_reason_for(
-            db, user_id=user_id, target=target, stage=stage, now=now, cfg=cfg
+            db, user_id=user_id, target=target, stage=stage, exposures=exposures, now=now, cfg=cfg
         )
         if reason is None:
             continue
@@ -620,8 +632,9 @@ def _review_plans(
             # 조건에 맞는 문장이 없다. 그 stage의 candidate를 만들지 않고 Pool
             # Fallback으로 넘긴다. 문맥을 **생성**하는 것은 Wave 3의 일이다.
             continue
-        # `anchor_sentence_id`를 쓰는 **유일한** 지점이다. 최초 지정과 quarantine
-        # 재지정이 한 자리에서 일어나야 두 경로가 갈리지 않는다.
+        # materialization 쪽의 `anchor_sentence_id` 쓰기 지점이다(`_new_plans`와
+        # 같은 규칙). 승격 시점의 기록은 `learning/progression.py`가 하고 둘 다
+        # **NULL일 때만** 쓴다. quarantine 재지정은 여기 한 자리가 소유한다.
         if state is not None and picked.anchor_to_record is not None:
             state.anchor_sentence_id = picked.anchor_to_record
             state.updated_at = now
@@ -634,15 +647,20 @@ def _review_reason_for(
     user_id: int,
     target: _ReviewTarget,
     stage: ContextStage,
+    exposures: int,
     now: datetime,
     cfg: LearningConfig,
 ) -> ReviewReason | None:
-    """06_LEARNING_ENGINE.md의 `review candidate: reason 판정`을 위에서부터 평가한다."""
+    """06_LEARNING_ENGINE.md의 `review candidate: reason 판정`을 위에서부터 평가한다.
+
+    `exposures`는 호출부가 이미 센 유효 노출 건수다. 같은 값을 여기서 다시 세면
+    "review pool에 들어가는가"(>= 1건)와 "reinforcement가 필요한가"가 서로 다른
+    질의 결과를 볼 수 있다.
+    """
     if _needs_context_repair(db, user_id=user_id, item_id=target.learning_item_id, stage=stage):
         return ReviewReason.CONTEXT_REPAIR
     if target.due(now):
         return ReviewReason.FSRS_DUE
-    exposures = _valid_exposure_count(db, user_id=user_id, learning_item_id=target.learning_item_id)
     if exposures < cfg.minimum_meaningful_exposures:
         # 불변식 #4: FSRS interval을 cap하지 않는다. 최소 노출은 이 reason으로 채운다.
         return ReviewReason.REINFORCEMENT
@@ -652,16 +670,32 @@ def _review_reason_for(
 def _needs_context_repair(db: Session, *, user_id: int, item_id: int, stage: ContextStage) -> bool:
     """새 상태 컬럼 없이 세 조건으로 판정한다 (06_LEARNING_ENGINE.md).
 
+    조건 a의 S_fail은 `study_presentations`가 아니라 **그 (presentation, item)의
+    유효한 `item_exposures` row**에서 읽는다. 둘은 같지 않다.
+
+    ``` text
+    target이 아닌 item의 `몰랐음`   presentation의 stage는 다른 item을 위해 고른 값이다
+    flag/quarantine된 노출          invalidated_at이 붙어 실패로 보지 않는다
+    ```
+
     되돌린 문맥의 노출이 실제로 일어나면 조건 c가 자동으로 거짓이 되므로
-    "repair를 아직 했는가"를 따로 저장할 필요가 없다.
+    "repair를 아직 했는가"를 따로 저장할 필요가 없다. 조건 b가 성립하려면 stage가
+    실제로 내려가야 하고, 그 하강은 `learning/progression.py`가 수행한다.
     """
     failure = db.execute(
-        sa.select(StudyPresentation.context_stage, LearningEvent.created_at)
-        .join(StudyPresentation, StudyPresentation.id == LearningEvent.study_presentation_id)
+        sa.select(ItemExposure.context_stage, LearningEvent.created_at)
+        .join(
+            ItemExposure,
+            sa.and_(
+                ItemExposure.study_presentation_id == LearningEvent.study_presentation_id,
+                ItemExposure.learning_item_id == LearningEvent.learning_item_id,
+                ItemExposure.invalidated_at.is_(None),
+            ),
+        )
         .where(
             LearningEvent.user_id == user_id,
             LearningEvent.learning_item_id == item_id,
-            LearningEvent.event_type.in_(UNKNOWN_EVENTS),
+            LearningEvent.event_type.in_(UNKNOWN_SIGNAL_EVENTS),
         )
         .order_by(LearningEvent.created_at.desc(), LearningEvent.id.desc())
         .limit(1)
@@ -671,7 +705,7 @@ def _needs_context_repair(db: Session, *, user_id: int, item_id: int, stage: Con
 
     failed_stage, failed_at = failure
     # b. 실패 후 한 단계 내려가 있어야 한다.
-    if STAGE_LADDER[stage] >= STAGE_LADDER[failed_stage]:
+    if stage_rank(stage) >= stage_rank(failed_stage):
         return False
 
     # c. 되돌린 stage의 유효 노출이 그 실패 이후로 아직 없다.

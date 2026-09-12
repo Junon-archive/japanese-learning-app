@@ -164,19 +164,22 @@ def finish(
 ) -> StudySession:
     """`POST /api/study/session/{id}/finish`.
 
-    열려 있는 presentation이 있으면 완료 처리하고 `sentence_completed`를 남긴다
-    (05_API_SPEC.md의 `열린 presentation 불변식`). 그 event의 key는 presentation id
-    기반 server 발급이라 동시에 도착한 `/complete`와 중복 기록되지 않는다.
+    열려 있는 presentation이 있으면 `finalize_presentation()`으로 완료 처리한다
+    (05_API_SPEC.md의 `열린 presentation 불변식`). 그래서 세션을 그냥 끝낸 사용자도
+    마지막 문장의 meaningful exposure를 얻는다 --- 07_SRS_SPEC.md의 조건 2가
+    "`Next`로 이동했거나 **세션을 정상 완료**했다"이기 때문이다. `sentence_completed`의
+    key는 presentation id 기반 server 발급이라 동시에 도착한 `/complete`와 중복
+    기록되지 않는다.
 
     이미 끝난 session에 다시 호출하면 같은 session을 그대로 돌려주고 event를 더 만들지
     않는다.
     """
-    session = _load_owned(db, user_id=user_id, session_id=session_id)
+    session = load_owned_session(db, user_id=user_id, session_id=session_id)
     if session.ended_at is not None:
         return session
 
     touch(session, now=now, cfg=cfg.session)
-    _complete_open_presentation(db, session=session, now=now)
+    _complete_open_presentation(db, session=session, now=now, cfg=cfg)
     session.ended_at = now
     record_event(
         db,
@@ -210,7 +213,7 @@ def extend(
     그래서 **연장은 `created`가 True일 때만 적용한다.** 재전송이 `extended_minutes`를
     한 번 더 올리면 그 UUID는 idempotency key가 아니라 그냥 장식이 된다.
     """
-    session = _load_owned(db, user_id=user_id, session_id=session_id)
+    session = load_owned_session(db, user_id=user_id, session_id=session_id)
     if session.ended_at is not None:
         raise StudySessionClosedError("session is already finished")
 
@@ -229,7 +232,12 @@ def extend(
     return session
 
 
-def _load_owned(db: Session, *, user_id: int, session_id: int) -> StudySession:
+def load_owned_session(db: Session, *, user_id: int, session_id: int) -> StudySession:
+    """요청 사용자의 session. 아니면 `StudySessionNotFoundError`다.
+
+    presentation service도 이것을 쓴다. 소유권 확인이 두 곳에 복제되면 한쪽에서
+    `user_id` 조건을 빠뜨리는 순간 남의 세션에 문장을 붙일 수 있다.
+    """
     session = db.execute(
         sa.select(StudySession).where(
             StudySession.id == session_id, StudySession.user_id == user_id
@@ -252,52 +260,44 @@ def _open_presentation(db: Session, *, study_session_id: int) -> StudyPresentati
     ).scalar_one_or_none()
 
 
-def _complete_open_presentation(db: Session, *, session: StudySession, now: datetime) -> None:
-    """`/finish`가 남은 presentation을 닫는다.
+def _complete_open_presentation(
+    db: Session, *, session: StudySession, now: datetime, cfg: AppConfig
+) -> None:
+    """`/finish`가 남은 presentation을 `finalize_presentation()`에 넘긴다.
 
-    **미완성:** meaningful exposure 확정은 여기에 없다. `item_exposures`는
-    `/complete`를 처리하는 presentation service가 소유하며(ADR-007), 그것이 생기면 이
-    함수는 그 경로를 호출하도록 바뀌어야 한다. 지금 exposure를 여기서도 만들면 규칙이
-    두 곳에 생기고 둘이 어긋난다. `sentence_completed` event와 `completed_at`만 남기는
-    것은 안전한 쪽의 부분 구현이다 --- exposure는 나중에 추가할 수 있지만, 잘못 센
-    exposure는 최소 5회 노출을 조기 충족시켜 되돌리기 어렵다(불변식 #5).
+    닫는 규칙(exposure 확정, 무신호 처리, candidate 소비, `sentence_completed`)은
+    **전부 그 함수 하나에만** 있다. 여기서 일부를 다시 구현하면 `/complete`로 닫은
+    문장과 `/finish`로 닫은 문장이 서로 다른 상태를 남긴다.
+
+    import는 함수 안에서 한다. `app.services.presentation`이 session 소유권 확인과
+    `touch()` 때문에 이 모듈을 import하므로, 모듈 최상단에서 맞import하면 순환이
+    된다. 방향은 `presentation -> study_session`이고, 이 한 줄만 반대로 간다.
     """
     presentation = _open_presentation(db, study_session_id=session.id)
     if presentation is None:
         return
-    presentation.completed_at = now
-    record_event(
-        db,
-        user_id=session.user_id,
-        study_session_id=session.id,
-        event_type=EventType.SENTENCE_COMPLETED,
-        client_event_id=server_client_event_id(
-            EventType.SENTENCE_COMPLETED, study_presentation_id=presentation.id
-        ),
-        presentation_id=presentation.id,
-        sentence_id=presentation.sentence_id,
-        now=now,
-    )
+    from app.services.presentation import finalize_presentation
+
+    finalize_presentation(db, presentation=presentation, now=now, cfg=cfg)
 
 
 def _expire_idle_session(db: Session, *, session: StudySession, now: datetime) -> None:
     """idle timeout으로 밀려난 session을 닫는다.
 
-    **명세 공백이다.** 05_API_SPEC.md와 04_DB_SPEC.md는 "초과면 새 session을 만든다"만
-    말하고 밀려난 session의 `ended_at`과 그 session의 미완료 presentation을 어떻게 할지
-    정하지 않았다. 가정을 이 함수 하나에 모아 둔다 --- 명세가 정해지면 여기만 고친다.
-
-    가정 1. `ended_at = last_activity_at`. `now`로 채우면 사용자가 자리를 비운 30분+가
-    세션 길이에 들어가 `ended_at - started_at`이 실제보다 길어진다. `active_seconds`가
-    긴 gap을 이미 배제하는 것과 같은 이유로, 종료 시각도 마지막으로 관측된 활동
-    시각으로 둔다.
-
-    가정 2. **미완료 presentation을 완료 처리하지 않는다.** `/finish`는 사용자의 명시적
+    **미완료 presentation을 완료 처리하지 않는다.** `/finish`는 사용자의 명시적
     "끝낸다"이지만 timeout은 부재의 추론이다. 보지 않고 떠난 문장에
     `sentence_completed`를 남기면 없는 신호를 만들어내는 것이고, 그것은 "no-click을
     Known으로 추론하지 않는다"(불변식 #2)와 같은 종류의 실수다. `열린 presentation
     불변식`은 session 하나 안에서의 규칙이므로 닫힌 session에 남은 미완료 행은 그것을
-    깨지 않는다.
+    깨지 않는다. 그 행에 뒤늦게 도착하는 상호작용은 05_API_SPEC.md의
+    `세션·presentation 상태 게이트`가 409로 막는다(ADR-014).
+
+    **`ended_at = last_activity_at`은 아직 명세 공백이다.** 05_API_SPEC.md와
+    04_DB_SPEC.md는 "초과면 새 session을 만든다"만 말하고 밀려난 session의 `ended_at`을
+    정하지 않았다. `now`로 채우면 사용자가 자리를 비운 30분+가 세션 길이에 들어가
+    `ended_at - started_at`이 실제보다 길어진다. `active_seconds`가 긴 gap을 이미
+    배제하는 것과 같은 이유로 종료 시각도 마지막으로 관측된 활동 시각으로 둔다.
+    명세가 정해지면 여기만 고친다.
 
     `session_finished` event는 남긴다. key가 session id 기반 server 발급이라 나중에
     같은 session에 `/finish`가 도착해도 중복되지 않는다.
