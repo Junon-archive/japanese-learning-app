@@ -20,13 +20,22 @@
 -   client가 보낸 event key로 서버 경로를 막을 수 없음 (server 발급 키와
     client 발급 키의 공간이 겹치지 않아, 한 번의 요청으로 세션 종료나 새
     세션 생성이 영구히 불가능해지는 상태가 만들어지지 않음)
--   종료된 세션과 이미 완료된 문장에는 학습 상호작용이 기록되지 않음 (같은
-    노출이 두 번 평가되지 않음). 콘텐츠 신고만 예외로 계속 받고, 이미 만들어진
-    노출을 무효화함
+-   종료된 세션과 이미 완료된 문장에는 학습 상호작용이 기록되지 않음. 콘텐츠
+    신고만 예외로 계속 받고, 이미 만들어진 노출을 무효화함
+-   **같은 노출이 두 번 평가되지 않음**: 한 `(presentation, learning_item)`에
+    explicit evidence는 최대 1건이며 **서버가** 그것을 강제함. self-report와
+    probe 응답을 합쳐 세고, 두 번째 요청은 재시도로 뚫리지 않으며 mastery·FSRS를
+    다시 적용하지 않음. 그 거부가 세션 상태 때문이 아님을 client가 구분할 수 있음
 -   contextual progression을 DB에서 재현 가능 (실패 없이 반복 노출하면
     context ladder가 올라가고, explicit `몰랐음` 뒤에는 한 단계 내려간다)
 -   incidental click에서 승격된 item이 `new` category로 실제 공급된다
 -   item explanation을 DB에서 조회 가능
+-   기본 history를 자기 데이터만으로 조회 가능 (최근 session 요약과
+    learned/reviewed item summary가 고정 상한 안에서 반환되고, 다른 사용자의
+    행은 어떤 요청으로도 들어오지 않음)
+-   history가 **잘렸는지를 응답이 말함**: 행이 상한과 정확히 같을 때와 상한을
+    넘을 때가 `truncated`로 구분되므로, 화면이 행 수로 추측해 경계에서 거짓을
+    말하지 않음
 -   tap마다 live LLM 불필요
 -   모든 provider 호출이 worker에서만 발생
 -   background batch generation/validation/Ready Pool 동작

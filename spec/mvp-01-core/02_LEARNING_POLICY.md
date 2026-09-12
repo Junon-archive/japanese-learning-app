@@ -80,6 +80,9 @@ passive exposure
 `evidence_count`는 **mastery update에 실제 사용된 explicit evidence
 개수**이며 meaningful exposure count와 혼동하지 않는다.
 
+한 노출이 이 값을 올릴 수 있는 횟수는 **최대 1이다.** 상한과 그 강제 방법의
+canonical 정의는 `07_SRS_SPEC.md`의 `노출당 evidence 1건`이다.
+
 ### No-signal review
 
 review sentence에서 FSRS rating을 만드는 explicit evidence가 없었다면
@@ -160,6 +163,29 @@ v0.2의 4단 목록에서 두 항목이 빠진 이유는 다음과 같다
 
 -   방금 explicit feedback을 받은 item
 -   probe cooldown 중인 item
+
+이 목록은 **하한이다.** 구현이 더 좁게 물어도 이 절을 어기지 않는다. `Probe
+Pacing`이 `mastery_probe_target_per_session_min`을 강제하지 않으므로
+(`06_LEARNING_ENGINE.md`의 `min은 강제하지 않는다`) 후보가 줄어드는 것 자체가
+위반이 되는 조항이 없다. 반대 방향(목록에 있는 것을 묻는 것)만 위반이다.
+
+MVP 구현이 실제로 쓰는 두 가지 해석을 여기 기록한다. 둘 다 이 절이 허용하는
+범위이며 **바꿀 이유가 생기기 전까지 그대로 둔다.**
+
+``` text
+"방금"의 범위        같은 study session
+추가로 제외하는 것   그 세션에서 mastery_probe_shown이 이미 나간 item
+```
+
+-   **"방금"을 세션 범위로 읽는다.** 이 절은 시간 창을 정하지 않았고, 세션보다
+    긴 창은 `probe_skip_cooldown_days`가 이미 담당한다. 세션은 그 사이에 남는
+    유일한 자연 단위이고 판정에 새 상태가 필요 없다 --- 세션 event만 보면 된다.
+-   **응답 없는 probe도 같은 세션에서 다시 묻지 않는다.** `mastery_probe_shown`
+    만 남고 응답이 없으면 `last_probe_at`이 갱신되지 않아 cooldown이 그 item을
+    잡지 못한다. 제외하지 않으면 한 세션에서 같은 item을 두 번 묻게 되고, 그것은
+    위 `방금 explicit feedback을 받은 item`이 막으려던 것과 같은 종류의 반복이다.
+    응답한 probe(known/uncertain/unknown/skipped)는 `last_probe_at`을 남기므로
+    cooldown이 담당하고 이 예외가 필요 없다.
 
 ### Skip
 

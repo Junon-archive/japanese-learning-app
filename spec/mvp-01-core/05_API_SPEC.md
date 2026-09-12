@@ -197,11 +197,17 @@ GET  /api/study/session            현재 열린 session 조회 (없으면 null)
 POST /api/study/session            create 또는 resume
 POST /api/study/session/{id}/next      다음 presentation 반환
 POST /api/study/session/{id}/finish    세션 종료
-POST /api/study/session/{id}/extend    +5분 연장  body: {client_event_id}
+POST /api/study/session/{id}/extend    extra_session_minutes 만큼 연장
+                                       body: {client_event_id}
 ```
 
 `/extend`만 body에 `client_event_id`를 받는다. 이유는 위
 `event idempotency key`에 있다.
+
+연장 폭은 `14_CONFIGURATION.md`의 `extra_session_minutes`이고 **호출 전에는 어떤
+응답에도 실리지 않는다.** 호출 후 늘어난 총량은 응답의 `extended_minutes`로
+확인한다. 그래서 연장 버튼 문구에는 분 수를 적지 않는다(`03_UI_UX_SPEC.md`의
+`Session End`).
 
 `POST /session`은 idle timeout 이내면 기존 세션을 resume하고, 초과면 새
 세션을 만든다(`04_DB_SPEC.md`의 `study_sessions`,
@@ -300,6 +306,172 @@ client 동작: 409를 받으면 그 화면의 상호작용을 멈추고 `POST /a
 재전송하지 않는다** --- 그 노출의 평가는 이미 끝났다. 버린 대안은
 `docs/decisions/ADR-014-closed-session-interaction-gate.md`.
 
+### 노출당 evidence 상한
+
+불변식 자체는 `07_SRS_SPEC.md`의 `노출당 evidence 1건`이 canonical이다. 이 절은 그
+불변식의 **HTTP 계약**만 정한다.
+
+``` text
+POST /presentations/{pid}/self-report      그 (presentation, learning_item)에
+POST /presentations/{pid}/probe-response    이미 evidence가 있으면 409
+```
+
+-   판정 대상은 `learning_item_id`다. body가 `sentence_item_id`를 받는 것과 무관하게
+    서버가 그것을 `learning_item_id`로 바꾼 뒤 센다. `probe-response`는 body에 item을
+    받지 않고 probe event에서 가져온다(아래 `Mastery Probe`).
+-   409이면 **event를 기록하지 않고 mastery·FSRS·`context_stage`도 건드리지 않는다.**
+-   `mastery_probe_skipped`는 evidence가 아니므로 이 상한에 걸리지 않는다. probe를
+    skip한 뒤 같은 item에 self-report를 하는 것은 허용된다.
+
+#### 판정 순서
+
+``` text
+1. 소유권                                            404
+2. 세션·presentation 상태 게이트                     409 (위 절)
+3. probe event 유효성          (probe-response 만)   400
+4. 이미 응답한 probe           (probe-response 만)   기존 결과 200 (멱등)
+5. 그 (presentation, learning_item)에 **다른
+   client_event_id의** evidence가 이미 있다          409
+6. 같은 client_event_id의 event가 이미 있다          재전송이므로 기존 결과 (204 / 200)
+7. 그 client_event_id가 다른 event_type에
+   이미 쓰였다                                       409
+```
+
+`/self-report`는 3과 4를 거치지 않는다. 나머지 단계는 두 endpoint가 같다.
+
+**3이 5보다 앞인 것은 선택이 아니라 구조다.** `/probe-response`는 body에
+`learning_item_id`를 받지 않고 **조회한 probe event에서 꺼낸다**(아래
+`Mastery Probe`). 그 event가 유효하지 않으면 5의 판정 키 자체가 없으므로 순서를
+바꿀 방법이 없다. 즉 잘못된 `probe_id`는 상한보다 먼저 400이다.
+
+**5가 6보다 앞인데도 재전송 멱등성은 깨지지 않는다.** 5는 **요청이 들고 온
+`client_event_id`와 다른** event만 센다. 그래서 성공한 요청의 재전송은 자기가 만든
+evidence에 걸리지 않고 6으로 내려가 기존 결과를 받는다. 위 `공통 규칙`의 "재전송 시
+동일 결과를 반환한다"를 보장하는 것은 순서가 아니라 **이 제외 조건**이다 --- 제외
+조건이 없으면 5를 6 뒤로 옮겨도 부족하다(그때는 5가 방금 만든 자기 행을 센다).
+
+**5가 7보다 앞이다.** 두 409가 동시에 성립할 때 client가 먼저 받는 것은 evidence
+상한이고 그것이 더 유용하다 --- 상한은 "재시도하지 말라"는 종결 답이고 key 충돌은
+"새 UUID로 재시도하라"다. 순서를 뒤집으면 client가 새 UUID로 재시도한 뒤 결국 상한
+409를 받으므로 왕복이 한 번 늘 뿐 결과가 같다.
+
+`/probe-response`의 기존 제한 --- "같은 `probe_id`에 이미 응답 event가 있으면 새로
+기록하지 않고 기존 결과를 반환한다"(아래 `Mastery Probe`) --- 은 **그대로 둔다.** 두
+규칙은 겹치되 같지 않다.
+
+``` text
+                     판정 키                        skip    결과
+-------------------  ------------------------------  ------  --------------------
+probe 응답 1건 제한  (presentation, learning_item)   포함    기존 응답 200 (멱등)
+이 절의 상한         (presentation, learning_item)   제외    409
+```
+
+**판정 키가 같다.** `Mastery Probe`가 그 제한을 `probe_id` 기준으로 서술하지만
+**실제 판정 키는 `(presentation, learning_item)`이다.** 지금은 두 표현이 같은 결과를
+낸다 --- `mastery_probe_shown`의 자연키가
+`"mastery_probe_shown:{pid}:{learning_item_id}"`이므로(위 `event idempotency key`) 한
+presentation의 한 item에 probe event는 **하나뿐이고**, `probe_id` 하나와 그 쌍 하나가
+일대일이다. 자연키가 바뀌어 한 쌍에 probe가 둘 생길 수 있게 되면 **두 표현은 갈라진다**
+--- `probe_id` 기준이면 두 번째 probe에 답할 수 있고 쌍 기준이면 막힌다. 문서와 코드가
+문자 그대로는 다르지만 그 차이가 현재 도달 불가능한 사례이며, 같은 성격의 선례는
+`08_LLM_SPEC.md`의 `target 수 상한의 출처와 검사 10의 지위`다.
+
+**그래서 두 규칙을 갈라 두는 근거는 판정 키가 아니라 `skip`과 결과다.** probe 제한은
+`mastery_probe_skipped`를 포함하고 성공 응답(기존 결과 200)을 내므로 **재전송
+멱등성**을 담당한다. 이 절의 상한은 skip을 제외하고 409를 내므로 **이중 평가**를
+막는다. 상한이 probe 제한을 포함한다고 해서 지우면 안 된다 --- 지우면 성공한 probe
+응답의 재시도가 200이 아니라 409가 되고, skip한 probe에 두 번째 skip이 들어온다.
+
+#### 409 사유 구분
+
+**client가 네 가지 409를 구분할 수 있어야 한다.** 복구 동작이 다르기 때문이다.
+구분 수단은 응답 body의 사유 문구이며 **새 체계를 만들지 않는다** --- 기존 409들이
+이미 서로 다른 문구를 쓰고 있고, 그 문구가 사유 코드다.
+
+``` text
+사유                             판정   client 동작
+-------------------------------  -----  ---------------------------------------------
+session이 이미 종료됨            2      POST /api/study/session 으로 session 재획득
+presentation이 이미 완료됨       2        -> /next (위 `세션·presentation 상태 게이트`)
+이 노출에 이미 evidence가 있음   5      재시도하지 않는다. "이미 기록했습니다"로 끝낸다
+client_event_id가 다른 event에   7      같은 요청을 **새 UUIDv4로** 재시도
+  이미 쓰임
+```
+
+복구 동작이 **세 종류**이고, 그것이 네 사유를 갈라 두는 이유다.
+
+-   **앞의 둘: 화면 상태가 서버와 어긋났다.** 그 화면의 상호작용을 멈추고 session을
+    다시 얻은 뒤 `/next`로 진행한다. **거부된 상호작용을 재전송하지 않는다**(위
+    상태 게이트 절).
+-   **세 번째: 서버가 이미 사용자의 답을 받아 두었다.** 요청 내용이 옳고 상태도 옳은데
+    그 노출의 평가가 끝난 것이므로 **어떤 재시도도 성공하지 못하고 해서도 안 된다.**
+    세션을 다시 얻어도 달라지지 않는다.
+-   **네 번째: 요청 자체는 유효하고 key만 잘못됐다.** 같은 요청을 새 UUIDv4로 보내면
+    **성공할 수 있다** --- 이 점이 세 번째와 정반대다. 영구 상태가 아니다(위
+    `키 공간 분리`).
+
+넷을 한 문구로 합치면 client가 무한 재시도 루프(세 번째를 네 번째로 오해), 불필요한
+세션 재획득(세 번째를 앞의 둘로 오해), 또는 복구 포기(네 번째를 세 번째로 오해)를
+하게 된다.
+
+사유 문구는 서로 달라야 하고 **내부 사정을 담지 않는다**(어느 event가 언제 기록됐는지,
+어떤 key가 무엇에 점유돼 있는지는 응답에 넣지 않는다).
+
+### 진행 상태의 갱신과 세션 종료 판정
+
+**client가 진행률과 "세션 종료 도달"을 무엇으로 계산하고 언제 다시 읽는지의
+canonical 정의는 이 절이다.**
+
+`active_seconds` / `target_minutes` / `extended_minutes`는 session payload를
+내는 응답, 즉 `GET /session`, `POST /session`, `/finish`, `/extend`에만 있다.
+`/next`와 `/complete` 응답에는 **없다** --- 둘은 presentation 계약이고, 같은
+값을 두 계약에서 내면 어느 쪽이 최신인지가 응답 도착 순서에 달리게 된다.
+
+진행 표시:
+
+``` text
+분모 = (target_minutes + extended_minutes) * 60   (초)
+분자 = active_seconds
+```
+
+세션 종료 도달 판정:
+
+``` text
+도달 = active_seconds >= (target_minutes + extended_minutes) * 60
+```
+
+-   **서버에 "목표 도달" 플래그를 두지 않는다.** 판정에 쓰이는 값이 전부 서버가
+    내려준 것이므로 client가 파생해도 정책값 하드코딩이 아니다. 플래그를 두면 같은
+    사실의 표현이 둘이 되고, 둘이 어긋나는 순간 어느 쪽이 맞는지 판정할 근거가
+    없다. `default_session_minutes`와 `extra_session_minutes`를 frontend가 읽는
+    것은 이와 다른 이야기이며 **금지한다** --- 그것은 정책값 하드코딩이다.
+-   도달은 **세션의 종료가 아니다.** session을 닫는 것은 `/finish` 하나뿐이다.
+    도달은 `오늘 학습 완료 / 더 학습하기`를 띄우는 시점일 뿐이고
+    (`03_UI_UX_SPEC.md`의 `Session End`), 도달 뒤에도 `/next`와 상호작용은 그대로
+    허용된다. 서버는 도달을 이유로 아무것도 거부하지 않는다.
+
+갱신 수단:
+
+``` text
+client는 POST /presentations/{pid}/complete 직후
+GET /api/study/session 을 한 번 다시 호출해 session payload를 갱신한다.
+갱신 단위는 문장이다.
+```
+
+-   **주기적 폴링을 하지 않는다.** 특히 상호작용 endpoint를 진행률 갱신 목적으로
+    주기 호출해서는 안 된다. 상태를 바꾸는 모든 경로가 `last_activity_at`을
+    옮기므로(위 `세션·presentation 상태 게이트`), 그런 호출은
+    `active_time_idle_gap_seconds` 이하의 간격을 계속 만들어 **자리를 비운 시간을
+    학습 시간으로 누적시킨다.** 이 오염은 화면에 드러나지 않는다 --- 진행바는
+    오히려 매끄럽게 움직이고, 틀어지는 것은 `active_seconds`의 의미뿐이다.
+-   `GET /api/study/session`이 이 용도로 안전한 이유는 **그것이 `touch()`를 하지
+    않기 때문이다.** 이 endpoint는 조회이므로 `last_activity_at`도
+    `active_seconds`도 옮기지 않고 idle timeout도 적용하지 않는다. 진행 표시가 이
+    성질에 의존하므로 **여기에 상태 변경을 추가하지 않는다.**
+-   따라서 `GET /session`이 돌려주는 `active_seconds`는 마지막 상태 변경 시점의
+    값이다. 문장을 읽는 동안에는 진행바가 멈춰 있고 `/complete` 뒤에 한 칸
+    움직인다. 이것은 결함이 아니라 `active_seconds`의 정의 그대로다.
+
 ## Sentence Presentation Payload
 
 `POST /session/{id}/next`의 최소 응답:
@@ -375,7 +547,9 @@ study_presentation_id = {pid}
     client가 보낸 값을 신뢰하지 않는다. 그래서 body에 별도
     `learning_item_id`를 받지 않는다.
 -   같은 `probe_id`에 이미 응답 event가 있으면 새로 기록하지 않고 기존
-    결과를 반환한다. probe 하나에 응답은 최대 1건이다.
+    결과를 반환한다. probe 하나에 응답은 최대 1건이다. **실제 판정 키는
+    `(presentation, learning_item)`이며** 위 자연키 때문에 지금은 두 표현이 같은
+    결과를 낸다. 그 사실과 갈라지는 조건은 위 `판정 순서`에 있다.
 
 ## Interaction
 
@@ -399,6 +573,10 @@ POST /api/study/presentations/{pid}/complete
 위 7개 endpoint는 전부 `세션·presentation 상태 게이트`를 먼저 통과한다.
 닫힌 session이나 이미 완료된 presentation이면 409이고, `/complete`만 예외
 규칙을 가진다.
+
+`/self-report`와 `/probe-response`는 게이트를 통과한 뒤 `노출당 evidence 상한`을
+한 번 더 통과한다. 그 노출에 이미 evidence가 있으면 409이며, 이 409는 게이트의
+409와 **사유가 다르다**(같은 절의 `409 사유 구분`).
 
 `/complete`는 `Next`를 누를 때 client가 **명시적으로** 호출한다
 (`열린 presentation 불변식`). idempotency key는 presentation id 기반
@@ -428,12 +606,188 @@ Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
 (`08_LLM_SPEC.md`의 Ready invariant). 즉 이 endpoint는 **live LLM fallback을 하지
 않는다.**
 
+### `explanation_revealed`를 언제 보내는가
+
+**두 event의 시점 구분은 여기가 canonical이다.**
+
+``` text
+item_clicked           사용자가 tappable span을 탭한 직후 (설명을 요청했다)
+explanation_revealed   설명 패널/시트가 실제로 렌더된 직후 (설명이 표시됐다)
+```
+
+두 event를 모두 두는 이유는 **탭했지만 설명이 표시되지 않은 경우를 구분할 수 있게
+하기 위해서다.** click 응답이 실패하거나(Ready invariant 위반의 500, 상태 게이트의
+409, 네트워크 단절) 사용자가 응답 도착 전에 화면을 떠나면 `item_clicked`만 남는다.
+하나로 합치면 그 구간이 관측되지 않고, "tap 즉시 표시"(`03_UI_UX_SPEC.md`)가
+실제로 지켜지는지 확인할 수단이 사라진다.
+
+-   `explanation_revealed`는 **표시된 뒤에** 보낸다. 탭과 동시에 보내면 두 event가
+    항상 1:1이 되어 뒤엣것이 앞엣것의 복사본이 되고, 위의 구분이 불가능해진다.
+-   같은 item의 패널을 접었다 다시 펴도 **한 presentation에서 1회만** 보낸다. client
+    발급 key는 UUIDv4이므로 매번 보내면 그때마다 새 event가 쌓이고, raw history가
+    학습 신호가 아니라 UI 조작 횟수를 세게 된다.
+-   둘 다 auxiliary signal이며 mastery도 FSRS rating도 만들지 않는다
+    (`02_LEARNING_POLICY.md`의 `Auxiliary signal`, `07_SRS_SPEC.md`의
+    `No-signal review`). 보내지 않아도 학습 진행은 막히지 않는다.
+
 ## History
 
 ``` text
 GET /api/history/sessions        최근 session 요약 목록
 GET /api/history/items           기본 learned/reviewed item summary
 ```
+
+`00_SCOPE.md`가 `기본 history`를 In Scope로 두므로 두 endpoint의 응답 계약을 여기서
+확정한다. 둘 다 **읽기 전용이다** --- 행을 만들지 않고, event를 남기지 않으며,
+`last_activity_at`과 `active_seconds`를 건드리지 않는다.
+
+-   둘 다 인증이 필요하다. 위 `익명 접근 허용 목록`에 없으므로 미인증 요청은 401이다.
+-   응답은 **요청 사용자의 행만** 담는다. 대상 사용자를 지정하는 파라미터를 받지
+    않는다 --- 받지 않으면 권한 검사를 빠뜨릴 자리 자체가 없다.
+-   **새 테이블·새 컬럼·새 config 키를 만들지 않는다.** 아래 모든 필드가 기존
+    컬럼에서 파생된다.
+
+읽기 전용이라는 것의 귀결 하나를 적어 둔다. **진행 중인 session 행의
+`active_seconds`는 마지막 학습 요청 시점의 값이고 history 조회로는 움직이지
+않는다.** history는 `touch()`를 부르지 않기 때문이다 --- 부르면 기록을 들여다보는
+행위가 학습 시간을 만들어낸다. 화면이 그 session을 `진행 중`으로 표시하므로
+(`03_UI_UX_SPEC.md`의 `History`) 오해 소지는 작다.
+
+**"학습 시간이 멈춰 보인다"를 이유로 여기에 상태 변경을 추가하지 않는다.** 그것은
+고칠 버그가 아니라 `active_seconds`의 정의 그대로이며, `touch()`를 넣는 것이 실제
+버그다. 위 `진행 상태의 갱신과 세션 종료 판정`이 `GET /api/study/session`에 대해
+같은 문장을 두고 있다 --- 두 곳은 **한 규칙이다: 조회는 학습 시간을 만들지 않는다.**
+
+### 개수 상한
+
+``` text
+history 응답 1건의 최대 행 수 = 50 (두 endpoint 공통, 고정)
+```
+
+**pagination·기간 필터·정렬 옵션을 두지 않는다.** `기본 history`는 "최근에 무엇을
+했는가"를 보여주는 화면이고, cursor나 필터를 붙이는 순간 정렬 키·경계 처리·빈 페이지
+같은 계약이 따라 붙는다. 상한을 넘으면 **오래된 것부터 잘린다.**
+
+50은 학습 정책값이 아니라 **응답 계약 상수**이므로 `14_CONFIGURATION.md`에 두지
+않는다. probe 문구나 flag note 길이 상한과 같은 취급이다 --- 실사용 관찰로 조정할
+학습 파라미터가 아니고, 바꾸면 화면 계약이 바뀐다.
+
+#### truncated
+
+**잘렸다는 사실은 응답이 알린다.** 두 응답 모두 목록과 나란히 `truncated`를 싣는다.
+
+``` text
+truncated  bool   상한을 넘는 행이 존재해서 목록이 잘렸으면 true
+```
+
+이 필드가 없으면 명세가 이행 불가능한 것을 요구한다. **client가 가진 단서는
+`len(rows) == 50`뿐이고 그것은 "정확히 50건인 사용자"와 구분되지 않는다.** 그
+추정으로 문구를 띄우면 경계에서 거짓을 말한다 --- 잘리지 않았는데 화면이 잘렸다고
+적는다.
+
+판정 방법:
+
+``` text
+상한 + 1 건을 조회한다. 51번째 행이 있으면 truncated = true 이고
+응답에는 앞의 50건만 담는다. 없으면 truncated = false 다.
+```
+
+-   **`COUNT(*)`를 추가하지 않는다.** 전체 개수는 화면이 쓰지 않는데, 행이 많은
+    사용자는 조회마다 전수 카운트를 치른다. 한 행을 더 읽는 것으로 필요한 사실이
+    전부 나온다.
+-   **총 개수(`total`)를 응답에 넣지 않는다.** 화면이 요구하지 않고, 노출하면
+    "몇 페이지인지 계산할 수 있다"는 이유로 pagination을 만들라는 압력이 된다. 위에서
+    pagination을 금지한 것과 같은 결정이다.
+-   `truncated`는 잘렸는지만 말하고 **몇 건이 잘렸는지는 말하지 않는다.** 그것을
+    말하려면 `COUNT(*)`가 필요하다.
+
+### GET /api/history/sessions
+
+``` json
+{
+  "sessions": [
+    {
+      "session_id": 812,
+      "started_at": "2026-09-12T09:02:11Z",
+      "ended_at": "2026-09-12T09:15:40Z",
+      "active_seconds": 703,
+      "target_minutes": 12,
+      "extended_minutes": 5,
+      "completed_sentence_count": 9
+    }
+  ],
+  "truncated": false
+}
+```
+
+기존 컬럼에서의 파생:
+
+``` text
+session_id / started_at / ended_at / active_seconds
+target_minutes / extended_minutes    study_sessions의 같은 이름 컬럼 그대로
+completed_sentence_count             그 session의 study_presentations 중
+                                     completed_at IS NOT NULL 인 행 수
+```
+
+-   정렬은 `started_at DESC, session_id DESC`다. 두 번째 키가 없으면 같은 시각의 두
+    행 순서가 실행마다 달라져 화면이 흔들린다.
+-   **아직 열려 있는 session도 목록에 포함한다.** 그때 `ended_at`은 `null`이다.
+    빼면 오늘 진행 중인 세션이 기록에서 사라진다.
+-   `completed_at IS NULL`인 presentation을 세지 않는 이유: idle timeout으로 닫힌
+    session에는 영원히 미완료로 남는 행이 있고(위 `세션·presentation 상태 게이트`),
+    그것을 세면 **보지 않고 떠난 문장이 학습 기록이 된다.** 이는 "부재를 완료로
+    추론하지 않는다"와 같은 규칙이다.
+-   `policy_snapshot_json`과 `summary_json`을 응답에 싣지 않는다. 전자는 설정값
+    묶음이고(사용자에게 정책값을 노출하지 않는다), 후자는 MVP에 채우는 경로가 없다
+    (`04_DB_SPEC.md`).
+
+### GET /api/history/items
+
+``` json
+{
+  "items": [
+    {
+      "learning_item_id": 772,
+      "lemma": "気が乗らない",
+      "item_type": "expression",
+      "comprehension_mastery": 0.32,
+      "exposure_count": 3,
+      "next_review_at": "2026-09-14T09:00:00Z"
+    }
+  ],
+  "truncated": false
+}
+```
+
+기존 컬럼에서의 파생:
+
+``` text
+목록 대상              그 사용자의 user_item_learning_state 행
+learning_item_id       user_item_learning_state.learning_item_id
+lemma / item_type      learning_items.lemma / learning_items.type
+comprehension_mastery  user_mastery.comprehension_mastery (행이 없으면 null)
+exposure_count         invalidated_at IS NULL 인 item_exposures 행 수
+next_review_at         review_states.next_review_at (행이 없으면 null)
+```
+
+-   목록 대상을 `user_item_learning_state`로 잡는 이유: 이 행은 그 item이 **target으로
+    제시되었을 때**(exposure 기록, 무신호 처리) 또는 **explicit evidence를 받았을
+    때**(승격, probe 응답) 생긴다. 그래서 눌러만 보고 지나간 item은 들어오지 않고
+    사용자가 실제로 학습·복습한 item만 남는다. "learned" 플래그 컬럼을 새로 만들
+    필요가 없다.
+-   `exposure_count`는 cache(`review_states.meaningful_exposure_count`)가 아니라
+    canonical source인 `item_exposures`를 센다(`07_SRS_SPEC.md`의
+    `Meaningful Exposure 정의`). history는 학습 결정에 영향을 주지 않는 표시이므로
+    cache를 읽어도 그 절의 규칙 위반은 아니지만, flag 직후 cache 재계산이 어긋난
+    창에서 무효화된 노출이 그대로 보인다.
+-   `listening_mastery`를 싣지 않는다. MVP에서 항상 NULL이므로 화면에 뜻이 없고,
+    0으로 보일 위험만 있다(`00_SCOPE.md`).
+-   `comprehension_mastery`가 `null`이면 **"아직 evidence 없음"**이다. 0으로 바꿔
+    내리지 않는다(`02_LEARNING_POLICY.md`).
+-   정렬은 `user_item_learning_state.updated_at DESC, learning_item_id DESC`다.
+    최근에 움직인 item이 위로 온다.
+-   통계·차트·기간 선택·item별 상세 화면은 MVP 밖이다(`00_SCOPE.md`의
+    `advanced analytics`). 이 응답에 집계 필드를 더하지 않는다.
 
 ## Operational
 

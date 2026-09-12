@@ -115,6 +115,11 @@ queued  콘텐츠가 아직 없다. worker가 채운다.
 ready   지금 그대로 제시할 수 있다.
 ```
 
+`expired`는 **MVP에서 쓰지 않는다.** 이 엔진도 그 값을 쓰지 않으며, 특히
+stage가 오른 뒤 남은 낮은 stage candidate를 만료시키지 않는다. 쓰는 주체와
+시점이 없다는 사실과 그 근거의 canonical 정의는 `04_DB_SPEC.md`의
+`user_sentence_candidates`다.
+
 **Ready invariant**(`08_LLM_SPEC.md`): 대상 문장은
 `sentences.status = validated`여야 하고, 그 문장의 `is_tappable = true`인
 모든 `sentence_items`가 `status = validated`인
@@ -219,9 +224,10 @@ review candidate도 **Wave 2의 materialization이 만든다.** Wave 3 job이
 이동 → review 문장 노출 → exposure 누적 → 새 문맥 재노출)와 Regression
 Scenario A~D를 Wave 2에서 재현할 수 없다.
 
-한 item에 대해 **동시에 두 개 이상의 review candidate를 만들지
-않는다.** 아래를 위에서부터 평가해 처음 만족하는 reason 하나로 정한다.
-평가 순서는 `Review Reason 선택`의 우선순위와 같다.
+**한 materialization 실행 안에서** 한 item에 대해 review candidate를 두 개
+이상 만들지 않는다. 아래를 위에서부터 평가해 처음 만족하는 reason 하나로
+정한다. 평가 순서는 `Review Reason 선택`의 우선순위와 같다. 이 제약의 범위는
+아래 `이 제약의 범위`가 정한다.
 
 ``` text
 1. context_repair
@@ -279,6 +285,34 @@ cache를 읽어도 되는 조건은 `07_SRS_SPEC.md`의 `Meaningful Exposure
 
 조건 1-b가 성립하려면 stage가 실제로 내려가야 한다. **그 하강은
 `07_SRS_SPEC.md`의 `전이 규칙`이 수행하며 이 문서는 결과만 읽는다.**
+
+#### 이 제약의 범위 (MVP 확정)
+
+"한 item에 review candidate를 두 개 이상 만들지 않는다"가 덮는 범위는 **한
+번의 materialization 실행**이다. "그 item에 살아 있는 review candidate가 전부
+합쳐 하나"라는 뜻이 아니다.
+
+``` text
+보장한다        한 실행에서 item당 review candidate 최대 1개 (reason 하나)
+보장하지 않는다  서로 다른 실행이 만든 candidate가 동시에 존재하지 않는 것
+```
+
+근거로 든 유일성 규칙(`04_DB_SPEC.md`)이 `status IN ('queued', 'ready')`에만
+걸려 있기 때문이다. `shown`이 된 candidate는 그 index 밖이므로, 그 문장이 아직
+화면에 열려 있는 동안 다음 실행이 돌면 같은
+`(user, sentence, review, stage)` 조합의 두 번째 row가 만들어진다. **이 경로는
+실재한다** --- `POST /api/study/session`은 신규와 resume 양쪽에서 위
+`실행 시점과 대상`대로 materialization을 1회 실행하므로, 문장이 열린 상태의
+새로고침 한 번이 그 상황을 만든다.
+
+**이것은 결함이 아니라 ADR-010이 의도한 것이다.** 그 ADR은
+`shown / consumed / quarantined / expired`를 index에서 **일부러** 제외했다 ---
+같은 문장을 나중에 다시 candidate로 만들 수 있어야 contextual review가
+성립하기 때문이다. 따라서 위 문장을 근거로 index 범위를 `shown`까지 넓히지
+않는다. 넓히면 ADR-010이 지키려던 재사용 가능성이 그대로 사라진다.
+
+같은 item에 candidate가 여럿 남았을 때 **무엇을 먼저 보여주는가**는 아래
+`Review Ordering`의 `candidate 단위 tie-break`가 정한다.
 
 ### review candidate: stage → sentence
 
@@ -491,11 +525,86 @@ Due review 정렬 기본 순서:
 3.  낮은 `comprehension_mastery` 우선 (NULL은 낮은 값으로 취급)
 4.  stable deterministic tie-break (`learning_item_id` 등)
 
+위 1\~4는 **item 단위** 순서다. 한 item에 review candidate가 여럿 남아 있을 수
+있으므로(위 `이 제약의 범위`) candidate 단위 순서는 아래
+`candidate 단위 tie-break`가 이어서 정한다.
+
 세션에서 보여주지 못한 due item은:
 
 -   lapse 처리하지 않는다.
 -   실패 처리하지 않는다.
 -   그대로 due 상태를 유지한다.
+
+### candidate 단위 tie-break (MVP 확정)
+
+review candidate가 둘 이상 선택 가능할 때의 순서다.
+
+먼저 **"candidate 하나가 item 하나에 속한다"는 전제가 거짓임**을 짚는다. 한
+candidate는 target을 `max_new_items_per_sentence`개까지 가지고(위 `role별 규칙`),
+그 target들의 `user_item_learning_state.context_stage`는 **서로 다를 수 있다.**
+같은 presentation에서 한 target이 explicit `몰랐음`이고 다른 target이 무신호이면
+전이 규칙이 target마다 따로 적용되어(`07_SRS_SPEC.md`의 `전이 규칙`) 그 자리에서
+갈린다. 우연이 아니라 구조다. 그래서 "candidate의 stage"와 "그 item의 stage"를
+비교하려면 **어느 target을 말하는지**를 먼저 정해야 한다.
+
+#### 1\~4를 target이 여럿인 candidate에 적용하는 방법
+
+``` text
+usable target      Review Ordering 1번을 만족하는 target.
+                   reason이 fsrs_due면 실제로 due인 target만.
+candidate의 order key
+                   그 candidate의 usable target들의 order key **최소값**
+dominant target    그 최소값을 만든 target
+                   (order key에 learning_item_id가 들어 있으므로 유일하다)
+```
+
+**가장 급한 target이 candidate의 우선순위를 정한다.** candidate는 통째로
+제시되므로, 그 안에서 가장 급한 target이 언제 보여야 하는지가 곧 그 candidate가
+언제 보여야 하는지다. 최대값이나 평균을 쓰면 급한 target이 덜 급한 동승자 때문에
+밀린다.
+
+#### 5\~6
+
+``` text
+5. candidate.context_stage == dominant target의
+   user_item_learning_state.context_stage 인 candidate를 먼저
+6. 그래도 동률이면 stable deterministic tie-break
+```
+
+**dominant target으로 판정하는 이유는 5번이 얹히는 자리가 1\~4의 동률이기
+때문이다.** 그 동률을 만든 것이 dominant target이므로, 5번이 말하는 "그 item"도
+그것이다. 다른 두 해석은 이 문언과 어긋난다.
+
+-   **"아무 target이나 일치하면 통과"로 읽으면 규칙이 무력해진다.** target이
+    `{item1: anchor, item2: near_original}`인 낡은 `anchor` candidate는 item1
+    때문에 항상 일치로 판정되고, item2가 order key를 지배하는 상황에서도 새
+    `near_original` candidate를 candidate id ASC로 이긴다. 이 규칙이 겨냥한 바로
+    그 시나리오에서 진다.
+-   **"모든 target이 일치해야 통과"로 읽으면 multi-target candidate가 사실상
+    배제된다.** 두 target의 ladder가 갈리는 것은 위에서 본 대로 구조적으로
+    일어나므로, 그 candidate는 갈린 순간부터 영구히 불리해진다. 배제는 이 규칙이
+    하지 않기로 한 것이다(아래).
+
+**배제가 아니라 선호다.** stage가 일치하는 candidate가 하나도 없으면 낮은
+stage candidate를 그대로 고른다. 그래서 이 규칙은 `Pool Fallback` 2단계가
+의도적으로 허용한 anchor/near-original reinforcement 노출을 막지 않는다 ---
+그 단계는 "그런 candidate가 있는가"를 보고, 이 규칙은 "둘 다 있을 때 무엇을
+먼저 보는가"만 정한다. 사라지는 것은 "가장 오래된 candidate가 먼저"라는 암묵
+순서뿐이다.
+
+규칙이 필요한 이유는 stage가 오른 뒤에도 낮은 stage candidate가 Ready Pool에
+남기 때문이다(위 `이 제약의 범위`). 그 candidate가 계속 먼저 뽑히면 minimum
+meaningful exposure가 실제 ladder 위치보다 낮은 stage로 기울고, 극단에서는
+5회가 거의 같은 anchor 문장으로 채워진다. 그것이 ADR-012가 결함이라 부른
+상태다. ladder 자체는 전이 규칙의 `max`가 지키지만(`07_SRS_SPEC.md`),
+**무엇을 보여주는가**는 지키지 않는다.
+
+stage **거리**로 정렬하지 않는다(예: "state보다 낮은 것 중 가장 높은 stage").
+일치 여부는 `user_item_learning_state` 하나만 읽으면 판정되지만, 거리 정렬은
+ladder 위의 우선순위를 새로 정하는 **새 정책**이고 MVP에 그것을 요구하는
+조항이 없다.
+
+근거와 버린 대안은 `docs/decisions/ADR-019-stale-review-candidates.md`.
 
 ## Probe Pacing
 

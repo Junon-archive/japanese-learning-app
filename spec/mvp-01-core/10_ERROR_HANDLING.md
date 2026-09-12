@@ -41,6 +41,17 @@ synchronous 호출하지 않는다.
 event 저장 실패 시 사용자에게 데이터가 저장되었다고 거짓 표시하지
 않는다. 핵심 transaction 경계를 명확히 한다.
 
+알려진 한계(MVP에서 고치지 않는다): 사용자별 학습 상태 행을 만드는 경로가
+read-or-create(SELECT 후 INSERT)이므로, **같은 item에 `skip`과 self-report가 동시에
+도착하면** 한쪽이 `user_item_learning_state` 행을 중복 INSERT하려다 제약 위반으로
+**500**을 받을 수 있다. evidence끼리의 동시 요청은
+`uq_learning_events_evidence`가 직렬화하지만 skip은 evidence가 아니라 그 상한에
+걸리지 않는다(`07_SRS_SPEC.md`의 `노출당 evidence 1건`). **데이터 오염이 아니라
+가용성 문제다** --- 제약이 오염을 이미 막으므로 잃는 것은 그 요청 하나이고 사용자는
+다시 누르면 된다. 해법 방향은 삽입을 `ON CONFLICT DO NOTHING`으로 바꾸는 것이며
+(`services/events.py`가 event 기록에 이미 쓰는 방식), 이 증상이 보고되면 원인을
+다시 찾지 않도록 여기 적어 둔다.
+
 ## Content Flag 동작
 
 사용자가 sentence를 `unnatural`, `wrong` 등으로 flag하면 **즉시**:

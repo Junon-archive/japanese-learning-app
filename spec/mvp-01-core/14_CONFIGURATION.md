@@ -98,6 +98,16 @@ llm:
 금지는 UI 규칙이며(`03_UI_UX_SPEC.md`) 이 키는 reading reveal 기본
 상태를 뜻한다.
 
+`content.translation_default_visible`과 `content.reading_default_visible`을
+**frontend가 읽는 경로는 없다.** 두 값이 기술하는 것은 API 구조가 이미 강제하고
+있다 --- presentation payload에는 `korean_translation` 필드도 reading 필드도
+존재하지 않으므로(`05_API_SPEC.md`의 `Sentence Presentation Payload`,
+`Interaction`) 번역과 reading은 각각 `/translation/reveal`과 `/click`을 거쳐야만
+나온다. 따라서 **이 두 키를 `true`로 뒤집어도 화면은 달라지지 않는다.** 값을 넘길
+endpoint를 만들면 숨김 규칙의 source of truth가 둘이 되고, 그중 하나가 뒤집히는
+사고가 가능해진다. 두 키는 "기본 노출 상태는 hidden이다"라는 정책 기록으로만
+남기고 소비처를 만들지 않는다.
+
 비율 키(`review_ratio`, `new_ratio`, `exploration_ratio`)의 합은 1.0이어야
 하며 config 로드 시 검증한다.
 

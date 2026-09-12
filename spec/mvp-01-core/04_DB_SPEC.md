@@ -313,6 +313,25 @@ materialization은 이미 검증된 콘텐츠만 투영하므로 곧바로 `read
 것을 명시한다.** 조건에서 `queued`를 빼면 나중에 이 상태를 도입할 때
 index를 다시 만들어야 하고, 두어도 지금 동작에 영향이 없다.
 
+**`expired`도 MVP에서 쓰지 않는다.** 이 값을 쓰는 주체와 시점이 없다. 특히
+`user_item_learning_state.context_stage`가 오른 뒤 Ready Pool에 남은 낮은
+stage candidate를 만료시키지 않는다.
+
+-   그 candidate를 보여줘도 ladder는 되돌지 않고
+    (`07_SRS_SPEC.md`의 `전이 규칙`의 `max`) 노출 카운트도 정확하다. 비용은
+    라운드 한 번이 낮은 stage 문장으로 지나가는 것뿐이다.
+-   `06_LEARNING_ENGINE.md`의 `Pool Fallback` 2단계는 바로 그런 노출
+    (anchor/near-original reinforcement)을 **의도적으로** 허용한다. 만료
+    규칙을 두면 그 fallback을 예외로 파야 하고, 그것은 새 정책이다.
+-   낮은 stage candidate가 먼저 뽑히는 문제는 배제나 만료가 아니라
+    `06_LEARNING_ENGINE.md`의 `candidate 단위 tie-break`가 **선호**로
+    해결한다. 근거와 버린 대안은
+    `docs/decisions/ADR-019-stale-review-candidates.md`.
+
+`queued`와 같은 이유로 값과 index 조건은 그대로 남긴다. `expired`가
+유효해지는 시점은 candidate에 **수명 정책**이 생길 때다(예: 생성 후 N일,
+또는 stage 변경 시 무효화). MVP에 그 정책이 없다.
+
 유일성: materialization이 idempotent해야 하므로 **아직 소비되지 않은
 candidate에 partial unique index**를 건다.
 
@@ -358,6 +377,27 @@ exposure replay, content flag invalidation을 추적한다.
 `열린 presentation 불변식`). 이것이 재시도로 인한 중복 presentation을
 막는다.
 
+유일성: 위 불변식은 애플리케이션 검사만으로 성립하지 않으므로 **아직
+완료되지 않은 presentation에 partial unique index**를 건다. 이름은
+`uq_study_presentations_open`이다.
+
+``` text
+UNIQUE (study_session_id) WHERE completed_at IS NULL
+```
+
+-   **partial이어야 한다.** 조건절을 빼고 full unique로 만들면
+    `study_session_id`가 한 행에만 존재할 수 있게 되어 **한 세션에 문장을
+    하나밖에 보여줄 수 없다.** 완료된 행은 세션마다 여러 개 쌓이는 것이
+    정상이다.
+-   **범위는 session 하나다.** `user_id`로 넓히지 않는다. idle timeout으로
+    만료된 session은 미완료 presentation을 그대로 남기는 것이 정상이므로
+    (`05_API_SPEC.md`의 `세션·presentation 상태 게이트`) 사용자 단위로 묶으면
+    그 정상 상태가 제약 위반이 된다. 불변식 문장 자체도 "한
+    `study_session_id`에"다.
+-   애플리케이션 검사를 대체하지 않는다. `/next`는 여전히 열린
+    presentation을 **조회해서 그것을 반환**해야 한다. index는 그 조회가
+    동시 요청과 경합했을 때의 마지막 방어선이다.
+
 ## study_sessions
 
 -   id
@@ -393,6 +433,43 @@ replay할 수 있도록 원본을 보존한다.
 -   created_at
 
 Unique: `(user_id, client_event_id)`.
+
+유일성: `07_SRS_SPEC.md`의 `노출당 evidence 1건`을 DB가 강제하도록 **explicit
+evidence event에 partial unique index**를 건다. 이름은
+`uq_learning_events_evidence`이다.
+
+``` text
+UNIQUE (study_presentation_id, learning_item_id)
+WHERE event_type IN (explicit evidence 6종)
+```
+
+-   **partial이어야 한다.** 조건절을 빼고 full unique로 만들면 한 노출에 event를
+    2건 이상 남길 수 없어 `item_clicked` / `explanation_revealed` /
+    `mastery_probe_shown`이 전부 막힌다. 한 노출에 여러 event가 쌓이는 것은
+    정상이고 **evidence만** 하나여야 한다.
+-   predicate의 6종은 `07_SRS_SPEC.md`의 `노출당 evidence 1건`이 열거하는 그
+    집합이다(self-report 3종 + probe 응답 3종). **목록을 이 문서에 다시 적지
+    않는다** --- 같은 집합을 두 곳에 적으면 한쪽만 고쳐지는 순간 index가 세는 것과
+    명세가 세는 것이 갈라진다. 구현이 두 목록을 갖는 것은 migration이 애플리케이션
+    코드를 import하지 않기 때문이며, 갈라졌는지는 테스트가 DB의 index 정의를 읽어
+    단정한다.
+-   **`mastery_probe_skipped`는 들어가지 않는다.** skip은 evidence가 아니므로
+    (`02_LEARNING_POLICY.md`의 `Skip`) 한 노출에 skip과 evidence가 함께 있는 것이
+    정상이고, predicate에 넣으면 그 정상 상태가 제약 위반이 된다.
+-   **범위에 `user_id`를 넣지 않는다.** `study_presentation_id`가 이미 한 사용자에
+    속하므로 넓혀도 더 막는 것이 없다. `item_exposures`의
+    `(study_presentation_id, learning_item_id)`와 같은 형태다.
+-   애플리케이션 검사를 대체하지 않는다. 정상 경로는 **기록 전에 조회해서** 2회차를
+    409로 거부하는 것이고(그래야 event를 애초에 남기지 않는다), index는 경합했을
+    때의 마지막 방어선이다. 경합에서 진 요청도 **같은 409**를 받는다 ---
+    `05_API_SPEC.md`의 `409 사유 구분`이 요구하는 사유가 두 경로에서 같아야 하기
+    때문이다. 그 판별을 위해 index 이름이 구현에서 상수다.
+
+**위반 행을 정리하는 migration 단계를 두지 않는다.** 위반 행이 있으면 migration은
+실패하며 그대로 둔다. 이 테이블은 immutable raw history이고, 행을 지우는 것은
+"사용자가 그렇게 답하지 않았다"는 없는 사실을 만드는 것이다. 두 행 중 무엇을 남길지
+고르는 판단도 migration이 할 일이 아니다. `item_exposures`와 달리 이 테이블에는
+무효화 컬럼이 없다는 점도 같은 방향을 가리킨다.
 
 ### client_event_id 발급 주체
 

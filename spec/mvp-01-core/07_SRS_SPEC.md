@@ -257,6 +257,61 @@ item click, explanation reveal, self-report를 각각 별도 exposure로
 `modality`는 MVP에서 사실상 `reading`만 사용한다. listening이 추가되면
 별도 modality로 확장한다.
 
+### 노출당 evidence 1건
+
+**한 노출이 남길 수 있는 explicit evidence 개수의 canonical 정의는 이 절이다.**
+위 `중복 집계 금지`가 exposure를 세는 규칙이라면 이 절은 그 노출에 붙는 **증거**를
+세는 규칙이고, 둘은 같은 단위를 쓴다.
+
+``` text
+같은 study_presentation + 같은 learning_item = evidence 최대 1건
+```
+
+evidence로 세는 것은 위 `No-signal review`가 `신호 있음`으로 열거한 **그 6개
+event**다. self-report 3종과 probe 응답 3종이며 `mastery_probe_skipped`는 들어가지
+않는다 --- skip은 evidence가 아니다(`02_LEARNING_POLICY.md`의 `Skip`). **목록을 여기
+다시 적지 않는다.** 같은 집합을 두 곳에 적으면 한쪽만 고쳐지는 순간 무신호 판정과
+evidence 상한이 서로 다른 것을 세게 된다.
+
+**세는 단위는 `learning_item`이지 `sentence_item`이 아니다.** 이 문서의 모든
+노출·증거 판정 단위가 `learning_item`이고 evidence가 붙는 대상도 그것이다. 한 문장에
+같은 `learning_item`을 가리키는 `sentence_item`이 둘 있으면 `sentence_item` 단위로
+세는 규칙은 evidence 2건을 통과시킨다.
+
+**self-report와 probe 응답을 합쳐서 센다.** 두 경로가 같은 EMA(`mastery_ema_alpha`)와
+같은 FSRS rating mapping(위 `Explicit signal → FSRS rating`)에 들어가므로 한쪽만
+막으면 상한이 성립하지 않는다. 그리고 이 경로는 **실제로 도달 가능하다** --- probe
+후보는 그 presentation의 target item이므로(`06_LEARNING_ENGINE.md`의 `Probe Pacing`)
+사용자가 item X에 `알고 있었음`을 self-report한 뒤 같은 X의 probe에 `몰랐음`을 답할
+수 있다. 합쳐 세지 않으면 그 한 노출이 mastery를 두 번 갱신하고 `reps`도 두 번
+올린다.
+
+이 상한을 **서버가 강제한다.** 프론트에서 버튼을 잠그는 것으로는 재시도·두 탭·직접
+호출에 뚫리고, 뚫린 결과가 mastery와 `review_states`에 조용히 남는다. 2회차 요청의
+HTTP 계약은 `05_API_SPEC.md`의 `노출당 evidence 상한`이 canonical이다.
+
+이 상한은 `13_ACCEPTANCE_CRITERIA.md`와 `12_TEST_PLAN.md`가 이미 쓰던 "같은 노출이
+두 번 평가되지 않는다"를 노출 **전체**로 확장한 것이다. 그 문장은 그때까지
+`/complete` 이후 도착한 상호작용만 막고 있었다(`05_API_SPEC.md`의
+`세션·presentation 상태 게이트`, ADR-014).
+
+#### 정정은 하지 않는다
+
+2회차를 **덮어쓰지 않는다.** 잘못 누른 `알고 있었음`은 그 노출에 고정된다.
+
+-   덮어쓰려면 그 노출 **직전**의 상태를 알아야 하는데 저장돼 있지 않다. EMA는
+    `new = old*(1-alpha) + observation*alpha`이고 역함수에 필요한 `old`가
+    `user_mastery`에 남지 않는다(현재값만 갖는다). FSRS는 더 강하게 막힌다 ---
+    `Card`를 review 전 상태로 복원해야 하는데 `review_states`도 현재 상태만 갖는다.
+    직전값 컬럼을 만들거나 `learning_events` replay 경로를 만드는 것은 **MVP 범위
+    확대다.**
+-   두 오입력의 피해가 대칭이 아니라는 점이 이 선택을 견딜 만하게 한다. `몰랐음`을
+    잘못 누르면 rating이 `Again`이라 다음 노출이 곧 와서 스스로 교정된다. 반대
+    방향(`알고 있었음` 오입력)은 교정되지 않고 interval이 밀리지만, 그 item은
+    minimum meaningful exposure를 채우기 전까지 `reinforcement`로 계속 돌아오므로
+    (위 `Minimum 5 Exposures와 FSRS의 분리`) 영구 손실이 아니다.
+-   근거와 버린 대안은 `docs/decisions/ADR-018-evidence-per-exposure.md`.
+
 ## Context Progression
 
 Context progression은 `user_item_learning_state`로 추적한다

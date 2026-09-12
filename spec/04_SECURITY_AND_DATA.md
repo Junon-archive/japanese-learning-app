@@ -331,6 +331,31 @@ api:      api.jp.example.com
 -   state-changing request는 SameSite cookie policy, strict Origin
     검증, 필요한 CSRF 방어를 적용한다.
 
+#### 쿠키 속성이 배포 토폴로지에 요구하는 조건
+
+**도메인을 고르기 전에 읽어야 하는 제약이다.** 위 `Session Cookie (MVP 확정)`의
+속성은 설정값이 아니므로(같은 절의 `이름과 속성은 설정값이 아니다`) 배포 쪽이
+여기에 맞춰야 한다. 네 가지가 따라온다.
+
+-   `SameSite=Strict`는 site가 다른 요청에 cookie를 **싣지 않는다.** fetch에
+    `credentials: 'include'`를 붙여도 우회되지 않는다 --- `include`는 same-site
+    요청에 cookie를 싣게 하는 것이지 `SameSite` 판정을 바꾸는 것이 아니다.
+-   `__Host-` prefix는 `Domain` 속성을 금지하므로 cookie는 **API 호스트
+    전용**이다. 형제 subdomain으로 넓힐 수단이 없다.
+-   따라서 **frontend origin과 API origin이 same-site(같은 registrable domain)
+    여야 하고 둘 다 https여야 한다.** `app.example.com` + `api.example.com`은
+    동작한다. frontend를 무료 호스팅의 공용 도메인(`*.workers.dev`,
+    `*.pages.dev`, `*.netlify.app` 등)에 두고 API를 별도 도메인에 두는 조합은
+    두 origin이 서로 다른 site이므로 **구조적으로 동작하지 않는다.** cookie
+    속성을 낮추는 것은 해법이 아니다(같은 절).
+-   추가로 frontend origin이 `CORS_ALLOW_ORIGINS`에 없으면 모든 상태변경 요청이
+    막힌다. 도메인을 정한 뒤 이 환경변수에 **정확한 origin**을 넣어야 한다
+    (wildcard 금지).
+
+실제 도메인 값은 이 명세가 정하지 않는다. 터널·DNS·정적 호스팅 설정은 배포
+절차의 몫이며 `infra/`에 도메인을 고정하지 않는다. 위 `로컬 개발`이 같은 제약의
+개발 환경 판본이다.
+
 ## 데이터 보존
 
 PostgreSQL이 canonical source이다. DB 내부 파일을 직접 편집하지 않는다.

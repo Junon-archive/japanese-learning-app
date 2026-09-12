@@ -899,3 +899,531 @@ target 수를 말하므로 신규 수를 세는 10번이 아니고, 10번이 발
 config 키를 쓰지만 적용 지점이 다르다"는 요지는 여전히 사실이므로 그대로 뒀다).
 새 ADR은 없다 --- 명세 문구가 구현과 다른 절에 어긋난 것을 맞춘 사실 정정이며
 새 설계 결정이 아니다.
+
+#### Wave 4 착수 전 반영 --- 프론트엔드 계약 공백 10건 (같은 후속 보완)
+
+Wave 4(프론트엔드) 착수 전에 드러난 **명세 공백 10건**을 반영했다. 새 버전 번호를
+만들지 않는다. **새 테이블·새 컬럼·새 config 키는 없다.** 모든 신설 계약을 기존
+컬럼과 기존 endpoint에서 파생시켰고, `spec/future/`·루트 `spec/05`·`spec/06`은
+건드리지 않았다.
+
+-   **[30] `GET /api/history/*`에 응답 계약이 없었다** (`05_API_SPEC.md`의
+    `History`가 canonical): `00_SCOPE.md`가 `기본 history`를 In Scope로 열거하는데
+    endpoint 2개에 한 줄 설명만 있었고 응답 스키마·수용 기준·화면 정의·상한이 전부
+    없었다. 수용 기준이 없다는 이유로 In Scope 항목을 빼지 않고 **최소 계약을
+    확정하는 쪽**을 택했다. `GET /sessions`는 `study_sessions`의 여섯 컬럼 그대로 +
+    `completed_sentence_count`(그 session의 `study_presentations` 중
+    `completed_at IS NOT NULL` 행 수)다. `GET /items`는 **`user_item_learning_state`
+    행을 목록 대상으로 잡고** `learning_items.lemma` / `type`,
+    `user_mastery.comprehension_mastery`, `invalidated_at IS NULL`인
+    `item_exposures` 행 수, `review_states.next_review_at`을 붙인다. 목록 대상을
+    그 테이블로 정한 이유는 그 행이 **target으로 제시되었거나 explicit evidence를
+    받았을 때만** 생겨서 "눌러만 보고 지나간 item"이 자동으로 빠지고, 따라서 새
+    `learned` 플래그 컬럼이 필요 없기 때문이다. 버린 대안: `summary_json`을 읽는
+    방식(MVP에 채우는 경로가 없다), `is_active_learning_target = true`만 담는
+    방식(exploration item은 노출되어도 target이 아니라 빠진다). 상한은 **두
+    endpoint 공통 고정 50**이고 pagination·기간 필터·정렬 옵션을 두지 않았다 ---
+    `기본 history`에 cursor를 붙이면 정렬 키·경계·빈 페이지 계약이 따라 붙는다. 50을
+    `14_CONFIGURATION.md`에 두지 않은 이유는 그것이 실사용으로 조정할 학습
+    파라미터가 아니라 **응답 계약 상수**이기 때문이다(probe 문구, flag note 길이
+    상한과 같은 취급). 함께: 인증 필수(익명 허용 목록은 그대로 2개), 대상 사용자를
+    지정하는 파라미터를 받지 않음, 읽기 전용(`last_activity_at`을 건드리지 않음).
+    `completed_at IS NULL`인 presentation을 세지 않는 이유는 idle timeout으로 닫힌
+    session에 영원히 미완료로 남는 행이 있고 그것을 세면 **보지 않고 떠난 문장이
+    학습 기록이 되기** 때문이다.
+    **구현 보고로 같은 계약에 두 가지를 보완했다(새 번호를 만들지 않는다).**
+    (i) 잘림 사실을 응답이 알릴 수 없었다 --- 명세가 "잘렸다는 사실은 화면이 문구로
+    알린다"고 요구했는데 스키마에 플래그도 총 개수도 없어 client의 단서가
+    `len(rows) == 50`뿐이었고, 그것은 **"정확히 50건인 사용자"와 구분되지 않아**
+    경계에서 거짓을 말한다. 두 응답에 `truncated: bool`을 추가하고 판정 방법까지
+    명세에 적었다: **상한 + 1건을 조회해 51번째 행의 존재로 판정하고 응답에는 50건만
+    담는다.** `COUNT(*)`를 쓰지 않은 이유는 전체 개수를 화면이 쓰지 않는데 행이 많은
+    사용자가 조회마다 전수 카운트를 치르기 때문이고, `total`을 노출하지 않은 이유는
+    그것이 pagination을 만들라는 압력이 되기 때문이다(pagination 금지는 그대로다).
+    `truncated`는 잘렸는지만 말하고 몇 건이 잘렸는지는 말하지 않는다 --- 그것을
+    말하려면 `COUNT(*)`가 필요하다.
+    (ii) **진행 중 session의 `active_seconds`가 멈춘 값이라는 사실을 기록했다.**
+    history는 `touch()`를 부르지 않으므로 그 값은 마지막 학습 요청 시점의 것이고,
+    화면이 `진행 중`으로 표시하므로 오해 소지는 작다. 고치지 않았다 --- 대신
+    "**여기에 상태 변경을 추가하지 않는다**"를 못박았다. `GET /api/study/session`에
+    같은 문장을 둔 것([31])과 **한 규칙**임을 적었다: 조회는 학습 시간을 만들지
+    않는다. 이 문장이 없으면 다음 사람이 "학습 시간이 멈춰 보인다"를 버그로 보고
+    history 조회에 `touch()`를 넣는데, 그것이 실제 버그다.
+-   **[31] 진행바의 분모와 갱신 수단이 없었다** (`05_API_SPEC.md`의
+    `진행 상태의 갱신과 세션 종료 판정`이 canonical): 분모
+    `(target_minutes + extended_minutes) * 60`, 분자 `active_seconds`, 갱신은
+    `/complete` 직후 `GET /api/study/session` 재조회(문장 단위)로 확정했다.
+    **자동 폴링을 금지**하고 그 이유를 적었다 --- 상호작용 endpoint를 주기 호출하면
+    모든 상태 변경 경로가 `touch()`를 지나므로 `active_time_idle_gap_seconds` 이하
+    간격이 계속 생겨 **자리를 비운 시간이 학습 시간으로 누적된다.** 화면은 오히려
+    매끄럽게 보이므로 이 오염은 눈에 띄지 않는다. 진행 표시가 **`GET /session`이
+    `touch()`하지 않는다는 사실에 의존**하므로 그 사실과 "여기에 상태 변경을
+    추가하지 않는다"를 명세에 못박았다. 세 값이 `/next`·`/complete` 응답에 없는
+    것은 결함이 아니라 계약 분리이며(session payload vs presentation payload) 두
+    계약에서 같은 값을 내면 최신성이 응답 도착 순서에 달린다.
+    **F2 구현 보고로 `/finish` 직후 화면을 확정했다(같은 계약, 새 번호를 만들지
+    않는다)**: `03_UI_UX_SPEC.md`의 `완료 화면`. 완료 문구 한 줄과 `active_seconds`로
+    만든 학습 시간 한 줄로 끝나고 **새 세션 시작 버튼을 두지 않는다.** 그 버튼이 눌릴
+    때마다 session 행이 하나 더 생겨 history의 세션 기록이 부풀고, "한 번 더 하시죠"라는
+    압박으로 읽힌다 --- 후자는 `Session End`가 이미 금지한 overdue/streak punishment와
+    같은 종류이므로 이 선택은 새 규칙이 아니라 그 금지의 **결과**다. 그래서 **막히는
+    경로는 없다**는 것도 적었다: 다시 열거나 새로고침하면 `POST /api/study/session`이
+    새 session을 만든다(방금 세션은 닫혀 있으므로 resume이 아니라 신규다). 사용자가
+    명시적으로 다시 시작하는 것과 화면이 권하는 것을 구분하는 것이 요점이다. 숫자는
+    `active_seconds` 하나이며 [32]의 "서버가 준 숫자만 화면에 쓴다"를 참조하게 했고,
+    통계·streak·세션 요약은 넣지 않는다.
+-   **[32] "세션 종료 도달"의 판정 주체가 없었다** (같은 절): 서버에 플래그를
+    추가하지 않고 **client가 `active_seconds >= (target_minutes +
+    extended_minutes) * 60`으로 파생**한다. 값 전부가 서버 것이므로 정책값
+    하드코딩이 아니다. 반면 `default_session_minutes` / `extra_session_minutes`를
+    frontend가 읽는 것은 하드코딩이므로 명시적으로 금지했다. 함께 못박은 것:
+    **도달은 세션의 종료가 아니다.** session을 닫는 것은 `/finish` 하나이고, 도달
+    뒤에도 `/next`와 상호작용이 허용되며 서버는 도달을 이유로 아무것도 거부하지
+    않는다.
+-   **[33] `explanation_revealed`의 시점이 없었다** (`05_API_SPEC.md`의
+    `explanation_revealed를 언제 보내는가`가 canonical): "설명 패널/시트가 실제로
+    렌더된 직후"로 확정하고, 두 event를 유지하는 이유를 적었다 --- click 응답이
+    실패하거나(500/409/네트워크 단절) 사용자가 응답 전에 떠나면 `item_clicked`만
+    남으므로 **"탭했으나 설명이 표시되지 않은 구간"이 관측된다.** 합치면 그 구간이
+    사라지고 "tap 즉시 표시"가 지켜지는지 확인할 수단이 없어진다. 함께: 패널을
+    접었다 다시 펴도 **presentation당 1회만** 보낸다(client key는 UUIDv4라 재전송
+    때마다 새 event가 쌓여 raw history가 UI 조작 횟수를 세게 된다).
+-   **[34] 학습 target span의 시각적 구분이 모호했다** (`03_UI_UX_SPEC.md`의
+    `tappable span 표시`): "학습 대상 span을 subtle하게"가 대상만 표시하라는 뜻으로
+    읽혔으나 `tappable_items` payload에는 target/incidental 구분 필드가 없다. 필드를
+    추가하지 않고 **모든 tappable span을 같은 방식으로 subtle하게** 표시하도록 문구를
+    명확히 했다. 근거 둘: 대상만 강조하면 그 문장에서 무엇이 평가 대상인지가 드러나
+    같은 문서의 "지나치게 시험 문제처럼 보이지 않게"가 그 자리에서 무너지고,
+    강조된 span만 눌려 **incidental click 경로가 사실상 사라진다** --- 그 경로가
+    MVP에서 신규 학습 target이 생기는 주된 통로다(`02_LEARNING_POLICY.md`).
+    target 여부는 `user_sentence_candidate_targets`가 가진 서버 측 사실이며 화면이
+    알 필요가 없다.
+-   **[35] 로그인 화면이 어느 UI 명세에도 없었다** (`03_UI_UX_SPEC.md`의 `Login`):
+    `01_USER_FLOW.md`가 `Authentication check`를 요구하는데 화면 정의가 없었다.
+    `login_id` / `password` 두 필드와 버튼 하나로 확정했다. 실패 문구는 **하나**다
+    --- 401이 사유를 구분하지 않으므로 UI가 구분해 적으면 서버가 감춘 것을 알려준다.
+    회원가입·재설정 진입점을 두지 않은 이유는 public signup이 없고 그 endpoint가
+    MVP에 없어서다(`04_DB_SPEC.md`).
+-   **[36] `timed_out_session_id` 표시 문구가 미정이었다**
+    (`03_UI_UX_SPEC.md`의 `이전 세션 종료 안내`): non-null이면 한 번 사라지는
+    안내를 띄운다("이전 세션은 오랫동안 활동이 없어 종료했습니다. 새 세션을
+    시작합니다."). 경고·오류로 보이게 하지 않는다(사용자가 잘못한 것이 없고
+    overdue/streak punishment 금지와 같은 취지). 지난 세션 복귀 동작을 제공하지
+    않는 이유는 그 session이 이미 닫혀 남은 문장이 영원히 미완료이기 때문이다.
+    내부 id 자체는 화면에 노출하지 않는다.
+-   **[37] `content.translation_default_visible` / `reading_default_visible`을
+    frontend가 읽을 경로가 없다** (`14_CONFIGURATION.md`): config를 지우지도 API를
+    바꾸지도 않고 **사실만 기록했다.** 두 값이 기술하는 것은 API 구조가 이미
+    강제한다 --- payload에 `korean_translation` 필드도 reading 필드도 없으므로 값이
+    뒤집혀도 화면은 달라지지 않는다. 값을 넘기는 endpoint를 만들면 숨김 규칙의
+    source of truth가 둘이 되고 그중 하나가 뒤집히는 사고가 가능해지므로, 두 키는
+    정책 기록으로만 남기고 소비처를 만들지 않는다.
+
+-   **[38] `+5분 더` 버튼의 숫자가 어떤 payload에도 없다**
+    (`03_UI_UX_SPEC.md`의 `Session End`): `extend()`가 더하는 값은
+    `learning.extra_session_minutes`인데 그 값은 `/extend`를 호출하기 **전** 어떤
+    응답에도 실리지 않는다. 따라서 버튼에 `5분`을 쓰면 정책값 하드코딩이고, config를
+    6분으로 바꾸면 화면은 계속 `5분`이라 말하고 서버는 6분을 더하는데 **아무 테스트도
+    빨개지지 않는다.** API를 바꾸는 대신 **문구에서 숫자를 뺐다**: `오늘 학습 완료 /
+    더 학습하기`. `StudySessionPayload`에 연장 폭을 노출하지 않은 근거는, 누르기
+    **전에** 정확한 분 수를 보여야 한다고 요구하는 조항이 어디에도 없고 세션 길이
+    자체를 `오늘 약 12분`으로 근사 제시하는 문서 전체의 어조와도 어긋나지 않는다는
+    것이다. 함께 규칙을 한 줄로 세웠다 --- **"서버가 준 숫자만 화면에 쓴다."**
+    `오늘 약 12분`이 허용되는 이유는 그것이 `target_minutes`로 내려오기 때문이고,
+    연장 폭이 금지되는 이유는 내려오지 않기 때문이다. 두 문구의 처리가 갈리는 것은
+    그 한 규칙의 결과다. `01_USER_FLOW.md`와 `spec/03_DOMAIN_MODEL.md`의 `+5분`은
+    config 기본값을 가리키는 서술이므로 고치지 않았고, 화면 문구를 인용하던
+    `05_API_SPEC.md`의 한 줄과 endpoint 요약의 `+5분 연장`만 맞췄다(요약은
+    `extra_session_minutes 만큼 연장`으로 고치고, 그 값이 호출 전에는 응답에 없다는
+    사실을 한 단락 추가했다).
+-   **[39] 세션 쿠키 속성이 배포 토폴로지를 제약한다는 사실이 기록되지 않았다**
+    (`spec/04_SECURITY_AND_DATA.md`의 `배포 도메인 가정` 아래
+    `쿠키 속성이 배포 토폴로지에 요구하는 조건`): **기록만 했다. ADR-004를 고치지
+    않았고 쿠키 속성도 바꾸지 않았다.** `__Host-nc_session`은 `Secure` +
+    `HttpOnly` + `SameSite=Strict` + host-only이며 이 속성들은 설정값이 아니므로
+    배포가 여기에 맞춰야 한다. 귀결 넷: `SameSite=Strict`는 site가 다른 요청에
+    cookie를 싣지 않고 `credentials: 'include'`로 우회되지 않는다(`include`는
+    same-site 요청에 cookie를 싣게 하는 것이지 `SameSite` 판정을 바꾸지 않는다);
+    `__Host-` prefix가 `Domain`을 금지하므로 cookie는 API 호스트 전용이다;
+    따라서 frontend origin과 API origin이 **same-site이고 둘 다 https여야** 하며
+    `app.example.com` + `api.example.com`은 동작하지만 무료 호스팅 공용
+    도메인(`*.workers.dev` 등) + 별도 도메인 조합은 **구조적으로 동작하지
+    않는다**; 그 위에 frontend origin이 `CORS_ALLOW_ORIGINS`에 없으면 상태변경
+    요청이 막힌다. 실제 도메인 값은 명세가 정하지 않고 `infra/`에 고정하지 않는다
+    --- 도메인·DNS·정적 호스팅은 배포 절차의 몫이다. Wave 5 배포 문서가 참조할
+    자리를 위해 기존 `배포 도메인 가정` 바로 아래에 두었다.
+
+교차 참조·서술을 맞춘 문서: `03_UI_UX_SPEC.md`(`Login` / `진행 표시` /
+`세션 시작 안내`(resume 포함) / `tappable span 표시` / `History` 신설(`truncated`로만
+잘림 문구를 띄운다는 한 줄 포함) / `완료 화면` 신설, `Session End` 문구
+변경 + 판정 절 참조, `Explanation`에 event 시점 참조 한 줄),
+`13_ACCEPTANCE_CRITERIA.md`(history 수용 기준 2건 --- 자기 데이터만 + 잘림 구분),
+`12_TEST_PLAN.md`(history integration 3건 --- 자기 데이터만 / `truncated` 경계
+양쪽 / 조회가 `active_seconds`를 움직이지 않음), `14_CONFIGURATION.md`([37] 한 단락),
+`spec/04_SECURITY_AND_DATA.md`([39] 한 절. `spec/00~06`은 이 한 곳만 건드렸고
+`spec/05`·`spec/06`과 `spec/future/`는 손대지 않았다).
+
+새 ADR은 없다. history 응답 계약이 ADR 후보였으나 **되돌리기 비싼 결정이
+아니다** --- 새 테이블·컬럼·config 키가 없고 저장 상태를 만들지 않는 읽기 전용
+계약이라, 목록 대상·상한·필드 구성을 바꾸는 것은 `05_API_SPEC.md`의 `History` 절
+하나를 고치는 일이다(마이그레이션도 데이터 변환도 없다). 버린 대안과 근거는 그 절과
+위 [30]이 이미 담고 있다. [31]\~[34]도 같은 성질이며 [35]\~[38]은 문구 정정,
+[39]는 기존 결정(ADR-004)의 귀결 기록이다.
+
+같은 item에 대한 두 번째 self-report의 처리는 이 묶음에서 보고만 하고 명세를 고치지
+않았다. 결정이 내려져 **아래 `#### 노출당 evidence 1건`에서 확정했다.**
+
+#### 노출당 evidence 1건 --- self-report 이중 적용 차단 (같은 후속 보완)
+
+위 묶음에서 미해결로 남겼던 건을 확정했다. **새 테이블·새 컬럼·새 config 키는 없다.**
+다만 이것은 문구 정정이 아니라 **Wave 2 서버 동작의 변경을 요구하는 규칙 확정**이므로
+`docs/decisions/ADR-018-evidence-per-exposure.md`를 남겼다.
+
+-   **[40] `(presentation, learning_item)`당 explicit evidence 상한이 없었다**
+    (`07_SRS_SPEC.md`의 `노출당 evidence 1건`이 canonical, HTTP 계약은
+    `05_API_SPEC.md`의 `노출당 evidence 상한`): 구현은 같은 item에 대한 두 번째
+    self-report를 `client_event_id`만 다르면 두 번 다 적용해 EMA를 두 번 돌리고
+    `reps`를 두 번 올렸다. 명세에 금지 조항이 없었고, 반대로 `05_API_SPEC.md`는
+    probe에 대해 "probe 하나에 응답은 최대 1건"을 이미 canonical로 못박고 있었다 ---
+    **같은 EMA·같은 FSRS mapping·같은 위험인데 한쪽만 막혀 있던 비대칭**이 이 결정의
+    출발점이다. 확정: 상한 1건, 서버가 강제, 2회차는 **409**, event도 부수효과도
+    기록하지 않는다. 단위는 **`learning_item`**이다(`sentence_item` 단위로 세면 한
+    문장에 같은 `learning_item`을 가리키는 `sentence_item`이 둘일 때 뚫린다). 세는
+    집합은 self-report 3종 + probe 응답 3종이며 `mastery_probe_skipped`는 제외한다
+    --- **새 목록을 만들지 않고** `07_SRS_SPEC.md`의 `No-signal review`가 이미
+    `신호 있음`으로 열거한 그 6개를 참조하게 했다(같은 집합을 두 곳에 적으면 한쪽만
+    고쳐지는 순간 무신호 판정과 evidence 상한이 서로 다른 것을 센다). **두 경로를
+    합쳐 세는 이유**: probe 후보는 그 presentation의 target item이므로 item X에
+    `알고 있었음`을 self-report한 뒤 같은 X의 probe에 `몰랐음`을 답하는 순서가
+    실제로 성립하고, `probe_id` 기준 제한은 `probe_id`가 다르지 않아 이 경로를 막지
+    못한다. 검사 10처럼 구조적으로 죽은 경로가 아니다.
+-   **판정 순서를 명시했다**(`05_API_SPEC.md`의 `판정 순서`): 소유권 404 -> 상태
+    게이트 409 -> **재전송 멱등성** -> evidence 상한 409 -> 그 밖의 검증. 멱등성이
+    상한보다 **먼저**여야 한다 --- 뒤집으면 성공한 self-report의 네트워크 재시도가
+    자기가 만든 evidence에 걸려 409를 받고 client가 성공을 실패로 읽는다.
+    `공통 규칙`의 "재전송 시 동일 결과를 반환한다"가 canonical이므로 그쪽이 이긴다.
+    같은 이유로 `probe-response`의 **probe 응답 1건 제한은 지우지 않았다** --- skip
+    포함 여부와 결과(기존 응답 200)가 달라 새 상한과 겹치되 같지 않고, 재전송
+    멱등성을 담당하는 쪽이 그것이다. 두 규칙의 관계를 표로 적었다.
+    **구현 보고로 그 표를 사실에 맞춰 세 곳 고쳤다(새 번호를 만들지 않는다).**
+    (i) `probe_id` 유효성 400을 상한 **뒤**(5번)에 두었으나 `/probe-response`는
+    판정 키를 그 probe event에서 꺼내므로 event가 유효하지 않으면 상한을 판정할 키
+    자체가 없다 --- **선택이 아니라 구조이고 순서를 바꿀 방법이 없다.** 400을 상한
+    앞으로 옮기고 그 이유를 적었다(기존 테스트가 이미 그 동작을 고정한다).
+    (ii) probe 제한의 **판정 키를 `probe_id`로 적었으나 실제 키는
+    `(presentation, learning_item)`이다.** 사실대로 고치고, `mastery_probe_shown`의
+    자연키가 `(presentation, learning_item)`당 하나이므로 **현재 두 표현이 같은
+    결과를 낸다**는 것과 **자연키가 바뀌면 갈라진다**는 것(`probe_id` 기준이면 두
+    번째 probe에 답할 수 있고 쌍 기준이면 막힌다)을 명시했다. 문서와 코드가 문자
+    그대로는 다르지만 그 차이가 현재 도달 불가능한 사례이며 선례로 `08_LLM_SPEC.md`의
+    `target 수 상한의 출처와 검사 10의 지위`를 가리켰다. **판정 키가 같아지므로 두
+    규칙이 왜 둘인지를 한 문장으로 못박았다** --- 갈라 두는 근거는 키가 아니라
+    **`skip` 포함 여부와 결과**다(probe 제한은 skip 포함·200·멱등성, 상한은 skip
+    제외·409·이중 평가 차단). `Mastery Probe` 절의 기존 문장은 그대로 두고 실제 키를
+    가리키는 한 줄만 덧붙였다 --- 두 곳이 말없이 어긋나면 안 된다.
+    (iii) `client_event_id` 충돌 409가 순서표에 빠져 있었다. 구현된 순서(상한이 key
+    충돌보다 앞)를 넣고 **그 순서가 의도된 것임을 확인했다** --- 두 409가 동시에
+    성립할 때 상한이 "재시도하지 말라"는 종결 답이므로 먼저 주는 것이 유용하고, 뒤집으면
+    client가 새 UUID로 재시도한 뒤 결국 상한 409를 받아 왕복만 한 번 는다. **구현
+    변경은 필요하지 않다.**
+    함께 `재전송 멱등성` 서술을 사실에 맞췄다: 구현은 순서로가 아니라 **상한 검사가
+    요청이 들고 온 `client_event_id`를 제외하는 것**으로 멱등성을 지킨다. "멱등성을
+    먼저 판정한다"는 서술로는 부족하다 --- 제외 조건이 없으면 순서를 뒤집어도 상한이
+    방금 만든 자기 행을 센다.
+-   **409 사유를 구분했다**(`05_API_SPEC.md`의 `409 사유 구분`): 새 코드 체계를
+    만들지 않고 **기존 방식(응답 body의 사유 문구가 곧 사유 코드)** 을 따랐다. 네
+    가지 409(session 종료 / presentation 완료 / `client_event_id` 재사용 / 이 노출에
+    이미 evidence)와 각각의 client 동작을 표로 적었다. **복구 동작이 세 종류**라는
+    것으로 정리했다: 앞의 둘은 화면 상태가 어긋난 것이라 session 재획득,
+    `client_event_id` 충돌은 **새 UUIDv4로 재시도하면 성공할 수 있고**(영구 상태가
+    아니다), evidence 상한은 **어떤 재시도도 성공하지 못하므로** "이미 기록했습니다"로
+    끝내야 한다. 넷을 합치면 client가 무한 재시도(상한을 충돌로 오해), 불필요한 세션
+    재획득(상한을 게이트로 오해), 또는 복구 포기(충돌을 상한으로 오해)를 한다. 표에
+    `판정 순서`의 단계 번호를 함께 실어 두 표가 대조되게 했다.
+-   **DB 강제 수단을 명시했다**(`04_DB_SPEC.md`의 `learning_events`). 구현이 뒤이어
+    `uq_learning_events_evidence` = `UNIQUE (study_presentation_id,
+    learning_item_id) WHERE event_type IN (explicit evidence 6종)`을 추가했고 그것을
+    형제 테이블과 같은 `유일성:` + 조건 코드블록 + 이유 3단 구조로 반영했다.
+    **partial이어야 하는 이유**: full unique면 한 노출에 event를 2건 이상 남길 수 없어
+    `item_clicked` / `explanation_revealed` / `mastery_probe_shown`이 전부 막힌다.
+    predicate의 6종은 **목록을 이 문서에 다시 적지 않았다** --- `07_SRS_SPEC.md`가
+    canonical이고, 같은 집합을 두 곳에 적으면 index가 세는 것과 명세가 세는 것이
+    갈라진다(`07_SRS_SPEC.md`에서 목록 재열거를 거부한 것과 같은 규칙이다).
+    `mastery_probe_skipped`가 predicate에 없는 이유도 적었다 --- 한 노출에 skip과
+    evidence가 함께 있는 것이 정상이므로 넣으면 그 정상 상태가 제약 위반이 된다
+    (구현의 변이 실험이 확인했다: 넣으면 기존 테스트 3건이 빨개진다). 범위에
+    `user_id`를 넣지 않은 이유(`study_presentation_id`가 이미 한 사용자에 속한다.
+    `item_exposures`와 같은 형태다), **애플리케이션 검사를 대체하지 않는다는 것**(정상
+    경로는 기록 **전** 조회로 event를 애초에 남기지 않고, index는 경합의 마지막
+    방어선이며 **진 요청도 같은 409**를 받는다 --- 그 판별 때문에 index 이름이 구현에서
+    상수다), **위반 행을 정리하는 migration 단계를 두지 않는다는 것**(immutable raw
+    history에서 행을 지우는 것은 "사용자가 그렇게 답하지 않았다"는 없는 사실을 만드는
+    것이고, 두 행 중 무엇을 남길지 고르는 판단도 migration이 할 일이 아니다. 위반 행이
+    있으면 migration은 실패한다)까지 함께 적었다. `12_TEST_PLAN.md`에 동시 self-report
+    2건 integration 항목을 추가하면서 **이 불변식이 갓 만난 item에서만 우연히 보호되고
+    있었다**는 사실을 기록했다 --- 경합에서 진 요청이
+    `uq_user_mastery_user_id_learning_item_id` 위반으로 넘어지고 그 롤백이 중복
+    evidence를 함께 지웠기 때문이며, `user_mastery` / `user_item_learning_state` /
+    `review_states` 행이 **이미 있는 item**(= 복습 중인 모든 item)에서는 그 우연이
+    성립하지 않아 evidence 2건이 커밋된다. **시간이 지나면 대다수가 되는 경로가 뚫려
+    있었다.** 그래서 이 index를 "다른 제약이 이미 막고 있다"는 이유로 지우면 안 된다.
+    R1의 flush 순서 우연([41])과 같은 성격의 기록이다.
+-   **read-or-create의 알려진 한계를 기록했다**(`10_ERROR_HANDLING.md`의
+    `DB Failure`). 고치지 않았다. 사용자별 학습 상태 행을 만드는 경로가 SELECT 후
+    INSERT이므로 같은 item에 **`skip`과 self-report가 동시에** 도착하면 한쪽이
+    `user_item_learning_state` 중복 INSERT로 **500**을 받을 수 있다. evidence끼리의
+    경합은 새 index가 직렬화하지만 skip은 evidence가 아니라 상한에 걸리지 않는다.
+    **데이터 오염이 아니라 가용성 문제다** --- 제약이 오염을 이미 막으므로 잃는 것은 그
+    요청 하나다. 해법 방향(`ON CONFLICT DO NOTHING`, `services/events.py`가 event
+    기록에 이미 쓰는 방식)까지 적어 두어 나중에 이 증상이 보고되면 원인을 다시 찾지
+    않게 했다.
+-   **정정은 지원하지 않는다**(`07_SRS_SPEC.md`의 `정정은 하지 않는다`). 덮어쓰기는
+    MVP 범위 밖이다 --- EMA 역함수에 필요한 직전 `old`가 `user_mastery`에 없고
+    (현재값만 갖는다) `Card` 복원에 필요한 review 전 상태도 `review_states`에 없다.
+    직전값 컬럼이나 `learning_events` replay가 선행 조건이고 둘 다 새 스키마·새
+    기능이다. 대신 두 오입력의 **비대칭**을 근거로 남겼다: `몰랐음` 오입력은
+    `Again`이라 다음 노출이 곧 와 스스로 교정되고, `알고 있었음` 오입력은 교정되지
+    않지만 minimum exposure를 채우기 전까지 `reinforcement`로 계속 돌아오므로 영구
+    손실은 아니다.
+
+교차 참조·서술을 맞춘 문서: `02_LEARNING_POLICY.md`(`evidence_count`가 한 노출에
+최대 1회 오른다는 두 줄 + canonical 참조), `13_ACCEPTANCE_CRITERIA.md`("같은 노출이
+두 번 평가되지 않음"을 독립 항목으로 올려 노출 **전체**에 적용됨을 명시. 기존 상태
+게이트 항목에서 그 괄호를 떼어 두 항목의 범위를 갈랐다),
+`12_TEST_PLAN.md`(integration 3건 --- self-report 2회차 409 + 같은 `client_event_id`
+재전송은 204, self-report 뒤 probe 응답 409 + skip 뒤 self-report는 성공 + 성공한
+probe 응답 재전송은 200, 동시 self-report 2건 + 우연 기록),
+`04_DB_SPEC.md`(`learning_events`의 `유일성:` 절),
+`10_ERROR_HANDLING.md`(read-or-create 한계 한 단락).
+
+새 ADR: `ADR-018-evidence-per-exposure.md`. history 계약([30])과 달리 **되돌리기가
+비싸다** --- 서버 동작 변경이고, 나중에 정정을 허용하려면 직전값 컬럼이나 event
+replay가 필요해 스키마가 따라 움직인다. 버린 대안 네 개((a) 현행 유지 + 프론트
+잠금, (b) 덮어쓰기, (c) 조용히 204, (d) `sentence_item` 단위)와 (b)가 왜 범위
+확대인지를 그 문서에 보존했다. 번호는 `docs/decisions/`를 확인해 최대값 017 + 1로
+잡았다(파일 목록과 함께 `ADR-018`/`ADR-019`를 미리 참조하는 문서·코드가 없음도
+확인했다 --- 번호만 예약된 경우를 잡기 위해서다). **구현 보고 후 그 문서 안에서
+근거 세 곳을 사실에 맞췄다**(새 ADR을 만들지 않았다): 멱등성 우선이 순서가 아니라
+제외 조건으로 성립한다는 것, probe 제한의 판정 키가 상한과 같고 갈라 두는 근거는
+skip과 결과라는 것, `probe_id` 400이 구조적으로 상한보다 앞이라는 것. 409 사유 bullet도
+네 사유·세 복구 동작으로 맞췄다. self-report -> probe 경로를 probe 제한이 막지 못하는
+이유도 "`probe_id`가 다르지 않아서"가 아니라 **"probe 응답 event만 보므로 앞선
+self-report를 보지 못해서"**로 정정했다. DB index가 추가된 뒤 `근거`에 **강제 수단이
+둘이고 둘 다 필요하다**는 bullet을 하나 더 넣었다 --- ADR이 "프론트 잠금으로는
+부족하다"고 말한 것과 같은 논리를 한 단계 더 적용한 결과이므로 새 결정이 아니고,
+그래서 새 ADR을 만들지 않았다.
+
+#### 열린 presentation 불변식의 DB 강제 수단 (같은 후속 보완)
+
+**구현이 먼저 닫고 명세가 따라간 건이다.** 위 [40]과 무관한 별건이며 ADR을 만들지
+않았다 --- 명세가 이미 선언한 불변식에 강제 수단을 명시하는 것이고 새 결정이 아니다.
+
+-   **[41] `study_presentations`에 partial unique index 블록이 없었다**
+    (`04_DB_SPEC.md`의 `study_presentations`): `04_DB_SPEC.md`와
+    `05_API_SPEC.md`가 "한 `study_session_id`에 `completed_at IS NULL`인 row는 최대
+    1개"를 선언하는데 그것을 강제하는 인덱스가 명세에도 DB에도 없었다. 형제
+    테이블은 자기 partial unique index를 적는다(`user_sentence_candidates`의
+    `UNIQUE (user_id, sentence_id, presentation_role, context_stage) WHERE status IN
+    ('queued', 'ready')`, `prompt_versions`의 `UNIQUE (task_type) WHERE active`).
+    같은 `유일성:` + 코드블록 형태로 `UNIQUE (study_session_id) WHERE completed_at
+    IS NULL`(이름 `uq_study_presentations_open`)을 불변식 문단 바로 뒤에 적었다.
+    **partial이어야 하는 이유**: full unique로 만들면 `study_session_id`가 한 행에만
+    존재할 수 있어 한 세션에 문장을 하나밖에 보여줄 수 없다. **범위가 session
+    하나인 이유**: idle timeout으로 만료된 session은 미완료 presentation을 남기는
+    것이 정상이므로(`_expire_idle_session`) `user_id`로 넓히면 그 정상 상태가 제약
+    위반이 된다. 애플리케이션 검사를 대체하지 않는다는 점도 적었다 --- `/next`는
+    여전히 열린 presentation을 조회해서 **그것을 반환**해야 하고 index는 경합 시의
+    마지막 방어선이다.
+-   `12_TEST_PLAN.md`에 동시 `/next` 2건 integration 항목을 추가하면서, 이 불변식이
+    그때까지 **ORM flush 순서의 우연**에 기대고 있었다는 사실을 함께 적었다.
+    `touch()`가 session 행을 dirty로 만들면 autoflush가 열린 presentation 조회보다
+    먼저 UPDATE를 내보내 행 락으로 직렬화되는데, **두 요청의 `now`가 같으면**
+    SQLAlchemy가 "unchanged"로 판정해 UPDATE를 내보내지 않아 창이 열린다. 한 요청이
+    시각을 한 번만 읽는 clock 규율(ADR-007) 아래서 동일 `now`는 정상이므로 **clock
+    규율이 이 우연을 더 자주 깨는 방향으로 작용한다.** 사후 발견이 어려운 종류라
+    적어 두었다 --- 나중에 누가 index나 락을 "불필요해 보인다"고 지우면 그 항목이
+    무엇을 지키는지 알 수 있어야 한다.
+
+`05_API_SPEC.md`는 변경하지 않았다. `열린 presentation 불변식` 절이 이미 "`/next`는
+열린 presentation이 있으면 새로 만들지 않고 그것을 그대로 반환한다"를 적고 있어 추가할
+것이 없다(확인만 했다).
+
+#### Wave 4 게이트 반영 --- candidate 수명과 로그아웃 진입점 (같은 후속 보완)
+
+Wave 4 게이트에서 `learning-verifier`가 코드에서 재구성한 candidate 수명
+메커니즘과, 구현돼 있으나 도달 불가능한 endpoint 하나를 반영했다. 새 버전 번호를
+만들지 않았다. 6건 중 3건이 실질(A-1/A-2/A-3)이고 3건은 **해석의 기록**이다.
+
+확인된 사실 관계부터 적는다(아래 [42]\~[44]가 모두 여기서 나온다).
+`selection.py`의 `_review_plans`는 그 시점의 `state.context_stage`로 candidate를
+만들고 이미 만들어 둔 candidate를 다시 보지 않는다. 유일성 index는
+`status IN ('queued', 'ready')`만 덮으므로 candidate가 `shown`인 동안
+materialization이 돌면 같은 `(user, sentence, review, stage)`의 두 번째 행이
+생긴다. 그 경로는 실재한다 --- `POST /api/study/session`이 신규·resume 양쪽에서
+명세대로 materialization을 1회 실행하고 브라우저는 문장이 열린 상태에서 그것을
+부르므로, **문장 도중 새로고침 한 번이 중복 candidate를 만든다.** `_select_review`에
+stage 필터가 없고 같은 item의 두 candidate는 `order_key`가 같으므로
+`min((order_key, candidate_id))`가 **더 오래된 쪽**을 고른다.
+
+**이것은 명세 위반이 아니다.** `07_SRS_SPEC.md`의 `전이 규칙`과 ADR-012의 근거
+(4)가 "Ready Pool에 남아 있던 낮은 stage candidate"를 명시적으로 전제하고
+`max`/`min`이 그래서 존재한다. 최소 노출 정의도 "단순 횟수"이지 "서로 다른
+문맥"이 아니다. 그러므로 아래 세 건은 **버그 수정이 아니라 비어 있던 규정을
+채우는 것**이며, 그 사실을 각 문서에 적었다.
+
+-   **[42] "동시에 두 개 이상의 review candidate를 만들지 않는다"의 status 범위가
+    없었다** (`06_LEARNING_ENGINE.md`의 `review candidate: reason 판정`):
+    `ready`만인가, `shown`도 포함인가, 한 실행 안만인가가 정의되지 않았다. 구현이
+    보장하는 것은 **한 실행 안에서 item당 reason 하나**뿐이다. 문장을 그 범위로
+    정확히 하고(`**한 materialization 실행 안에서**`), `이 제약의 범위 (MVP 확정)`
+    소절을 새로 넣어 보장하는 것과 보장하지 않는 것을 갈라 적었다. **`shown`
+    candidate가 남아 있는 동안 새 candidate가 생기는 것은 정상**임을 명시했고,
+    ADR-010이 `shown / consumed / quarantined / expired`를 index에서 **일부러**
+    제외했으므로 이 문장을 근거로 index 범위를 넓히지 않는다는 금지도 함께 적었다.
+    적지 않으면 다음 사람이 이 문장을 근거로 index를 넓혀 ADR-010이 지키려던
+    재사용 가능성을 깬다.
+-   **[43] `expired`에 writer가 없었다** (`04_DB_SPEC.md`의
+    `user_sentence_candidates`, `06_LEARNING_ENGINE.md`의 `공통 필드`):
+    값만 있고 쓰는 주체·시점이 어느 문서에도 없었고, stage가 오른 뒤 남은 하위
+    stage `ready` candidate를 어떻게 할지 규정도 없었다. **만료시키지 않는 쪽을
+    채택했다** --- 그 candidate를 보여줘도 ladder는 되돌지 않고(`max`) 노출 카운트도
+    정확하며, `Pool Fallback` 2단계가 바로 그런 anchor/near-original reinforcement
+    노출을 **의도적으로** 허용하므로 만료 규칙은 그 fallback을 예외로 파야 하는
+    **새 정책**이 된다. 대신 `queued`를 다룰 때와 **같은 방식으로** 처리했다:
+    값과 index 조건은 남기고, MVP에서 쓰지 않는다는 것과 **언제 유효해지는지**
+    (candidate 수명 정책이 생기는 시점)를 적었다. `06` 쪽에는 한 단락으로 같은
+    사실을 적고 canonical을 `04`로 가리켰다 --- 적지 않으면 다음 사람이 `06`에서
+    규칙을 발명한다.
+-   **[44] candidate 단위 tie-break가 없었다** (`06_LEARNING_ENGINE.md`의
+    `Review Ordering`): 기존 1\~4는 **item 단위** tie-break만 정했고 같은 item에
+    candidate가 여럿일 때를 정하지 않아, 실질적으로 candidate id ASC(= 가장
+    오래된 것)가 규칙이었다. 이것이 [42]의 중복과 곱해지면 최소 노출이 실제 ladder
+    위치보다 낮은 stage로 기울고, 극단에서 ADR-012가 **결함이라 부른 상태**("최소
+    5회가 전부 동일 anchor 문장")에 가까워진다. `candidate 단위 tie-break (MVP
+    확정)` 소절로 5\~6번을 추가했다: **`state.context_stage`와 일치하는 candidate를
+    먼저**, 그다음이 기존 규칙. **배제가 아니라 선호**이므로 일치하는 것이 없으면
+    낮은 stage candidate를 그대로 고르고, 그래서 `Pool Fallback` 2단계가 명시적으로
+    허용한 노출을 막지 않는다 --- 그 단계는 "그런 candidate가 있는가"를 보고 이
+    규칙은 "둘 다 있을 때 무엇을 먼저 보는가"만 정한다. 사라지는 것은 "가장
+    오래된 candidate가 먼저"라는 암묵 순서뿐이고 그것을 요구하는 조항은 없었다.
+    stage **거리**로 정렬하지 않는 이유(새 정책이 된다)도 적었다.
+    `12_TEST_PLAN.md`의 Unit에 이 규칙의 항목을 하나 넣었다 --- 선호와 배제가
+    갈리는 지점(일치하는 candidate가 없을 때)까지 단정한다.
+
+새 ADR: `ADR-019-stale-review-candidates.md`. [42]\~[44]가 한 메커니즘의 세 면이고
+**되돌리기가 비싸다** --- 선택 동작 변경이며, 버린 대안 (a)만료·(b)배제는 각각
+`expired`에 writer를 만들거나 `Pool Fallback` 2단계에 예외를 파므로 나중에
+그쪽으로 돌아가려면 정책 문서 여러 곳이 함께 움직인다. 버린 대안 네 개
+((a) 만료, (b) 선택 단계 배제, (c) index를 `shown`까지 확장, (d) 현행 유지)와 왜
+(2)번 증상만 고치면 충분한지를 그 문서에 보존했다. 번호는 `docs/decisions/`의
+**파일 목록**으로 최대값 018 + 1을 잡았다 --- 이 문서 위쪽 [40] 서술에 `ADR-019`를
+미리 언급하는 산문이 있어 grep으로는 오탐이 난다.
+
+**구현 변경이 필요한 것은 [44] 하나다.** [42]와 [43]은 구현이 이미 하고 있는 것을
+적었을 뿐이다. 변경 지점은 `backend/app/learning/selection.py`의 `_select_review`
+이며, `_load_review_targets`가 `UserItemLearningState.context_stage`를 함께
+읽어(현재는 `ReviewState` + `UserMastery`만 읽는다) bucket에 넣는 정렬 키를
+`(order_key, candidate_id)`에서 `(order_key, stage_mismatch, candidate_id)`로
+넓히는 형태다. 이 보완은 명세만 고쳤고 `backend/`·`frontend/`는 건드리지 않았다.
+
+**구현자가 멈추고 보고해서 [44]의 규칙 5를 두 곳 확정했다**(같은 절 안. 새 항목도
+새 ADR도 만들지 않았고 `ADR-019`의 Decision 블록만 같은 내용으로 맞췄다). 원인은
+내가 **"candidate 하나가 item 하나에 속한다"는 전제**를 검증하지 않고 규칙을 쓴
+것이다. 그 전제는 거짓이다 --- `_create_candidates`가 plan을
+`(sentence_id, context_stage)`로 묶어 `max_new_items_per_sentence`까지 target을
+붙이므로 review candidate도 target을 2개 가질 수 있고(DB probe: `candidate 3 anchor
+[1, 2]`), `services/presentation.py`의 `_advance_context_stages`가 `몰랐음`을
+**item별로** 판정하므로 2-target presentation 하나에서 두 target의 `context_stage`가
+그 자리에서 갈린다. 우연이 아니라 구조다. 그래서 규칙 5의 판정 대상이 정해지지 않은
+동안 세 해석(아무 target이나 일치 / order key를 지배한 target / 모든 target이 일치)이
+**하필 이 규칙이 겨냥한 시나리오에서** 서로 다른 답을 냈다.
+
+-   **판정 대상 = dominant target**(= 그 candidate의 usable target 중 order key가
+    최소인 target). 근거는 내가 규칙 5를 "1\~4의 동률에서만 적용된다"고 못박은
+    문언이다 --- 그 동률을 만든 target이 곧 5번이 말하는 item이다. 버린 해석 둘의
+    귀결도 절에 적었다: "아무 target이나 일치"는 낡은 `anchor` candidate가 동승자
+    덕분에 항상 일치로 판정되어 **규칙이 존재하는 이유를 없애고**, "모든 target이
+    일치"는 ladder가 갈린 multi-target candidate를 사실상 **배제**한다(배제는 이
+    규칙이 하지 않기로 한 것이다). 아직 구현되지 않은 규칙의 해석 확정이므로 구현
+    변경을 부르지 않는다.
+-   **1\~4를 target이 여럿인 candidate에 올리는 방법을 명세에 고정했다.**
+    `candidate의 order key = usable target들의 order key 최소값`이고 `usable target`의
+    정의(1번 통과 + `fsrs_due`면 실제 due)도 함께 적었다. 이것은 **현행 동작을 적은
+    것이다** --- 그때까지 `selection.py`의 코드 주석에만 있었고 명세에는 없었다. 규칙
+    5가 그 위에 얹히므로 둘을 함께 고정해야 한다. 근거는 한 줄이다: candidate는
+    통째로 제시되므로 가장 급한 target이 그 candidate가 언제 보여야 하는지를 정한다.
+    최대값·평균은 급한 target을 덜 급한 동승자 때문에 밀리게 한다. **구현 변경 없음.**
+-   함께 발견된 **reason 병합**(같은 `(sentence, stage)`의 두 번째 plan이 candidate를
+    만들지 않고 target만 붙으므로 그 target의 reason이 사라진다)은 **이번에 명세를
+    고치지 않았다.** 분석만 해서 coordinator에게 올렸다 --- 결론은 노출 자체는 손실되지
+    않고(병합된 candidate가 그 target을 실어 `item_exposures`를 만든다)
+    `reinforcement_min_share_of_review`는 **지표만** 어긋난다는 것이다. 결정은
+    coordinator가 한다.
+
+#### 로그아웃 진입점 (같은 후속 보완)
+
+-   **[45] 로그아웃 화면이 명세에 없었다** (`03_UI_UX_SPEC.md`의 `로그아웃` 신설):
+    `POST /api/auth/logout`이 `05_API_SPEC.md`의 계약에 있고 `backend/app/api/auth.py`
+    에 구현돼 있는데 `03_UI_UX_SPEC.md`의 화면 목록에 진입점이 없어 프론트엔드가
+    호출하지 않는다. 귀결은 기기를 분실·공유했을 때 30일 cookie를 브라우저에서
+    폐기할 수단이 없고 폐기 경로가 DB 직접 조작뿐이라는 것이다. **범위 확대가
+    아니라 `00_SCOPE.md`의 `개인 로그인`을 닫는 것**이므로 추가했고, 그 판단
+    근거를 절 안에 적었다. 최소로 정의했다 --- 사이드바 `학습 기록` 아래 버튼
+    하나, 누르면 `POST /api/auth/logout` 후 Login 화면, **확인 대화상자 없음**
+    (잃는 것이 없고 되돌리는 비용이 로그인 한 번이다). 함께 적은 경계 셋:
+    `logout`이 폐기하는 것은 auth session이므로 **진행 중인 study session을 닫지
+    않고** 다시 로그인하면 idle timeout 이내면 resume된다, 실패 시 로그인 화면으로
+    보내지 않되 **`401`은 성공과 같게 처리**한다(폐기할 세션이 이미 없다는 뜻),
+    Demo에는 두지 않는다(Login을 지나지 않는다). **통계·계정 관리·설정 화면은
+    만들지 않았고** `History`의 `설정`이 MVP 화면이 아니라는 조항은 그대로 두었다.
+    **구현 보고 후 같은 절 안에서 두 곳을 정정했다**(새 항목을 만들지 않았다).
+    (1) 위치를 `사이드바, 학습 기록 아래`로 적었는데 **이 프론트엔드에 사이드바가
+    없다** --- 모바일 한 손 조작을 우선한 단일 컬럼이고, mockup 사이드바의 나머지
+    항목은 같은 문서가 이미 MVP 화면에서 뺐다. 없는 구조를 가리키는 명세는 그대로
+    읽은 사람에게 사이드바를 만들게 하므로 `화면 위쪽, 학습 기록 링크 바로 아래`로
+    고쳤다(상대 위치는 구현과 맞으므로 유지). 같은 오독원을 막으려고 문서 머리의
+    Reference 문단 뒤에 **MVP 레이아웃이 단일 컬럼이고 mockup 사이드바가 MVP 구조가
+    아니라는 한 줄**을 못박았다 --- `History` 절의 `사이드바의 학습 기록에 대응하는
+    화면이다`도 같은 표현을 쓰고 있어서, 그 문장을 고치는 대신 이 한 줄이 "mockup
+    안에서의 위치를 가리키는 말"이라고 해석을 고정하게 했다. **사이드바를 명세에
+    도입하지 않았다.** (2) 절이 위치만 적고 **어느 화면에 나타나는지**를 정하지
+    않아 구현이 study 화면만 택했다. 그 선택이 옳다고 판단해 명세가 말하게 했다 ---
+    `History`는 `두 목록으로 끝난다`이고 같은 절이 "다음 행동으로 이어지는 버튼도
+    두지 않는다"를 이미 정했으므로 로그아웃은 그 조항의 첫 예외가 된다. 치르는
+    비용은 탭 한 번(`학습으로 돌아가기`가 그 화면의 유일한 출구다)이고, 폐기 수단이
+    존재한다는 목적에는 진입점 하나로 충분하다. **구현 변경 없음.** 함께 확인된
+    사실 하나를 기존 bullet에 붙였다 --- 재로그인 후 `이어서 학습합니다.`는
+    `POST /api/study/session`의 `resumed`가 담당하므로 로그아웃 경로가 따로 하는
+    일이 없고, 여기에 `/finish`나 세션 정리를 붙이지 않는다. 실패 시 재시도로 문구가
+    최대 ~0.6초 뒤에 뜬다는 사실은 **적지 않았다** --- 공용 재시도 정책의 결과이지
+    이 화면의 규칙이 아니고, 절이 즉시성을 약속한 적이 없으며 숫자를 UI 문서 산문에
+    박는 것이 된다.
+
+#### 구현 해석의 기록 (같은 후속 보완, 구현을 바꾸지 않았다)
+
+-   **[46] probe 제외 집합이 명세보다 엄격했다** (`02_LEARNING_POLICY.md`의
+    `Probe 대상 우선순위`): `learning/probe.py`의 `SESSION_FEEDBACK_EVENTS`에
+    `mastery_probe_shown`이 들어 있는데, 명세의 제외 목록은 "방금 explicit feedback을
+    받은 item / cooldown 중인 item" 둘뿐이었다. 또 "방금"을 **세션 범위**로 읽은 것도
+    명세가 정하지 않은 해석이다. **구현을 바꾸지 않고 명세가 이 해석을 허용한다는
+    것을 적었다.** 목록이 **하한**임을 먼저 밝혔다 --- `Probe Pacing`이
+    `mastery_probe_target_per_session_min`을 강제하지 않으므로 후보가 줄어드는 것
+    자체가 위반이 되는 조항이 없고, 반대 방향(목록에 있는 것을 묻는 것)만 위반이다.
+    두 해석의 근거: 세션은 명세가 정하지 않은 시간 창에서 남는 유일한 자연 단위이고
+    더 긴 창은 `probe_skip_cooldown_days`가 이미 담당한다. 응답 없는 probe는
+    `last_probe_at`을 남기지 않아 cooldown이 잡지 못하므로, 제외하지 않으면 한 세션에서
+    같은 item을 두 번 묻게 된다(응답한 probe는 cooldown이 담당하므로 이 예외가 필요
+    없다). 이 근거는 코드 주석에도 이미 있었고 문서 쪽에만 없었다.
+-   **[47] Core E2E 12단계의 문자가 단정 가능한 것보다 강했다**
+    (`12_TEST_PLAN.md`의 `Core E2E Scenario`): 12단계가 "새로운 문맥(`new_context`)
+    으로 재노출"이라 적었는데, **문장으로는 `varied`와 `new_context`를 구분할 수
+    없다** --- `06_LEARNING_ENGINE.md`의 `한계`가 두 stage의 문장 선택 규칙이 같다고
+    적고 있다. 그래서 단정할 수 있는 둘(presentation의 `context_stage`가 `anchor`보다
+    위, state의 `context_stage`가 `varied` 이상)로 단계 문자를 고치고, **무엇을 단정하지
+    않는지와 그 이유**를 뒤에 한 단락으로 적었다. 문장 내용으로 stage를 단정하는
+    테스트는 두 규칙이 같은 동안 항상 참이거나 항상 거짓이라 회귀를 잡지 못한다는
+    점도 적었다. 이 단계가 실제로 검증하는 것은 "anchor 한 문장이 반복되지 않는다"다.
+
+`13_ACCEPTANCE_CRITERIA.md`와 `14_CONFIGURATION.md`는 변경하지 않았다. 위 여섯 건
+어디에도 새 tuning 값이 없고(전부 기존 상태·기존 ladder로 판정한다) acceptance가
+말하는 범위도 그대로다. `spec/future/`와 루트 `spec/05`·`spec/06`도 변경하지 않았다.

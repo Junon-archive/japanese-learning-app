@@ -13,6 +13,17 @@ FSRS wrapper, validation, duplicate, auth.
     `deferred_until`만 설정
 -   category mix deficit 계산 (15문장처럼 나누어떨어지지 않는 경우 포함)
 -   review ordering tie-break의 결정성
+-   candidate 단위 tie-break(`06_LEARNING_ENGINE.md`의
+    `candidate 단위 tie-break`): 같은 item에 `anchor` candidate와
+    `state.context_stage`와 같은 stage의 candidate가 **둘 다** ready이면
+    후자가 선택된다(candidate id가 더 커도). 일치하는 candidate가 없으면
+    낮은 stage candidate가 그대로 선택된다 --- 이 규칙은 배제가 아니라
+    선호이며 `Pool Fallback` 2단계를 막지 않는다
+-   같은 규칙의 판정 대상이 **dominant target**이다: target이
+    `{item1: anchor, item2: near_original}`인 `anchor` candidate와
+    target이 `{item2}`인 `near_original` candidate가 함께 ready이고 item2가
+    order key를 지배하면 **후자가 선택된다.** item1이 `anchor`와 일치하는 것은
+    판정에 쓰이지 않는다
 -   exposure 중복 집계 금지 (같은 presentation + 같은 item = 1회)
 -   span code point offset 검증과 overlap 거부
 -   job idempotency key 중복 삽입 방지
@@ -103,6 +114,17 @@ Alembic from empty DB.
     (`04_DB_SPEC.md`의 partial unique index).
 -   `/next` 재시도가 presentation을 중복 생성하지 않는다
     (`05_API_SPEC.md`의 `열린 presentation 불변식`).
+-   **동시** `/next` 2건이 열린 presentation을 2개 만들지 않는다. 한 세션에
+    `completed_at IS NULL`인 행은 끝까지 1개이며, 강제 수단은
+    `uq_study_presentations_open`이다(`04_DB_SPEC.md`의 `study_presentations`).
+    이 항목이 지키는 것을 적어 둔다 --- 이 불변식은 그때까지 **ORM flush 순서의
+    우연**에 기대고 있었다. `touch()`가 session 행을 dirty로 만들면 autoflush가
+    열린 presentation 조회보다 먼저 UPDATE를 내보내고 행 락으로 두 요청이
+    직렬화되는데, **두 요청의 `now`가 같으면** SQLAlchemy가 "unchanged"로 판정해
+    UPDATE를 내보내지 않아 창이 열린다. 한 요청이 시각을 한 번만 읽는 이 프로젝트의
+    clock 규율(ADR-007) 아래서 동일 `now`는 비정상이 아니라 정상이므로, **clock
+    규율이 이 우연을 더 자주 깨는 방향으로 작용한다.** 따라서 index나 락을
+    "불필요해 보인다"고 지우면 이 항목이 빨개져야 한다.
 -   `/complete` 재호출이 `sentence_completed`와 `item_exposures`를 중복
     생성하지 않는다.
 -   `probe-response`가 다른 presentation의 `probe_id`를 받으면 400이고,
@@ -123,6 +145,41 @@ Alembic from empty DB.
     그 session의 `last_activity_at`은 움직이지 않는다.
 -   열린 session에서도 `/complete` 뒤의 self-report는 409다 --- 같은 노출이
     두 번 평가되지 않는다.
+-   노출당 evidence 상한(`07_SRS_SPEC.md`의 `노출당 evidence 1건`): 열린
+    presentation에서 같은 item에 self-report를 **두 번째** 보내면(다른 UUIDv4)
+    409이고, `user_mastery.evidence_count`와 `review_states.reps`가 1에서 더
+    오르지 않으며 두 번째 event row가 만들어지지 않는다. **같은
+    `client_event_id`로 재전송하면 409가 아니라 204다** --- 재전송 멱등성이
+    상한보다 먼저 판정된다(`05_API_SPEC.md`의 `판정 순서`).
+-   두 evidence 경로를 합쳐 센다: 같은 item에 self-report를 한 뒤 그 item의
+    probe에 응답하면 409다. 반대로 probe를 `skip`한 뒤의 self-report는 성공한다
+    --- `mastery_probe_skipped`는 evidence가 아니다. 성공한 probe 응답을 같은
+    `probe_id`로 재전송하면 409가 아니라 기존 결과 200이다.
+-   **동시** self-report 2건이 한 노출에 evidence를 2건 만들지 않는다. 강제 수단은
+    `uq_learning_events_evidence`이고(`04_DB_SPEC.md`의 `learning_events`) 경합에서
+    진 요청도 선행 검사에 걸린 요청과 **같은 409**를 받는다. `user_mastery`의
+    `evidence_count`와 `review_states.reps`가 1에서 더 오르지 않는다.
+    이 항목이 지키는 것을 적어 둔다 --- 이 불변식은 그때까지 **갓 만난 item에서만
+    우연히** 보호되고 있었다. 경합에서 진 요청이
+    `uq_user_mastery_user_id_learning_item_id` 위반으로 넘어지고 그 롤백이 중복
+    evidence를 함께 지웠기 때문이다. 그러나 `user_mastery` /
+    `user_item_learning_state` / `review_states` 행이 **이미 있는 item**(= 복습 중인
+    모든 item)에서는 그 우연이 성립하지 않아 두 요청이 끝까지 가고 evidence 2건이
+    커밋된다. 즉 **시간이 지나면 대다수가 되는 경로가 뚫려 있었다.** 따라서 이
+    index를 "다른 제약이 이미 막고 있다"는 이유로 지우면 안 된다.
+-   history 두 endpoint가 자기 데이터만 돌려준다: 다른 사용자의 session과
+    item이 응답에 없고, 미인증 요청은 401이며, 상한을 넘는 행이 있을 때 응답
+    행 수가 고정 상한을 넘지 않고 최근 것부터 담긴다
+    (`05_API_SPEC.md`의 `History`).
+-   `truncated`가 **경계 양쪽**에서 맞다(`05_API_SPEC.md`의 `truncated`): 행이
+    상한과 **정확히 같으면** `truncated = false`이고 전부 반환된다. 행이
+    **상한 + 1**이면 `truncated = true`이고 반환은 상한 개수까지다. **양쪽을 모두
+    본다** --- 한쪽만 보면 `truncated`를 상수로 박은 구현이 통과한다. 응답에
+    `total`이 없다는 것도 함께 확인한다.
+-   history 조회가 `active_seconds`를 움직이지 않는다: 진행 중 session을
+    history로 두 번 읽어도 `study_sessions.active_seconds`와
+    `last_activity_at`이 그대로다(`05_API_SPEC.md`의 `History`). 조회는 학습
+    시간을 만들지 않는다.
 -   Demo isolation: demo API endpoint가 존재하지 않고, demo frontend
     fixture가 backend로 네트워크 요청을 하지 않는다.
 -   contextual repetition이 실제로 진행한다: 같은 item을 연속 세션에서
@@ -179,8 +236,23 @@ Alembic from empty DB.
 9.  due 시점으로 테스트 clock 이동
 10. review 문장 노출
 11. exposure 누적
-12. 초기 원문(anchor) 후 새로운 문맥(new_context)으로 재노출
+12. 초기 원문(anchor) 후 **더 높은 stage의 다른 문맥**으로 재노출.
+    단정할 수 있는 것은 둘이다 --- 제시된 presentation의
+    `context_stage`가 `anchor`보다 위이고,
+    `user_item_learning_state.context_stage`가 `varied` 이상까지
+    올라간다(`07_SRS_SPEC.md`의 `전이 규칙`).
 13. 최소 5회 노출 이후에도 FSRS due라면 계속 복습 가능
+
+12단계에서 **"그 문장이 `new_context`다"를 단정하지 않는다.** MVP에는 문장
+단위의 "anchor로부터의 거리" 지표가 없어 `varied`와 `new_context`의 문장 선택
+규칙이 **같기 때문이다**(`06_LEARNING_ENGINE.md`의 `한계`). 즉 제시된 문장만
+보고 두 stage를 구분할 방법이 없고, 구분은 `context_stage` ladder 위치로만
+존재한다. `new_context` 문장을 실제로 **생성**하는 것은 Wave 3의
+`GENERATE_REVIEW_CONTEXT`다.
+
+이 단계가 검증하는 것은 "anchor 한 문장이 반복되지 않는다"이며, 그것은 위 두
+단정으로 충분하다. 문장 내용으로 stage를 단정하는 테스트를 쓰면 두 stage의
+선택 규칙이 같은 동안 **항상 참이거나 항상 거짓**이라 회귀를 잡지 못한다.
 
 ## Regression Scenarios
 
