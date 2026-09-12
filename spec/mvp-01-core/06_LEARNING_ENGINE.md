@@ -121,6 +121,17 @@ ready   지금 그대로 제시할 수 있다.
 `sentence_item_explanations`를 가져야 한다. 하나라도 없으면 candidate를
 만들지 않는다.
 
+이 범위는 **target item만이 아니라 그 문장의 모든 tappable item**이며
+generation validation이 쓰는 범위와 같다(`08_LLM_SPEC.md`의
+`Ready invariant와 같은 범위`). seed loader도 같은 해석으로 적재한다. 세
+곳이 다른 해석을 쓰면 생성은 통과했는데 candidate가 될 수 없는 문장이
+조용히 쌓인다.
+
+explanation 누락 때문에 문장을 건너뛰었다면 그 문장의 누락된
+`sentence_item`마다 `EXPLAIN_ITEM`을 enqueue한다(`09_BACKGROUND_JOBS.md`의
+`Enqueue 트리거와 idempotency key`가 canonical). **이번 실행에서 실제로
+검사한 문장만** 대상이며 corpus 전체를 훑지 않는다.
+
 ### role별 규칙
 
 `new`와 `exploration`은 `user_item_learning_state.is_active_learning_target`
@@ -182,10 +193,10 @@ presentation이 닫히면 1건이 되어 그 다음부터 `review`다. 이 조�
 -   실리지 못한 item은 같은 실행의 다른 문장이나 다음 실행에서 자기
     candidate를 얻는다. 문장을 버리면 이미 만든 candidate를 되돌려야
     하고, 그 item 때문에 멀쩡한 문장 하나가 통째로 사라진다.
--   `08_LLM_SPEC.md`의 `Deterministic Content Validation` 10번은 **생성
-    시점**의 검사다. 이 규칙은 이미 validated인 문장에 target을 붙이는
-    **materialization 시점**에 적용된다. 둘은 같은 config 키를 쓰지만
-    적용 지점이 다르다.
+-   `08_LLM_SPEC.md`의 `Deterministic Content Validation` 5번(전체 target
+    수. 신규 수는 10번)은 **생성 시점**의 검사다. 이 규칙은 이미 validated인
+    문장에 target을 붙이는 **materialization 시점**에 적용된다. 둘은 같은
+    config 키를 쓰지만 적용 지점이 다르다.
 
 Cold start에서는 `user_item_learning_state` 행이 없으므로 new와 review
 pool이 비고 **exploration만 생긴다.** 이는 Cold Start 절의 "Category
@@ -296,6 +307,12 @@ new_context    varied와 같은 조건
 (`07_SRS_SPEC.md`)이 담당한다. 목적에 맞는 문맥을 실제로 **생성**하는
 것은 Wave 3의 `GENERATE_REVIEW_CONTEXT`이며, 조건에 맞는 문장이 하나도
 없으면 그 stage의 candidate를 만들지 않고 `Pool Fallback`으로 넘어간다.
+
+이때 그 `(item, context_stage)`에 대해 `GENERATE_REVIEW_CONTEXT`를
+enqueue한다(payload와 key는 `09_BACKGROUND_JOBS.md`의 표가 canonical).
+그 item에 쓸 문장이 **아예 없는** 경우는 이 경로가 아니라 Pool Fallback
+3단계의 `GENERATE_SENTENCE_BATCH`가 맡는다. 두 job의 경계는 "문장이
+없다"와 "이 stage에 맞는 문장이 없다"이다.
 
 이때 **stage는 그대로 남는다.** 전이는 오직 exposure로만 일어나므로
 (`07_SRS_SPEC.md`의 `전이 규칙`) candidate를 만들지 못한 것 자체는 ladder를
@@ -669,6 +686,11 @@ frequency_key =
 difficulty_distance 안에서 seed item 뒤에 놓인 뒤 `learning_item_id`로만
 정렬된다. 코퍼스 기반 frequency는 MVP 범위가 아니다.
 
+다만 **MVP에는 `origin = generated` item을 만드는 경로가 없으므로**(worker는
+요청에 실어 보낸 item만 annotate한다. `08_LLM_SPEC.md`의
+`worker가 만들지 않는 것`) 이 한계가 실제로 발생하지는 않는다. 규칙은 그런
+item이 생기는 시점에도 정렬이 결정론적이도록 그대로 남긴다.
+
 ### Cold start의 exploration
 
 첫 세션에는 `user_mastery`와 `item_exposures`가 거의 비어 있어 후보 조건을
@@ -723,6 +745,13 @@ Mix가 틀어진다.
 0단계는 **요청당 1회**다. 1단계를 훑고도 비어 있다고 해서 0단계로
 돌아가지 않는다. 3단계(job enqueue)는 0단계를 돌려도 만들 candidate가
 없을 때, 즉 정말로 콘텐츠가 없을 때만 의미가 있다.
+
+3단계가 enqueue하는 job_type은 role과 무관하게 `GENERATE_SENTENCE_BATCH`
+하나이고 payload는 `{user_id, presentation_role}`뿐이다. **item 목록을
+싣지 않는다** --- idempotency key가 하루 창이라 그날 첫 job의 payload가
+그대로 고정되어 실행 시점에는 이미 낡는다. worker가 실행 시점에 대상을
+다시 계산한다(`08_LLM_SPEC.md`의 `GENERATE_SENTENCE_BATCH 대상 선정`,
+key/payload 표는 `09_BACKGROUND_JOBS.md`).
 
 세션을 LLM 응답 대기로 block하지 않는다. **모든 pool이 비어도 API
 request handler에서 provider를 synchronous 호출하지 않는다**

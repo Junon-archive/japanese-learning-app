@@ -20,6 +20,7 @@ Decision:
 
 ``` text
 L0  models  config  settings  clock  db      app 내부 의존 없음
+    render  normalization                   app.* 를 아예 import하지 않는다
 L1  srs/*        learning/*                  L0만. 서로 import 금지
 L2  services/*   jobs/*                      L0 + L1 + L2
 L3  api/*                                    L0 + L2 + schemas. L1 금지
@@ -36,6 +37,9 @@ L3  api/*                                    L0 + L2 + schemas. L1 금지
     모든 컬럼을 DTO로 미러링해야 하고, 그러면 쓰기가 `services/` 한곳에
     모여 소유권 규칙 자체가 성립하지 않는다.
 -   G2는 Wave 1의 `api/auth.py` ↔ `services/auth.py`와 같은 경계다.
+-   `render.py`와 `normalization.py`는 Wave 3에서 L0로 올라왔다. span 검증과
+    문장 정규화를 `app/llm/`(L1)이 재사용하는데, 그것들이 `services/`에 남아
+    있으면 L1이 L2를 import해야 한다. 규칙과 guard 번호는 ADR-015의 G11(b)다.
 
 ## 정적 guard
 

@@ -542,3 +542,360 @@ security reviewer가 **실제 요청으로 익스플로잇한 결함 1건**과 �
 3건), `13_ACCEPTANCE_CRITERIA.md`(수치 없는 기준 2줄).
 
 새 ADR: `docs/decisions/ADR-014-closed-session-interaction-gate.md`.
+
+#### Wave 3 계획 반영 --- LLM/worker 차단 공백 13건 (같은 후속 보완)
+
+Wave 3(LLM/worker) 계획에서 보고된 **차단성 명세 공백 13건**과 비차단 5건을
+확정했다. 새 버전 번호를 만들지 않는다. MVP 범위를 넓히지 않았고,
+`spec/06_LLM_ENGINEERING_PRINCIPLES.md`의 `MVP 구현 의무 범위`가 제외한
+항목(prompt caching 최적화, 정교한 model routing, 고급 비용 지표, 100개
+golden eval, embedding similarity, 형태소 분석기)은 끌어들이지 않았다.
+
+**새 테이블 1개 / 새 config 키 6개 / 새 컬럼 0개**다.
+
+-   **[1] worker heartbeat 저장 위치** (`04_DB_SPEC.md`의
+    `worker_heartbeats`, `09_BACKGROUND_JOBS.md`의 `Worker Heartbeat`,
+    `05_API_SPEC.md`, ADR-015): 두 번 미뤄진 미결을 닫았다. 전용 테이블
+    `worker_heartbeats(worker_name PK, last_heartbeat_at)`를 만들고, worker가
+    **job이 없어도** loop마다 upsert하며 job 트랜잭션과 분리해 commit한다.
+    `/api/health`는 최대값 하나를 읽어 `unknown | ok | stale`을 낸다. 버린
+    대안인 "`generation_jobs`의 최근 활동으로 추론"은 개인용 앱에서 **job이
+    0건인 날이 정상**이라 "일이 없다"와 "worker가 죽었다"를 구분하지
+    못한다 --- heartbeat가 가장 필요한 날에 판정이 항상 틀린다.
+-   **[2] Ready invariant의 범위** (`08_LLM_SPEC.md`의
+    `Ready invariant와 같은 범위`, `06_LEARNING_ENGINE.md`): 대상은 target
+    item만이 아니라 그 문장의 **모든 `is_tappable` item**이다. seed loader와
+    Wave 2 materialization이 이미 이 해석이므로 generation validation만 약한
+    해석을 쓰면 "생성은 통과했는데 candidate는 될 수 없는" 문장이 조용히
+    쌓인다. 함께 못박은 것: target item은 반드시 tappable이고, 설명을 붙일 수
+    없는 표현은 tappable로 만들지 않는다.
+-   **[3] `preferred_new_items_per_sentence`의 소비처**
+    (`14_CONFIGURATION.md`): 생성 프롬프트에 싣는 **선호값**이며 유일한
+    소비처는 `GENERATE_SENTENCE_BATCH`의 요청 context다. 강제 상한은
+    `max_new_items_per_sentence` 하나이고, 선호값을 어겼다는 이유로 생성된
+    문장을 버리지 않는다.
+-   **[4] `normalized_hash` 정규화 규칙** (`08_LLM_SPEC.md`):
+    `NFKC` → 모든 Unicode whitespace 제거 → `sha256` hex를 canonical로
+    확정했다. **현행 seed loader 구현을 그대로 승계**한다 --- 바꾸면 기존
+    seed 행의 해시가 비교 불가능해져 duplicate 검사가 seed를 못 본다. seed
+    loader와 worker는 같은 함수 하나를 쓴다.
+-   **[5] structured output 스키마** (`08_LLM_SPEC.md`의
+    `Structured Output 스키마`): 응답 JSON을 필드 단위로 확정했다. 모델이 우리
+    쪽 id를 만들지 않고, item 지시는 요청 로컬 라벨 `item_ref`(`it{n}`)로만
+    한다. 요청에 없는 ref가 오면 그 문장을 버린다(`unknown_item_ref`).
+    `register` 필드는 스키마에 두지 않는다(`00_SCOPE.md`).
+    `GENERATE_REVIEW_CONTEXT`도 같은 스키마를 쓰고 `EXPLAIN_ITEM`은
+    `explanation` 객체 하나만 받는다.
+-   **[6] `failed`와 `dead_letter`의 경계** (`09_BACKGROUND_JOBS.md`):
+    attempt 소진 = `failed`, 재시도해도 결과가 같은 영구 오류 = `dead_letter`
+    (payload 필수 key 불충족 / 참조 행 없음 / 미지원 job_type / active
+    prompt_version 없음). provider 인증 실패는 키 교체 중일 수 있어
+    `dead_letter`가 아니라 retry다.
+-   **[7] stale `running` job 회수** (`09_BACKGROUND_JOBS.md`의
+    `Claim과 lease`): 명세에 아예 없어 crash한 job이 영구히 `running`에
+    갇혔다. `jobs.claim_lease_seconds`를 신설하고
+    `running AND started_at < now - lease` → `retry`로 회수하되
+    **`retry_count`를 증가시킨다.** 증가시키지 않으면 실행할 때마다 crash하는
+    job이 무한 재실행된다. claim은 `FOR UPDATE SKIP LOCKED` 단일 UPDATE다.
+-   **[8] token/request usage 저장 위치와 일 경계**
+    (`04_DB_SPEC.md`의 `result_ref 구조`, `09_BACKGROUND_JOBS.md`의
+    `usage 기록과 일 경계`, `11_OBSERVABILITY.md`): **새 테이블 없이**
+    `generation_jobs.result_ref.usage`에 per-job 누적 기록한다. 실패한 호출도
+    비용이므로 지우지 않는다. daily ceiling 판정 경계는 **UTC 일**이다 ---
+    사용자에게 보이는 학습 경계가 아니라 전역 운영 장치이고 job은 사용자
+    단위로 돌지 않는다. ceiling에 걸리면 **claim하지 않는다**(claim 후
+    실패시키면 한도 때문에 attempt가 소모된다).
+-   **[9] duplicate 비교 corpus** (`08_LLM_SPEC.md`의
+    `duplicate 비교 corpus`): `sentences` 전체 중 `status != retired`이며
+    **`quarantined`를 반드시 포함**한다. 빼면 flag로 격리한 문장을 다시
+    생성해 새 id로 ready가 되고 `13_ACCEPTANCE_CRITERIA.md`의 "flag된
+    content가 다시 Ready로 선택되지 않음"이 깨진다. similarity는 표준
+    라이브러리 문자 유사도이며 embedding은 MVP 의무가 아니다.
+-   **[10] `GENERATE_SENTENCE_BATCH`의 대상 선정과 batch 크기**
+    (`08_LLM_SPEC.md`의 `GENERATE_SENTENCE_BATCH 대상 선정`): payload는
+    `{user_id, presentation_role}`뿐이고 **item 목록을 넣지 않는다** ---
+    idempotency key가 하루 창이고 `ON CONFLICT DO NOTHING`이라 그날 첫 job의
+    payload가 고정되어 실행 시점에는 이미 낡는다. worker가 실행 시점에 role별
+    대상 조건을 다시 계산하고, 거기에 "Ready invariant를 만족하는 문장이 0건"
+    조건을 더해 **materialization이 문장을 못 찾은 item만** 대상으로 삼는다.
+    상한은 새 키 `llm.sentences_per_batch`이며 item 하나당 문장 하나다.
+-   **[11] `EXPLAIN_ITEM` / `GENERATE_REVIEW_CONTEXT`의 트리거와 key**
+    (`09_BACKGROUND_JOBS.md`의 `Enqueue 트리거와 idempotency key`가
+    canonical, `06_LEARNING_ENGINE.md`가 참조): enqueue는 전부 request 경로의
+    materialization에서 일어나고 worker는 job을 만들지 않는다. 세 job_type의
+    트리거·key 형식·payload 구조를 표 하나에 모았다. 기존 replenishment key
+    형식(`replenish:...:{YYYY-MM-DD}`)도 같은 표에 canonical로 올려 구현과
+    명세가 갈라지지 않게 했다. 두 job의 경계는 "문장이 없다"
+    (`GENERATE_SENTENCE_BATCH`)와 "이 stage에 맞는 문장이 없다"
+    (`GENERATE_REVIEW_CONTEXT`)다.
+-   **[12] `origin = generated` learning_item을 누가 만드는가**
+    (`08_LLM_SPEC.md`의 `worker가 만들지 않는 것`, `04_DB_SPEC.md`,
+    `06_LEARNING_ENGINE.md`): **MVP는 만들지 않는다.** worker는 요청에 실어
+    보낸 item만 annotate한다. `06_LEARNING_ENGINE.md`의 "generated item에는
+    frequency 정보가 없다"는 한계 서술은 삭제하지 않고, 그 한계가 MVP에서는
+    실제로 발생하지 않는다는 한 문단을 덧붙여 모순을 없앴다.
+-   **[13] `prompt_versions` 등록 절차** (`04_DB_SPEC.md`): version 형식은
+    원칙 6의 이름을 그대로 쓴 `sentence_gen_v{n}` / `review_context_v{n}` /
+    `explain_item_v{n}`이고, prompt 본문이 바뀌면 `{n}`을 올린다. `active`는
+    **partial unique index `UNIQUE (task_type) WHERE active`**로 강제한다
+    ("가장 최근 행"으로 추론하면 rollback이 불가능해진다). 등록은 idempotent
+    upsert 스크립트이며 본문은 Git 파일, DB는 registry만 둔다.
+-   **[14] provider/model 선택 소스와 env 변수명**
+    (`spec/04_SECURITY_AND_DATA.md`의 `LLM provider 자격증명 (MVP 확정)`,
+    `08_LLM_SPEC.md`, `02_ARCHITECTURE.md`, ADR-016): 구현 선택은
+    `LLM_PROVIDER = openai | stub`(기본 `stub`), secret은 `LLM_API_KEY`이며
+    **worker 프로세스에만 주입**한다. 모델명은 `prompt_versions` 행에서 온다.
+    **mock provider(`stub`)를 명세에 정식 포함**하되 안전장치를 함께 박았다:
+    `APP_ENV = production`이면 worker 부팅 실패, `openai`인데 키가 없어도 부팅
+    실패, stub 응답도 같은 validation을 통과해야 저장, provenance에
+    `provider/model = "stub"` 기록.
+-   **[16] `sentences.difficulty_json`** (`08_LLM_SPEC.md`): 모델이 준 label만
+    `{"label": ...}`로 저장하고 정확성을 검증하지 않는다. 허용값은 스키마
+    enum이 강제하며, 이 값은 문장 선택에 쓰이지 않는다.
+-   **[17] validation 탈락 콘텐츠** (`08_LLM_SPEC.md`의
+    `탈락한 콘텐츠의 처리`): **저장하지 않는다.** `draft`로 남기면 아무도 읽지
+    않는 행이 쌓이는데 정리할 maintenance job도 admin UI도 MVP에 없다. 대신
+    13개 사유 코드를 `result_ref.rejected`와 로그에 남긴다. 그 결과 MVP에는
+    `sentences.status = draft` 행을 만드는 경로가 없고, 그 사실을
+    `04_DB_SPEC.md`에 명시했다.
+
+새 config 키(전부 `14_CONFIGURATION.md`):
+
+``` text
+jobs.poll_interval_seconds        5
+jobs.claim_lease_seconds        300
+jobs.heartbeat_interval_seconds  30
+jobs.heartbeat_stale_seconds    120
+llm.sentences_per_batch           5
+llm.avoid_examples_per_item       3
+```
+
+`heartbeat_stale_seconds > heartbeat_interval_seconds`를 config 로드 시
+검증한다(같으면 정상 worker가 주기적으로 `stale`로 보고된다).
+
+교차 참조·서술을 맞춘 문서: `spec/02_ARCHITECTURE.md`(provider/model 출처
+한 줄), `spec/04_SECURITY_AND_DATA.md`(env 절 신설),
+`06_LEARNING_ENGINE.md`(Ready invariant 범위, enqueue 지점 2곳, Pool
+Fallback 3단계 payload, generated item 한계),
+`11_OBSERVABILITY.md`(수집 항목의 저장 위치 표), `12_TEST_PLAN.md`(unit
+6건 + integration 8건), `13_ACCEPTANCE_CRITERIA.md`(수치 없는 기준 7줄),
+`.env.example`(새 환경변수 2개).
+
+새 ADR: `docs/decisions/ADR-017-worker-heartbeat-storage.md`,
+`docs/decisions/ADR-016-llm-provider-selection.md`.
+
+같은 확정에서 드러난 인접 공백 하나도 함께 닫았다:
+`user_sentence_candidates.status = queued`는 **MVP에 만드는 경로가 없다**
+(worker가 candidate를 만들지 않고 materialization은 곧바로 `ready`를 쓴다).
+값과 partial unique index 조건은 그대로 두고 쓰지 않는다는 사실만 명시했다
+(`04_DB_SPEC.md`).
+
+#### Wave 3 구현 보고 반영 --- provider 주입과 stub (같은 후속 보완)
+
+구현자가 보고한 **ADR 간 정면 충돌 1건**과 파생 확정 2건을 닫았다. 새 버전
+번호를 만들지 않는다. **새 테이블·새 컬럼·새 config 키는 없다.**
+
+-   **[18] `LLM_PROVIDER = stub`을 구현할 앱 코드가 존재하지 않았다**
+    (`spec/04_SECURITY_AND_DATA.md`의 `LLM provider 자격증명 (MVP 확정)`이
+    canonical, `08_LLM_SPEC.md`의 `Provider 선택과 model 출처`,
+    ADR-016의 `개정` 절): ADR-016은 `LLM_PROVIDER = openai | stub`에 기본값
+    `stub`을 두었고, ADR-015는 `StubProvider`를 `app/`에 두는 것을 명시적으로
+    거부했다(구현체 1개 상한). 그 결과 `build_provider`가 `openai` 하나만
+    만들어 **기본 설정으로 worker를 띄우면 `ProviderConfigError`**였다. 두
+    의도는 양립하므로 **주입으로 해소한다.** 프로세스 진입점
+    (`scripts/run_worker.py`)이 env를 읽어 `build_provider(name, api_key=...)`로
+    만든 provider를 worker loop에 **인자로** 넘기고, 테스트는 같은 자리에
+    `backend/tests/`의 test double을 넣는다. 그래서 claim / lease / validation /
+    저장 / completed는 실제 코드로 돌고 provider 호출만 대체된다. 확정:
+    `LLM_PROVIDER`의 **허용값은 `openai` 하나, 기본값 없음**이며 미설정·미지원
+    값·키 없음은 전부 worker 부팅 실패다. `APP_ENV = production`이면 실패한다는
+    검사는 **없앤다** --- 선택할 mock이 앱 코드에 없으므로 런타임 검사보다 강한
+    구조적 보장이 남는다(Public Demo의 "structurally impossible"과 같은 형태).
+    기본값을 `openai`로 두지 않는 이유는 ADR-016 원안이 막으려던 위험(키가
+    놓인 개발 머신에서 유료 호출이 먼저 일어남)이 그대로 살아나기 때문이다.
+-   **[19] `stub`이 남는 자리** (`08_LLM_SPEC.md`, `04_DB_SPEC.md`의
+    `prompt_versions`): env 값에서 사라지고 **provenance 값으로만** 남는다.
+    `prompt_versions.provider` / `provenance_json.provider = "stub"`은 test
+    double이 만든 콘텐츠라는 뜻이고 테스트 fixture만 그 행을 만든다. stub
+    응답도 똑같은 deterministic validation을 통과해야 저장된다는 규칙은
+    그대로다.
+-   **[20] `build_provider`가 `api_key`를 인자로 받는다** (ADR-015의
+    `provider abstraction의 상한`, ADR-016의 `개정` 4): `app/llm/`이
+    `app.settings`를 읽으면 G11(a)를 어기고 테스트가 값을 주입할 수 없다.
+    환경변수를 **읽는** 유일한 지점은 worker 진입점이고 `build_provider`는
+    key를 **client에 넣는** 유일한 지점이다. ADR-015의 "API key를 읽는 유일한
+    지점"이라는 표현을 그렇게 정정했다. provider SDK는 구현체 모듈 안에서만
+    import하며 SDK 버전은 명세가 아니라 의존성 manifest가 정한다.
+
+ADR-015의 "키 없이 완주라는 요구는 명세 어디에도 없다"는 서술도 정정했다.
+`12_TEST_PLAN.md`의 integration 목록과 `13_ACCEPTANCE_CRITERIA.md`가 실제로
+그것을 요구한다. 결론(`app/`에 mock을 두지 않는다)은 바뀌지 않는다 --- 그
+요구를 만족시키는 것이 env 값이 아니라 주입이라는 것이 이번 확정이다.
+
+교차 참조·서술을 맞춘 문서: `spec/02_ARCHITECTURE.md`(허용값 한 줄),
+`04_DB_SPEC.md`(`prompt_versions.provider`의 `stub` 주석),
+`12_TEST_PLAN.md`(integration 2건 수정 + request 경로 SDK 미적재 조건),
+`13_ACCEPTANCE_CRITERIA.md`(mock 선택 불가 기준 1줄), `.env.example`.
+
+개정한 ADR: `docs/decisions/ADR-016-llm-provider-selection.md`(`개정` 절),
+`docs/decisions/ADR-015-llm-worker-module-boundaries.md`(진입점 표기,
+`build_provider` 시그니처, 정정 1건). 새 ADR은 없다.
+
+#### Wave 3 구현 보고 반영 --- unknown token과 G12 문구 (같은 후속 보완)
+
+구현이 명세 없이 내린 판단 4건을 명세에 확정했다. 새 버전 번호를 만들지
+않는다. **새 테이블·새 컬럼·새 config 키는 없다.** 네 건 모두 구현된 동작을
+그대로 명세화한 것이므로 구현 변경은 없다.
+
+-   **[21] provider가 `usage`를 주지 않으면 token은 `null`이고 0이 아니다**
+    (`09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`가 canonical): 0은
+    "호출했는데 토큰을 안 썼다"는 거짓이고 그 거짓이 그대로 daily ceiling
+    판정에 들어간다. 누적은 **sticky-null**이다 --- 한 attempt의 token을
+    모르면 그 job의 총계는 계속 `null`이며, 아는 부분까지 집계에서 빠진다.
+    부분 합을 적으면 그 숫자가 **총계처럼** 보이기 때문에 "모른다" 쪽으로
+    기운다. 손실은 `max_job_attempts`로 유계이고, 정확히 하려면 호출 단위
+    기록이 필요한데 그것은 이미 같은 절이 MVP에서 만들지 않기로 한 것이다.
+-   **[22] `daily_token_limit`은 unknown token에서 fail-closed다**
+    (같은 절 + `14_CONFIGURATION.md` 한 단락): 오늘 호출한 job 중 token이
+    `null`인 것이 하나라도 있으면 한도에 **도달한 것으로 본다**(신규
+    generation 중단). 하한을 한도와 비교하는 것은 한도를 지키는 척하는
+    것이고, `null`을 0으로 뭉개면 한도를 켜 둔 운영자가 상한 없는 청구서를
+    받는다 --- 이 키가 막으라고 있는 유일한 사건이다. `null = limit
+    disabled`와 모순되지 않는다: `null`은 판정을 하지 않는다는 뜻이고
+    fail-closed는 한도를 **켜 둔** 경우에만 적용된다. 멈춤은 UTC 자정에
+    해소되고 off-switch가 문서화된 기본값이며, 학습 세션은 Ready Pool로 계속
+    돈다(불변식 #1). 멈춘 이유가 한도 자체가 아닐 수 있으므로 멈춤 로그에
+    token이 `null`인 job 수를 함께 싣는다. **`daily_request_limit`은
+    영향받지 않는다** --- 호출 수는 항상 셀 수 있다.
+-   **[23] `result_ref` 구조에서 token이 nullable이다**
+    (`04_DB_SPEC.md`의 `result_ref 구조`): `usage.input_tokens` /
+    `usage.output_tokens`는 **정수 또는 `null`**이라고 서술을 맞췄다. 예시
+    JSON은 그대로 두고(구체적 인스턴스다) 타입만 명시했다. 기록·누적 규칙과
+    ceiling 판정은 [21][22]가 canonical이다.
+-   **[24] ADR-015 G12에서 정적으로 검사 불가능한 절을 뺐다**
+    (`docs/decisions/ADR-015-llm-worker-module-boundaries.md`): "enqueue
+    모듈이 `generation_jobs` INSERT 외에 아무것도 하지 않는다"는 AST guard로
+    검사할 수 없다. 검사할 수 없는 것을 정적 guard 문구에 두면 guard가
+    지키는 범위가 실제보다 넓어 보인다. G12를 (a) jobs 모듈 import
+    allowlist / (b) enqueue 모듈은 `app.llm`을 import하지 않는다 /
+    (c) `BackgroundTasks` 금지로 **번호를 매겨 갈랐고**, 빠진 절반은
+    `정적과 런타임의 분담`이 런타임 테스트로 받는다: request 경로가 worker
+    loop와 job runner를 실행하지 않는다(`12_TEST_PLAN.md`의 Integration에
+    항목 추가). 기존 `no_outbound_network()` +
+    `assert_no_provider_import()`는 provider 쪽을 이미 덮는다.
+
+`cached tokens` 판정: **MVP 필수가 아니다**(`11_OBSERVABILITY.md`).
+`MVP 필수 범위` 목록이 닫힌 집합이고 거기에 없다. MVP는 기록하지 않으며
+`usage` 구조에 키를 추가하지 않는다 --- 그 구조는 `04_DB_SPEC.md`가 MVP
+확정으로 못박았으므로, 필요해지면 명세를 먼저 고친다. 문서 맨 위 `LLM:`
+줄의 `cached tokens`는 장기 지표 쪽이다. 기존 문구("provider가 값을 줄 때만
+담고")가 필수처럼 읽혔던 것을 여기서 닫았다.
+
+교차 참조·서술을 맞춘 문서: `09_BACKGROUND_JOBS.md`(canonical 4개 bullet),
+`04_DB_SPEC.md`(nullable 서술), `11_OBSERVABILITY.md`(nullable token +
+`cached tokens` 판정), `14_CONFIGURATION.md`(fail-closed 한 단락),
+`12_TEST_PLAN.md`(unit 1건 + integration 1건).
+
+개정한 ADR: `ADR-015`(G12 분할 + 런타임 분담 한 단락). 새 ADR은 없다 ---
+[21][22]는 되돌리기 비싼 결정이 아니라 canonical 절 하나로 뒤집을 수 있고,
+그 절이 근거를 이미 담고 있다.
+
+#### Wave 3 구현 보고 반영 --- cost 누적과 "무엇이 관측하는가" (같은 후속 보완)
+
+구현·검증에서 드러난 **명세 문구가 사실과 다른 지점 4건**을 고쳤다. 새 버전
+번호를 만들지 않는다. **새 테이블·새 컬럼·새 config 키는 없다.** 네 건 모두
+문구 정정이며 구현 변경을 요구하지 않는다.
+
+-   **[25] `estimated_cost_usd`의 누적 규칙이 없었다**
+    (`09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`가 canonical): 누적
+    규칙이 `provider_calls`와 token에만 걸려 있고 sticky-null 문단의 주어도
+    token이어서, cost는 "채운다"는 서술만 있었다. cost도 **token과 같은
+    규칙**(attempt 합, 한 attempt를 모르면 sticky-null)임을 못박았다. 마지막
+    attempt 값으로 덮어쓰면 retry한 job의 비용이 실제의 1/attempt로 보인다.
+    같은 규칙이므로 한 함수로 구현한다 --- 구현은 `jobs/queue._accumulate`를
+    int/float 공용으로 두어 규칙을 한 곳에만 둔다. 함께: **cost는 관측
+    항목이며 ceiling 판정에 들어가지 않는다.** 한도는 `daily_request_limit`과
+    `daily_token_limit` 둘뿐이고 fail-closed([22])는 `daily_token_limit`
+    전용이다. cost로 판정하면 단가표를 모른다는 것만으로 생성이 멈추는데,
+    단가표는 명세가 담지 않기로 한 것이므로 그 멈춤은 해소할 수단이 없다.
+    `04_DB_SPEC.md`는 이미 cost를 nullable로 적고 기록 규칙을 09에 위임하므로
+    고치지 않았다.
+-   **[26] duplicate corpus의 `quarantined` 포함을 hash로 관측할 수 없다**
+    (`12_TEST_PLAN.md` unit 1건; 규칙 자체는 `08_LLM_SPEC.md`의
+    `duplicate 비교 corpus`가 canonical): 명세가 "격리된 문장과 같은 문장을
+    생성하면 `duplicate_hash`로 탈락한다"를 관측 방법으로 적었으나 그것으로는
+    규칙을 검증할 수 없다. `jobs/persistence`의 저장 직전 hash 대조가
+    `sentences.status`를 보지 않으므로 corpus에서 `quarantined`를 빼도 같은
+    문장은 여전히 `duplicate_hash`로 탈락한다(실증: 사유 코드만 보는 동안에는
+    corpus에서 `quarantined`를 빼도 관련 테스트가 전부 통과했다). 관측
+    요구를 **"탈락이 corpus 비교(11번)에서 났다는 것까지 단정한다"**로 고쳤고,
+    두 경로를 갈라 보려면 backstop 쪽 탈락이 `detail`로 식별되어야 한다는
+    조건을 명시했다. 그 식별 수단이 없으면 이 규칙은 **similarity(12번)로만**
+    관측된다 --- near-copy에는 persistence 대응물이 없으므로 corpus만이 그것을
+    거부할 수 있다. 구현은 backstop 탈락의 `detail`에 표식을 붙여 식별 수단을
+    두었다(`jobs/persistence`); `detail` 형식은 명세가 규정하지 않는다
+    (`rejected`의 **사유 코드** 집합만 `08_LLM_SPEC.md`가 canonical이다).
+-   **[27] ADR-015가 달성 불가능한 것을 주장했다**
+    (`ADR-015`의 `정적과 런타임의 분담`): "request를 보내는 **모든** 테스트가
+    `no_outbound_network()` 안에서 돈다"는 참이 될 수 없다. 테스트 DSN이 unix
+    socket이고 unix socket 연결도 그 헬퍼가 거부하는 `socket.socket.connect`를
+    지나가므로, 요청이 새 pooled 커넥션을 여는 다중 커넥션
+    fixture(`committed_api` --- job → worker → pool을 실제로 밟는 것들)는
+    provider와 무관한 이유로 실패한다. 단일 커넥션 fixture에서 통하는 것은
+    커넥션이 이미 열려 재사용되기 때문이다. 문구를 **단일 커넥션 fixture로
+    한정**하고, fixture에 의존하지 않는 일반 메커니즘으로 별도 프로세스 검사
+    (`test_a_fresh_api_process_loads_neither_the_provider_module_nor_the_sdk`)를
+    지목했다.
+-   **[28] "`sys.modules`에 적재되지도 않는다"는 in-process로 검사 불가능하다**
+    (`12_TEST_PLAN.md` Integration 1건): provider 구현체 모듈을 절대 집합
+    검사에 넣을 수 없다 --- 그 모듈을 직접 검사하는 테스트가 최상위에서
+    import하므로 full run에서는 수집 시점에 이미 `sys.modules`에 있고, 넣으면
+    모든 호출 지점이 영구히 실패한다. in-process 쪽은 **블록 전후 delta**("이
+    요청이 `app.llm*`을 새로 적재했는가")로 관측하고 --- 이것이 `app/jobs/`가
+    `app.llm`을 합법적으로 import해서 생기는 G4의 맹점도 덮는다 --- 문자 그대로의
+    요구는 **별도 프로세스** 테스트가 받는다고 적었다. 이 문장이 없으면 다음
+    사람이 절대 집합 헬퍼를 "고치고" provider 테스트의 top-level import를 지운다.
+
+교차 참조·서술을 맞춘 문서: `09_BACKGROUND_JOBS.md`(cost 누적 + ceiling 제외
+2개 bullet), `12_TEST_PLAN.md`(unit 1건 + integration 1건 문구 정정).
+개정한 ADR: `ADR-015`(런타임 분담 문구 한정). 새 ADR은 없다 --- 네 건 모두
+관측 가능성에 대한 사실 정정이거나 기존 canonical 절 안의 규칙 확장이다.
+
+#### Wave 3 구현 보고 반영 --- target 수 상한의 출처 (같은 후속 보완)
+
+구현·검증에서 드러난 **명세 내부 불일치 1건**을 고쳤다. 새 버전 번호를 만들지
+않는다. **새 테이블·새 컬럼·새 config 키는 없고 구현 변경도 요구하지 않는다**
+--- 코드가 맞고 명세 문구가 틀렸다.
+
+-   **[29] validation 검사 5는 리터럴 숫자로, 검사 10은 config 키로 같은
+    상한을 적고 있었다** (`08_LLM_SPEC.md`의
+    `target 수 상한의 출처와 검사 10의 지위`가 canonical): 검사 5는 "target
+    LearningItem 수 1\~2", 검사 10은 "신규 target item 수가 configured max 이하
+    (`learning.max_new_items_per_sentence`)"였고,
+    `06_LEARNING_ENGINE.md`는 **전체** target 수를 그 키에 묶는다. 리터럴을
+    남기는 쪽은 택하지 않았다 --- 학습 정책값 하드코딩 금지에 어긋나고, 키를
+    1로 낮추면 리터럴 "2"가 06의 규칙과 정면충돌한다(06은 전체 target 1개를
+    요구하는데 08은 2개를 통과시킨다). 따라서 "1\~2"는 **기본값을 인라인으로
+    적은 것**으로 판정하고, 검사 5를 "1 이상
+    `learning.max_new_items_per_sentence` 이하(기본값 2)"로 고쳤다. 하한 1은
+    config가 아닌 고정값으로 유지했다 --- target이 없는 문장은 어떤 candidate도
+    만들지 못한다. 함께: 신규 target 수는 항상 전체 target 수 이하이므로 두
+    상한이 한 키에서 오는 동안 **검사 10은 구조적으로 발화하지 않는다**는
+    사실을 적었다(구현이 회귀 테스트로 고정해 둔 사실이다). 검사 10을
+    지우지는 않았다 --- 두 검사가 세는 대상이 다르고(전체 target vs 신규
+    target) 상한이 분리되면 즉시 유효해지는 backstop이며, 구현도 그래서 두
+    상한을 별도 인자로 들고 있다(`app/llm/validation.py`의 `SentencePolicy`).
+    **상한 분리는 MVP 범위가 아니다**; 분리하는 변경이 들어오면 그때 검사 10의
+    handler 경로 테스트를 추가해야 한다는 조건만 적었다. 검사 번호는
+    재배열하지 않았다 --- 다른 문서와 테스트가 번호로 참조한다.
+
+교차 참조·서술을 맞춘 문서: `14_CONFIGURATION.md`(강제되는 값을 검사하는 곳이
+5번과 10번 둘 다라는 사실 정정. `preferred_new_items_per_sentence`가 선호값이지
+강제 상한이 아니라는 나머지 논지는 그대로다),
+`06_LEARNING_ENGINE.md`(`role별 규칙`의 bullet 하나. 문장당 target 수 상한의
+**생성 시점** 대응물을 10번이 아니라 **5번**으로 정정했다 --- 06의 규칙은 전체
+target 수를 말하므로 신규 수를 세는 10번이 아니고, 10번이 발화하지 않는다고
+명문화한 뒤에는 발화하지 않는 검사를 자기 대응물로 가리키게 된다. "둘은 같은
+config 키를 쓰지만 적용 지점이 다르다"는 요지는 여전히 사실이므로 그대로 뒀다).
+새 ADR은 없다 --- 명세 문구가 구현과 다른 절에 어긋난 것을 맞춘 사실 정정이며
+새 설계 결정이 아니다.

@@ -24,6 +24,10 @@ iPhone / Browser PWA
 -   모든 외부 LLM provider 호출은 **background worker에서만** 발생한다.
     FastAPI request handler는 provider를 synchronous 호출하지 않는다
     (`mvp-01-core/08_LLM_SPEC.md`)
+-   provider **구현 선택**은 환경변수 `LLM_PROVIDER`(MVP 허용값 `openai`
+    하나, 기본값 없음)이고 **모델명**은 `prompt_versions` 행에서 온다. 모델명을 코드나 config
+    YAML에 고정하지 않는다(`mvp-01-core/08_LLM_SPEC.md`의
+    `Provider 선택과 model 출처`, `04_SECURITY_AND_DATA.md`, ADR-016)
 
 ## Future-safe providers
 

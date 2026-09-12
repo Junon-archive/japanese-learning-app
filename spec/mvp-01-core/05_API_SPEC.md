@@ -478,10 +478,25 @@ components.worker.status    unknown | ok | stale    + last_heartbeat_at nullable
     (`spec/04_SECURITY_AND_DATA.md`). 상세는 서버 로그로만 남긴다.
 -   `version`에 빌드 환경 변수나 설정값을 덧붙이지 않는다.
 
-**미결:** worker heartbeat를 어디에 저장하는지는 `04_DB_SPEC.md`에 아직
-없다. 저장 방식은 **Wave 3(job queue 구현) 시점에 확정한다.** 그 전까지
-`components.worker.status`는 `unknown`을 반환하며, 이를 위해 테이블이나
-컬럼을 미리 만들지 않는다.
+**worker heartbeat의 저장 위치는 Wave 3에서 확정했다.**
+`worker_heartbeats` 테이블의 `last_heartbeat_at` **최대값 하나**를 읽는다
+(`04_DB_SPEC.md`, `09_BACKGROUND_JOBS.md`의 `Worker Heartbeat`,
+ADR-015).
+
+``` text
+행이 없다                                                -> unknown
+now - last_heartbeat_at <= jobs.heartbeat_stale_seconds  -> ok
+그 밖                                                     -> stale
+```
+
+-   `unknown`은 worker가 한 번도 heartbeat를 쓴 적이 없다는 뜻이다(예:
+    worker를 아직 띄우지 않은 개발 환경). 위 규칙대로 그 자체로는
+    `degraded`가 아니고, `stale`은 `degraded`다.
+-   임계값은 `14_CONFIGURATION.md`의 `jobs.heartbeat_stale_seconds`다.
+    **응답에 임계값이나 worker 이름, provider 이름을 넣지 않는다**(이
+    endpoint는 설정값을 노출하지 않는다).
+-   DB를 확인할 수 없으면 `database`가 `down | unknown`이고 worker도
+    `unknown`이다. worker 상태를 위해 별도 연결을 만들지 않는다.
 
 ## API Principles
 

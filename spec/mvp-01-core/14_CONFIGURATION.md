@@ -69,14 +69,27 @@ jobs:
   # 22_ 결정
   max_job_attempts: 3
   retry_backoff_base_seconds: 60
+  # worker loop (09_BACKGROUND_JOBS.md)
+  poll_interval_seconds: 5
+  # running에 갇힌 job을 회수하는 임계값 (stale running 회수)
+  claim_lease_seconds: 300
+  # 생존 신호 쓰기 간격과 /api/health의 stale 판정 임계값 (Worker Heartbeat)
+  heartbeat_interval_seconds: 30
+  heartbeat_stale_seconds: 120
 
 llm:
   # Public Demo는 static frontend fixture이므로 API/worker를 사용하지
   # 않는다. 이 flag는 구조적 분리에 더한 안전장치이며 true로 바꾸지 않는다.
   public_demo_generation_enabled: false
   # null = limit disabled. production에서 필요 시 integer를 설정한다.
+  # 판정은 UTC 일 경계다 (09_BACKGROUND_JOBS.md의 usage 기록과 일 경계).
   daily_request_limit: null
   daily_token_limit: null
+  # generation batch 1회가 요청하는 문장 수이자 대상 item 수 상한
+  # (08_LLM_SPEC.md의 GENERATE_SENTENCE_BATCH 대상 선정)
+  sentences_per_batch: 5
+  # 프롬프트에 싣는 item당 기존 문장 예시 수 (08_LLM_SPEC.md의 요청 context)
+  avoid_examples_per_item: 3
 ```
 
 초기 승인값이지 영구적인 학습 법칙이 아니다.
@@ -106,6 +119,37 @@ backlog 모드의 비율 키(`backlog_review_ratio`, `backlog_new_ratio`,
 
 `probe_min_gap_presentations`와 `candidate_materialization_batch_size`는
 양의 정수다.
+
+`preferred_new_items_per_sentence`는 **생성 프롬프트에 싣는 선호값**이지
+강제 상한이 아니다. 유일한 소비처는 `GENERATE_SENTENCE_BATCH`의 요청
+context다(`08_LLM_SPEC.md`의 `요청 context`). 강제되는 값은
+`max_new_items_per_sentence` 하나이며 그것을 검사하는 곳은 생성 validation
+**5번과 10번** 그리고 materialization의 target 부착 규칙이다
+(`06_LEARNING_ENGINE.md`). 5번은 문장의 target 전부를, 10번은 그중 신규 item만
+세며 MVP에서는 두 상한이 이 키 하나에서 오므로 10번이 구조적으로 발화하지
+않는다(`08_LLM_SPEC.md`의 `target 수 상한의 출처와 검사 10의 지위`).
+선호값을 어겼다는 이유로 생성된 문장을 버리지 않는다 --- 버리면 비용을 치른
+자연스러운 문장을 숫자 하나 때문에 폐기하게 된다.
+
+`jobs`의 새 키(`poll_interval_seconds`, `claim_lease_seconds`,
+`heartbeat_interval_seconds`, `heartbeat_stale_seconds`)와 `llm`의
+`sentences_per_batch` / `avoid_examples_per_item`은 모두 **양의 정수**다.
+추가로 다음을 config 로드 시 검증한다.
+
+``` text
+heartbeat_stale_seconds > heartbeat_interval_seconds
+```
+
+임계값이 쓰기 간격보다 작거나 같으면 정상 동작 중인 worker가 주기적으로
+`stale`로 보고된다. `claim_lease_seconds`는 job 하나의 최대 실행 시간보다
+넉넉해야 하며(짧으면 살아 있는 job을 회수한다) 그 관계는 코드로 검증할 수
+없으므로 운영 판단이다.
+
+`daily_token_limit`이 integer일 때, 그날 token 총량을 **모르는** job이 하나라도
+있으면 한도는 도달한 것으로 본다(fail-closed). 이는 `null = limit disabled`와
+모순되지 않는다 --- `null`은 판정 자체를 하지 않는다는 뜻이고 fail-closed는
+한도를 **켜 둔** 경우에만 적용된다. `daily_request_limit`은 영향받지 않는다.
+근거와 판정식은 `09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`가 canonical이다.
 
 `srs`, `session`, `user`, `content`, `jobs`, `llm` 섹션의 키는 비율 합
 검증 대상이 아니다.

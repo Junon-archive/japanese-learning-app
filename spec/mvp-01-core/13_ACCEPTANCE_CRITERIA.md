@@ -30,7 +30,18 @@
 -   tap마다 live LLM 불필요
 -   모든 provider 호출이 worker에서만 발생
 -   background batch generation/validation/Ready Pool 동작
--   flag된 content가 다시 Ready로 선택되지 않음
+-   flag된 content가 다시 Ready로 선택되지 않음 (격리된 문장과 같은 문장이
+    generation으로 다시 만들어지지도 않음)
+-   생성된 문장의 **모든 tappable item에 설명이 있음** (tap했을 때 빈
+    화면이 되지 않음)
+-   실제 provider 키 없이도 generation 경로 전체를 실행·검증할 수 있고, 그
+    mock 구현이 앱 코드에 없으므로 어떤 환경에서도 배포 설정으로 선택될 수 없음
+-   worker 생존 여부를 `/api/health`가 구분해 보고함 (한 번도 신호가 없음 /
+    살아 있음 / 신호가 끊김)
+-   crash로 `running`에 갇힌 job이 자동으로 회수되어 다시 실행 가능해짐
+-   영구 오류 job과 attempt 소진 job이 서로 다른 종료 상태로 남음
+-   하루 provider 사용량 한도에 도달하면 신규 generation이 멈추고 학습
+    세션은 계속 진행됨
 -   신규 사용자가 seed 기반으로 첫 세션을 시작 가능
 -   **Demo는 backend/DB/LLM과 구조적으로 분리** (paid LLM 0, private data
     접근 0)

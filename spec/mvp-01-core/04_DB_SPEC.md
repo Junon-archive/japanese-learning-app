@@ -84,6 +84,11 @@ password 요구사항(최소 길이 등)의 canonical 정의는
 -   metadata_json
 -   created_at
 
+**MVP에 `origin = generated` 행을 만드는 경로는 없다.** worker는 요청에
+실어 보낸 item만 annotate하고 새 `learning_items`를 만들지 않는다
+(`08_LLM_SPEC.md`의 `worker가 만들지 않는 것`). 값은 컬럼 허용값으로
+남긴다.
+
 Future-ready: item senses, register, active-use/recognize-only, richer
 difficulty, morphology provenance, audio metadata, production mastery는
 모두 Future다(`spec/future/` 참조). MVP에서는 nullable 확장 여지만 남기고
@@ -110,6 +115,12 @@ Sentence는 **global content entity**다. "이 사용자에게 지금 어떤
 -   created_at
 
 `sentences`에는 `user_id`도, 사용자별 role도 두지 않는다.
+
+`status`의 MVP 사용 범위: seed 적재와 generation 모두 검증을 마친 뒤
+`validated`로 INSERT하므로 **`draft` 행을 만드는 경로가 없다**
+(`08_LLM_SPEC.md`의 `탈락한 콘텐츠의 처리`). `quarantined`는 content
+flag가 만들고(`10_ERROR_HANDLING.md`), `retired`는 MVP에 경로가 없다. 값은
+남기되 쓰지 않는 것을 명시한다.
 
 ## sentence_items
 
@@ -294,6 +305,14 @@ queued  콘텐츠가 아직 없어 worker가 생성 중인 candidate (Wave 3)
 ready   Ready invariant를 만족해 지금 그대로 제시할 수 있다
 ```
 
+Wave 3을 확정하고 보니 **`queued`를 만드는 경로는 MVP에 없다.** worker는
+candidate를 만들지 않고(`08_LLM_SPEC.md`의 `worker가 만들지 않는 것`),
+materialization은 이미 검증된 콘텐츠만 투영하므로 곧바로 `ready`를 쓴다
+(`06_LEARNING_ENGINE.md`). `sentences.status = draft`와 같은 취급이다.
+값과 아래 partial unique index의 조건은 그대로 두되 **MVP에서 쓰지 않는
+것을 명시한다.** 조건에서 `queued`를 빼면 나중에 이 상태를 도입할 때
+index를 다시 만들어야 하고, 두어도 지금 동작에 영향이 없다.
+
 유일성: materialization이 idempotent해야 하므로 **아직 소비되지 않은
 candidate에 partial unique index**를 건다.
 
@@ -459,7 +478,8 @@ audio 관련 event는 MVP에 없다(`00_SCOPE.md` 참조).
 -   job_type (허용값은 아래 목록이 canonical)
 -   status: `queued | running | validated | completed | retry | failed | dead_letter`
 -   payload_json
--   result_ref nullable (생성된 sentence/explanation id 집합)
+-   result_ref nullable (JSON. 생성된 sentence/explanation id 집합 +
+    provider usage. 구조는 아래 `result_ref 구조`)
 -   idempotency_key **UNIQUE**
 -   retry_count
 -   max_attempts
@@ -499,6 +519,57 @@ provider task이므로 축을 하나로 유지한다.
     `ANALYZE_SENTENCE`를 Future로 보낸 기준과 같다(`08_LLM_SPEC.md`).
     필요해지면 이 목록을 먼저 고치고 migration으로 값을 추가한다.
 
+job_type별 **enqueue 트리거·`idempotency_key` 형식·`payload_json` 구조의
+canonical 표는 `09_BACKGROUND_JOBS.md`의
+`Enqueue 트리거와 idempotency key`**에 있다. 여기에 중복해 두지 않는다.
+
+### result_ref 구조 (MVP 확정)
+
+``` json
+{
+  "sentence_ids": [12, 13],
+  "sentence_item_explanation_ids": [55],
+  "rejected": [{"reason": "duplicate_hash"}],
+  "usage": {
+    "provider_calls": 1,
+    "input_tokens": 1234,
+    "output_tokens": 567,
+    "estimated_cost_usd": null,
+    "last_call_at": "2026-09-12T04:05:06Z"
+  }
+}
+```
+
+`usage.input_tokens` / `usage.output_tokens`는 **정수 또는 `null`**이다.
+`null`은 "이 job이 쓴 총량을 모른다"(provider가 `usage`를 주지 않은 호출이
+있었다)이고 0과 다르다. `estimated_cost_usd`도 nullable이다.
+
+`usage`가 **token/request 사용량의 저장 위치**다. 별도 usage/metrics
+테이블을 만들지 않는다. 기록 규칙과 daily ceiling 판정(UTC 일 경계)은
+`09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`가 canonical이고,
+`rejected`의 사유 코드 집합은 `08_LLM_SPEC.md`가 canonical이다.
+
+## worker_heartbeats
+
+worker 프로세스의 생존 신호다. `GET /api/health`의 `components.worker`가
+읽는 유일한 소스다(`05_API_SPEC.md`, `09_BACKGROUND_JOBS.md`의
+`Worker Heartbeat`).
+
+-   worker_name (text, PK)
+-   last_heartbeat_at (timestamptz NOT NULL)
+
+MVP의 worker는 하나이며 `worker_name = 'default'` 한 행만 존재한다. 그래도
+이름을 PK로 두는 이유는 upsert 대상이 필요하고, worker가 둘이 되는 날
+migration 없이 행만 늘면 되기 때문이다. 사용자 종속 테이블이 아니므로
+`user_id`가 없다.
+
+**왜 새 테이블인가.** `generation_jobs`의 최근 활동으로 추론하는 대안은
+`components.worker`가 답해야 하는 질문에 답하지 못한다. 개인용 앱에서는
+하루 종일 job이 0건인 것이 정상이고, 그때 "일이 없다"와 "worker가 죽었다"가
+같은 관측이 된다. 즉 heartbeat가 가장 필요한 순간에 판정이 항상 틀린다.
+근거와 버린 대안 전체는
+`docs/decisions/ADR-017-worker-heartbeat-storage.md`.
+
 ## content_flags
 
 -   id
@@ -517,11 +588,55 @@ flag의 실제 동작(quarantine, evidence 무효화)은
 ## prompt_versions
 
 -   id
--   task_type
--   version
--   model/provider metadata
+-   task_type (허용값은 `generation_jobs.job_type`과 같은 3개)
+-   version (형식은 아래)
+-   provider (실행 구현 이름. `openai | stub`. `stub`은 테스트 fixture만
+    만드는 값이며 `LLM_PROVIDER`의 허용값이 아니다 --- `08_LLM_SPEC.md`의
+    `Provider 선택과 model 출처`)
+-   model (모델 문자열. business logic에 하드코딩하지 않는다)
 -   created_at
 -   **active** (현재 사용 중인 버전 표시)
+
+Unique: `(task_type, version)`.
+
+### version 형식과 active 유일성 (MVP 확정)
+
+``` text
+task_type                version 형식
+GENERATE_SENTENCE_BATCH  sentence_gen_v{n}
+GENERATE_REVIEW_CONTEXT  review_context_v{n}
+EXPLAIN_ITEM             explain_item_v{n}
+```
+
+이름은 `spec/06_LLM_ENGINEERING_PRINCIPLES.md` 6번의 것을 그대로 쓰고
+`{n}`은 1부터 증가하는 정수다. **prompt 본문이 바뀌면 반드시 `{n}`을
+올린다.** 같은 version 행의 내용을 바꿔 재등록하면
+`sentences.provenance_json.prompt_version`이 어떤 prompt를 가리키는지
+사후에 알 수 없다.
+
+`active`는 task_type당 최대 하나이며 **partial unique index**로 강제한다.
+
+``` text
+UNIQUE (task_type) WHERE active
+```
+
+"가장 최근 행이 active"로 추론하지 않는다. 추론하면 옛 version으로
+되돌리는 rollback이 불가능해진다.
+
+### 등록 절차
+
+prompt 본문은 Git에 파일로 두고(`backend/app/llm/prompts/`) DB에는
+registry만 둔다. 등록은 **idempotent upsert 스크립트**로 하며 직접
+INSERT하지 않는다.
+
+``` text
+1. (task_type, version) 으로 upsert (provider / model 갱신)
+2. 같은 task_type의 다른 행을 active = false 로 내린 뒤
+   대상 행을 active = true 로 올린다 (한 트랜잭션)
+```
+
+worker는 실행 시점에 `active = true` 행을 읽는다. 없으면 그 job은
+`dead_letter`다(`09_BACKGROUND_JOBS.md`의 `failed와 dead_letter의 경계`).
 
 ## Seed Data
 

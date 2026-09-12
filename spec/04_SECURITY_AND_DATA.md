@@ -60,6 +60,44 @@ APP_ENV = local | development | production
 -   인증 없이 열리는 API endpoint 목록은
     `spec/mvp-01-core/05_API_SPEC.md`의 공통 규칙이 canonical이다.
 
+### LLM provider 자격증명 (MVP 확정)
+
+``` text
+LLM_PROVIDER = openai            기본값 없음. 미설정이면 worker 부팅 실패
+LLM_API_KEY  = provider secret   LLM_PROVIDER = openai 일 때 필수
+```
+
+-   둘 다 `.env` 계열 환경변수다. 학습 정책이 아니라 배포·secret 설정이므로
+    `spec/mvp-01-core/14_CONFIGURATION.md`의 YAML에 두지 않는다(`APP_ENV`와
+    같은 취급). 모델명은 이 둘 어디에도 없고 `prompt_versions` 행에서 온다
+    (`spec/mvp-01-core/08_LLM_SPEC.md`의 `Provider 선택과 model 출처`).
+-   **`LLM_API_KEY`는 worker 프로세스에만 주입한다.** FastAPI 프로세스는
+    provider client를 만들지 않으므로(같은 문서의 `LLM 호출 경계`) 키가
+    필요 없고, 주지 않는 것이 그 경계를 배포 수준에서 한 번 더 강제한다.
+-   **허용값은 실제 provider 이름뿐이고 MVP에는 `openai` 하나다.** mock을
+    가리키는 값은 없다 --- 실제 키 없이 generation 경로를 실행하는 수단은
+    env 값이 아니라 **worker 진입점에 provider를 주입하는 것**이며 그 mock은
+    `backend/tests/`의 test double이다(`spec/mvp-01-core/08_LLM_SPEC.md`의
+    `Provider 선택과 model 출처`). 앱 코드에 mock 구현이 없으므로
+    production이 mock으로 도는 일은 런타임 검사가 아니라 구조로 불가능하다.
+-   **fail-closed 부팅 검사는 두 가지다.** `LLM_PROVIDER`가 없거나 허용값이
+    아니면 worker가 부팅에 실패한다. `LLM_PROVIDER = openai`인데
+    `LLM_API_KEY`가 없어도 부팅 실패다. 어느 쪽도 조용히 다른 값으로
+    승격시키지 않는다 --- 그러면 운영자가 모르는 사이에 유료 호출 경로가
+    열린다.
+-   **기본값을 두지 않는 이유**는 값을 잊은 환경에서 유료 호출이 먼저
+    일어나지 않게 하기 위해서다. 기본값 `openai`는 키가 어쩌다 존재하는
+    개발 머신에서 곧바로 호출을 시작시킨다. 값이 없을 때의 결과는 "worker가
+    뜨지 않는다"이고 학습 세션은 Ready Pool로 계속 돈다.
+-   **환경변수를 읽는 지점은 worker 진입점 하나다.** 진입점이 두 값을 읽어
+    `build_provider(name, api_key=...)`로 client를 만들고 worker loop에
+    인자로 넘긴다. `app/llm/`은 환경을 읽지 않는다(ADR-015의 G11(a)).
+-   PWA bundle과 API 응답에 이 값들을 노출하지 않는다. `/api/health`도
+    provider 이름을 반환하지 않는다.
+
+근거와 버린 대안은 `docs/decisions/ADR-016-llm-provider-selection.md`(원안의
+`stub` env 값을 폐기한 이유는 그 문서의 `개정` 절).
+
 ## Authentication (MVP 확정)
 
 이 앱은 SaaS가 아니다.

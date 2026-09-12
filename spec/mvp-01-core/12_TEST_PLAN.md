@@ -41,6 +41,33 @@ FSRS wrapper, validation, duplicate, auth.
 -   client 발급 `client_event_id`는 **UUIDv4만** 통과한다. v5(=server 발급
     형식)·v1·v7을 body에 넣으면 422이고 event가 기록되지 않는다
     (`05_API_SPEC.md`의 `키 공간 분리`)
+-   structured output parsing: 요청이 보내지 않은 `item_ref`가 응답에 오면
+    그 문장이 `unknown_item_ref`로 탈락한다 (`08_LLM_SPEC.md`)
+-   validation 9번의 범위: **target이 아닌** tappable item의 explanation이
+    비어 있으면 그 문장이 `missing_explanation`으로 탈락한다
+    (`08_LLM_SPEC.md`의 `Ready invariant와 같은 범위`)
+-   `normalized_hash`: 전각/반각·공백만 다른 두 문장이 같은 해시를 내고,
+    seed loader와 generation 경로가 **같은 함수**로 같은 값을 만든다
+-   duplicate corpus에 `quarantined`가 포함된다(`08_LLM_SPEC.md`의
+    `duplicate 비교 corpus`): 격리된 문장과 같은 문장을 생성하면
+    `duplicate_hash`로 탈락한다. **탈락이 corpus 비교(11번)에서 났다는 것까지
+    단정한다** --- `jobs/persistence`의 저장 직전 hash 대조가 같은 사유 코드를
+    내고 그것은 `sentences.status`를 보지 않으므로, 사유 코드만 보면 corpus에서
+    `quarantined`를 빼도 이 항목이 통과한다. 두 경로를 갈라 보려면 backstop 쪽
+    탈락이 `detail`로 식별되어야 한다. 그 식별 수단이 없으면 이 규칙은
+    **similarity(12번)로만** 관측된다 --- near-copy에는 persistence 대응물이
+    없으므로 corpus만이 그것을 거부할 수 있다. `near_original`로 생성된 문장은
+    similarity(12번)로 탈락하지 않는다
+-   `failed`와 `dead_letter` 분기: active `prompt_versions` 행이 없으면 첫
+    시도에서 `dead_letter`이고 `retry_count`가 늘지 않는다. provider
+    timeout은 `retry`이며 소진하면 `failed`다
+    (`09_BACKGROUND_JOBS.md`의 `failed와 dead_letter의 경계`)
+-   daily ceiling 초과 시 job을 claim하지 않는다: job이 `queued`로 남고
+    `retry_count`가 늘지 않으며 provider가 호출되지 않는다
+-   `daily_token_limit`이 설정된 상태에서 오늘 token이 `null`인 job이 있으면
+    한도 미달이어도 claim하지 않는다(fail-closed). `daily_request_limit`만
+    설정된 경우에는 영향이 없다
+    (`09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`)
 
 ## Integration
 
@@ -51,7 +78,19 @@ Alembic from empty DB.
 
 -   Ready invariant: explanation이 없는 item을 포함한 문장은 candidate가
     `ready`가 되지 않는다.
--   API request handler 경로에서 provider client가 호출되지 않는다.
+-   API request handler 경로에서 provider client가 호출되지 않는다. 실제
+    구현체 모듈과 provider SDK가 `sys.modules`에 적재되지도 않는다
+    (ADR-015의 `정적과 런타임의 분담`). **"적재되지 않는다"를 in-process의
+    절대 집합 검사로 확장하지 않는다** --- provider 구현체는 그것을 직접
+    검사하는 테스트 모듈이 최상위에서 import하므로 full run에서는 수집
+    시점에 이미 `sys.modules`에 있고, 절대 집합에 그 이름을 넣으면 모든 호출
+    지점이 영구히 실패한다. in-process 쪽은 **블록 전후의 delta**("이 요청이
+    `app.llm*`을 새로 적재했는가")로 관측하고, 문자 그대로의 요구는 **별도
+    프로세스** 테스트가 검사한다(같은 절).
+-   request 경로가 **worker loop와 job runner를 실행하지 않는다.** enqueue만
+    일어나고 job 실행 진입점은 한 번도 불리지 않는다. 정적 guard(G12)가 검사할
+    수 있는 것은 import까지이므로 "실제로 안 불렸다"는 이 테스트가 증명한다
+    (ADR-015의 `정적과 런타임의 분담`).
 -   flag → quarantine → 이후 selection 제외.
 -   login 실패 응답이 사유와 무관하게 동일하다 (없는 `login_id` /
     틀린 password / 비활성 계정 → 같은 401, 본문 구분 없음).
@@ -96,6 +135,34 @@ Alembic from empty DB.
     presentation은 그 item의 `item_exposures`를 만들지 않고,
     `anchor_sentence_id`가 그 문장으로 기록되며, 이어진 materialization이
     `presentation_role = new` candidate를 **같은 문장**으로 만든다.
+-   stale `running` 회수: `started_at`을 `claim_lease_seconds` 이전으로
+    되돌린 `running` job이 다음 worker loop에서 `retry`가 되고
+    `retry_count`가 1 증가하며 다시 claim된다. 소진하면 `failed`다
+    (`09_BACKGROUND_JOBS.md`의 `stale running 회수`).
+-   claim이 중복 실행을 만들지 않는다: 같은 job을 두 번 claim하려 하면
+    두 번째는 아무 job도 얻지 못한다(`FOR UPDATE SKIP LOCKED`).
+-   heartbeat: worker loop 1회가 `worker_heartbeats`를 upsert하고
+    `/api/health`가 `worker.status = ok`를 반환한다.
+    `last_heartbeat_at`을 임계값 이전으로 되돌리면 `stale` +
+    `status = degraded`이고, 행이 없으면 `unknown`이며 `degraded`가 아니다.
+-   enqueue 트리거: explanation이 없는 문장만 가진 item으로
+    materialization을 돌리면 `EXPLAIN_ITEM`이 누락된 `sentence_item`당 1건
+    생기고, 같은 날 재실행이 중복 생성하지 않는다(idempotency key).
+-   현재 `context_stage` 조건에 맞는 문장이 없으면
+    `GENERATE_REVIEW_CONTEXT`가 `(item, stage)`당 1건 enqueue된다. 그 item에
+    문장이 아예 없으면 대신 Pool Fallback 3단계의
+    `GENERATE_SENTENCE_BATCH`가 enqueue된다.
+-   `backend/tests/`의 test double provider를 worker loop에 주입해
+    `GENERATE_SENTENCE_BATCH` job을 끝까지 실행하면 `sentences` / `sentence_items` / `sentence_item_spans` /
+    `sentence_item_explanations`가 만들어지고, 이어진 materialization이 그
+    문장으로 `status = ready` candidate를 만든다. 네트워크 호출은 0건이다.
+-   같은 job을 두 번 실행해도(at-least-once) 문장이 두 벌 저장되지 않는다.
+-   worker 진입점은 `LLM_PROVIDER`가 없거나 허용값이 아니면 부팅에
+    실패한다. `LLM_PROVIDER = openai`인데 `LLM_API_KEY`가 없어도 실패한다.
+    두 경우 모두 provider client를 만들지 않는다
+    (`spec/04_SECURITY_AND_DATA.md`의 `LLM provider 자격증명 (MVP 확정)`).
+-   job 완료 후 `result_ref.usage`가 채워지고, 그 합이 daily ceiling 판정에
+    쓰인다. 판정 경계는 UTC 일이다.
 
 ## Core E2E Scenario
 
