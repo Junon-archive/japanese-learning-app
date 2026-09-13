@@ -11,24 +11,30 @@
  *     토글하면 "호출 후 공개"가 거짓이 된다 --- 번역 문자열이 이미 화면 DOM에 있으므로
  *     `translation_revealed` event가 "사용자가 번역을 봤다"를 뜻하지 못한다. payload에
  *     번역 필드 자체가 없으므로(`types.ts`의 `Presentation`) 만들 재료도 없다.
- * 2.  **`explanation_revealed`는 패널이 실제로 렌더된 뒤에 보낸다.** 탭과 동시에 보내면
- *     두 event가 항상 1:1이 되어 "탭했지만 표시되지 않은 경우"를 구분할 수 없다. click이
- *     실패하면 `item_clicked`만 남아야 하므로 **그 경로에서는 보내지 않는다**
- *     (05_API_SPEC.md의 `explanation_revealed를 언제 보내는가`).
- * 3.  **같은 item의 패널을 접었다 펴도 event가 늘지 않는다.** 다시 열 때 `/click`도
- *     부르지 않는다 --- 캐시한 설명을 그대로 그린다. client key는 UUIDv4라 매번 보내면
- *     그때마다 새 event가 쌓여 raw history가 UI 조작 횟수를 세게 된다.
+ * 2.  **`explanation_revealed`는 설명 내용이 떠나지 않은 화면의 DOM(설명 시트)에 삽입된 직후에
+ *     보낸다.** 시트 애니메이션의 끝(`transitionend`)을 기다리지 않는다. 탭과 동시에 보내면 두
+ *     event가 항상 1:1이 되어 "탭했지만 표시되지 않은 경우"를 구분할 수 없다. click이 실패했거나
+ *     **응답 전에 `signal`이 abort됐으면** 설명을 그리지 않고 보내지 않는다 --- `item_clicked`만
+ *     남는다(05_API_SPEC.md의 `explanation_revealed를 언제 보내는가`).
+ * 3.  **시트를 닫고 같은 표현을 다시 탭해도 event가 늘지 않는다.** 다시 열 때 `/click`도
+ *     부르지 않는다 --- 캐시한 설명으로 시트 내용을 다시 만든다. client key는 UUIDv4라 매번
+ *     보내면 그때마다 새 event가 쌓여 raw history가 시트 여닫기 횟수를 세게 된다. 첫 `/click`이
+ *     실패한 item의 다시 탭은 재열기가 아니라 첫 요청의 재시도다.
  * 4.  **self-report와 probe는 선택이다.** 둘 다 잠기거나 실패해도 문장 진행을 막지
  *     않는다. probe는 세션의 중심 UI가 아니므로 `skip`으로 즉시 지나갈 수 있다.
  * 5.  **실패를 성공처럼 보이지 않게 한다.** 실패한 자리에 문구를 남기고, 번역이 오지
  *     않으면 빈 번역 노드를 만들지 않는다(10_ERROR_HANDLING.md).
  * 6.  타이머도 주기 호출도 없다. 사용자가 누른 것만 나간다.
+ * 7.  **시트는 item 설명에만 쓴다.** 번역은 시트가 아니라 문장 아래 인라인 영역이다
+ *     (03_UI_UX_SPEC.md의 `화면 전환과 시트`).
  */
 
 import type { ContentFlagReason, ExplicitSignal, Explanation, Presentation } from '../types'
 import { renderExplanationPanel } from './explanation'
 import { renderFlagControl } from './flag'
 import { renderProbe } from './probe'
+import type { SheetHandle } from './sheet'
+import { openSheet } from './sheet'
 
 /** 호출부가 실패를 처리한 결과. 컨트롤러는 이것으로 화면에 무엇을 남길지 정한다. */
 export type InteractionFailure =
@@ -58,7 +64,7 @@ export type InteractionOps = {
 export type InteractionsHandle = {
   /** 호출부가 슬롯에 붙이는 노드. 이 컨트롤러는 자기 노드 안만 고친다. */
   element: HTMLElement
-  /** 문장의 tappable span이 눌렸다. */
+  /** 문장의 tappable span이 눌렸다. 시트를 닫으면 그때 포커스가 있던 요소로 돌려준다. */
   tapItem: (sentenceItemId: number) => void
   /** 상태를 그대로 다시 그린다. 잠금(비활성) 상태를 복원하는 용도다. */
   refresh: () => void
@@ -66,6 +72,17 @@ export type InteractionsHandle = {
 
 const ALREADY_RECORDED = '이미 기록했습니다.'
 const TRANSLATION_FAILED = '문장 뜻을 표시하지 못했습니다.'
+const EXPLANATION_SHEET_TITLE = '표현 설명'
+
+export type InteractionsOptions = {
+  /**
+   * 이 문장을 보여주는 동안 살아 있다. abort되면(화면을 떠났거나 문장이 바뀌었다) 늦게 온 `/click`
+   * 응답으로 설명을 그리지 않고 `explanation_revealed`도 보내지 않으며, 열린 시트를 닫는다.
+   */
+  signal: AbortSignal
+  /** 설명 시트를 붙일 화면 요소. 화면이 떼어지면 시트도 함께 사라진다. */
+  sheetContainer: HTMLElement
+}
 
 type ItemState = {
   explanation: Explanation
@@ -77,7 +94,10 @@ type ItemState = {
 export function createInteractions(
   presentation: Presentation,
   ops: InteractionOps,
+  options: InteractionsOptions,
 ): InteractionsHandle {
+  const { signal, sheetContainer } = options
+
   const box = document.createElement('div')
   box.className = 'interactions'
 
@@ -86,7 +106,8 @@ export function createInteractions(
   const revealAttempted = new Set<number>()
   const pending = new Set<string>()
 
-  let openItemId: number | null = null
+  /** 지금 열린 설명 시트. 닫히면 null이다. */
+  let sheet: { itemId: number; body: HTMLElement; handle: SheetHandle } | null = null
   let itemFailure: string | null = null
   /** reveal 응답을 받기 전에는 **문자열 자체가 없다.** */
   let translation: string | null = null
@@ -106,25 +127,9 @@ export function createInteractions(
   function render(): void {
     const parts: HTMLElement[] = [renderTranslationArea()]
 
-    const open = openItemId === null ? undefined : items.get(openItemId)
-    if (openItemId !== null && open !== undefined) {
-      const itemId = openItemId
-      parts.push(
-        renderExplanationPanel({
-          explanation: open.explanation,
-          reported: open.reported,
-          alreadyRecorded: open.alreadyRecorded,
-          failure: open.failure,
-          onSelfReport: (value) => {
-            sendSelfReport(itemId, value)
-          },
-          onClose: () => {
-            openItemId = null
-            render()
-          },
-        }),
-      )
-    }
+    // 열린 시트의 내용도 지금 상태로 다시 만든다(기록 뒤 잠금, 실패 문구).
+    if (sheet !== null) sheet.body.replaceChildren(explanationPanel(sheet.itemId))
+
     if (itemFailure !== null) parts.push(failureLine(itemFailure))
 
     if (presentation.probe !== null) {
@@ -169,6 +174,57 @@ export function createInteractions(
     box.replaceChildren(...parts)
   }
 
+  /** 설명 내용. 열 때마다, 상태가 바뀔 때마다 캐시한 설명에서 새로 만든다. */
+  function explanationPanel(itemId: number): HTMLElement {
+    const item = items.get(itemId)!
+    return renderExplanationPanel({
+      explanation: item.explanation,
+      // 문장 속 표면형. 서버가 잘라 준 segment의 text를 순서대로 이을 뿐 offset을 계산하지 않는다.
+      surface: presentation.render_segments
+        .filter((segment) => segment.sentence_item_id === itemId)
+        .map((segment) => segment.text)
+        .join(''),
+      reported: item.reported,
+      alreadyRecorded: item.alreadyRecorded,
+      failure: item.failure,
+      onSelfReport: (value) => {
+        sendSelfReport(itemId, value)
+      },
+    })
+  }
+
+  /**
+   * 설명 시트를 열고 **내용이 DOM에 들어간 직후** `explanation_revealed`를 보낸다(item당 1회).
+   * abort된 뒤에는 열지 않는다.
+   */
+  function showExplanation(itemId: number, returnFocusTo: HTMLElement | null): void {
+    if (signal.aborted) return
+    sheet?.handle.close()
+
+    const body = document.createElement('div')
+    body.className = 'sheet-body'
+    body.append(explanationPanel(itemId))
+    const opened = {
+      itemId,
+      body,
+      handle: openSheet({
+        container: sheetContainer,
+        title: EXPLANATION_SHEET_TITLE,
+        body,
+        returnFocusTo,
+        onClose: () => {
+          if (sheet === opened) sheet = null
+        },
+      }),
+    }
+    sheet = opened
+    sendExplanationRevealed(itemId)
+  }
+
+  signal.addEventListener('abort', () => {
+    sheet?.handle.close()
+  })
+
   /**
    * 번역 자리. `translation`이 null이면 **버튼 하나뿐이고 번역 노드가 없다.**
    *
@@ -192,8 +248,9 @@ export function createInteractions(
       return area
     }
 
+    // 문장 바로 아래 인라인 펼침. 시트가 아니다. 움직임은 CSS뿐이고 표시가 그 끝을 기다리지 않는다.
     const text = document.createElement('p')
-    text.className = 'translation'
+    text.className = 'translation inline-expand'
     text.textContent = translation
     area.append(text)
     return area
@@ -236,41 +293,38 @@ export function createInteractions(
   }
 
   function tapItem(sentenceItemId: number): void {
-    itemFailure = null
-
-    if (openItemId === sentenceItemId) {
-      // 접기. event를 보내지 않는다.
-      openItemId = null
-      render()
-      return
-    }
+    if (signal.aborted) return
+    // 시트를 닫으면 포커스를 돌려줄 곳. 문장 렌더러는 누른 요소를 넘기지 않으므로 지금 포커스를 쓴다.
+    const returnFocusTo = document.activeElement as HTMLElement | null
 
     if (items.has(sentenceItemId)) {
-      // 다시 펴기. `/click`도 `explanation-revealed`도 보내지 않는다(모듈 주석 3).
-      openItemId = sentenceItemId
-      render()
+      // 재열기. 캐시로 시트 내용을 다시 만든다. `/click`도 `explanation-revealed`도 보내지 않는다(모듈 주석 3).
+      showExplanation(sentenceItemId, returnFocusTo)
       return
     }
 
+    itemFailure = null
     void perform(
       `click:${sentenceItemId}`,
       async () => {
         const explanation = await ops.clickItem(sentenceItemId)
+        // 응답 전에 떠났다. 그리지 않고 `explanation_revealed`도 보내지 않는다(`item_clicked`만 남는다).
+        if (signal.aborted) return
         items.set(sentenceItemId, {
           explanation,
           reported: null,
           alreadyRecorded: false,
           failure: null,
         })
-        openItemId = sentenceItemId
-        // **먼저 렌더한다.** 다음 줄의 event는 "설명이 표시됐다"를 뜻한다.
         render()
-        // **이 task 안에서 await하지 않는다.** 아래 `sendExplanationRevealed` 참조.
-        sendExplanationRevealed(sentenceItemId)
+        // 시트에 내용을 넣은 직후 보낸다. **이 task 안에서 await하지 않는다.** 아래
+        // `sendExplanationRevealed` 참조.
+        showExplanation(sentenceItemId, returnFocusTo)
       },
       (failure) => {
         // click이 실패한 경로만 여기로 온다. `explanation_revealed`는 자기 실패를
         // 스스로 삼키므로 이 핸들러에 닿지 않는다.
+        if (signal.aborted) return
         itemFailure = failureText(failure)
       },
     )

@@ -176,7 +176,11 @@ export function mount(ctx: PublicScreenContext): void {
       return
     }
 
-    const handle = createInteractions(entry.presentation, demoOps(entry))
+    // fixture 응답은 기다림이 없으므로 문장별 signal을 따로 두지 않는다. 화면 signal이면 충분하다.
+    const handle = createInteractions(entry.presentation, demoOps(entry), {
+      signal: ctx.signal,
+      sheetContainer: screen,
+    })
     sentenceSlot.replaceChildren(
       renderSentence(entry.presentation.render_segments, (sentenceItemId) => {
         handle.tapItem(sentenceItemId)

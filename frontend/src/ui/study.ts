@@ -137,6 +137,8 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
   let session: StudySession | null = null
   let presentation: Presentation | null = null
   let interactions: InteractionsHandle | null = null
+  /** 지금 문장의 수명. 문장을 치우거나 화면을 떠나면 abort된다. */
+  let sentence: AbortController | null = null
   let busy = false
 
   // ----------------------------------------------------------------------
@@ -173,11 +175,29 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     )
   }
 
+  /**
+   * 문장 하나의 signal. 화면 signal이 abort되면 함께 abort되고, 문장을 치울 때도 abort된다. 그래서
+   * 다음 문장으로 넘어간 뒤 늦게 온 `/click` 응답이 지난 문장의 설명 시트를 열거나
+   * `explanation_revealed`를 보내지 못한다.
+   */
+  function sentenceSignal(): AbortSignal {
+    sentence?.abort()
+    const controller = new AbortController()
+    sentence = controller
+    signal.addEventListener('abort', () => {
+      controller.abort()
+    })
+    return controller.signal
+  }
+
   function showSentence(next: Presentation): void {
     presentation = next
     // 문장의 tappable span과 상호작용 영역은 서로 다른 슬롯에 있다. span이 눌리면 그
-    // 컨트롤러의 `tapItem`으로 들어간다.
-    const handle = createInteractions(next, interactionOps(next))
+    // 컨트롤러의 `tapItem`으로 들어간다. 설명 시트는 화면 전체를 덮으므로 화면 요소에 붙는다.
+    const handle = createInteractions(next, interactionOps(next), {
+      signal: sentenceSignal(),
+      sheetContainer: screen,
+    })
     interactions = handle
     sentenceSlot.replaceChildren(
       renderSentence(next.render_segments, (sentenceItemId) => {
@@ -190,7 +210,9 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
 
   function clearSentence(): void {
     presentation = null
-    // 컨트롤러를 놓는다. 응답이 늦게 도착해도 이미 떼어낸 자기 노드에만 그린다.
+    // 컨트롤러를 놓는다. 늦게 도착한 응답은 떼어낸 자기 노드에만 그리고, 설명 시트는 열지 않는다.
+    sentence?.abort()
+    sentence = null
     interactions = null
     sentenceSlot.replaceChildren()
     interactionSlot.replaceChildren()

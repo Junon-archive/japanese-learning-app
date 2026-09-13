@@ -247,14 +247,10 @@ button.reveal-translation {
   font-size: 13px;
 }
 
-/* 설명 패널 */
+/* 설명 시트의 내용. 시트가 테두리와 배경을 가진다. */
 .explain {
   display: grid;
   gap: 8px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
 }
 
 .item-head {
@@ -270,6 +266,12 @@ button.reveal-translation {
 }
 
 .reading {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.canonical-form {
+  margin-top: 4px;
   color: var(--muted);
   font-size: 13px;
 }
@@ -327,7 +329,6 @@ button.flag-reason {
   color: var(--muted);
 }
 
-button.explain-close,
 button.flag-open,
 button.flag-cancel {
   min-height: 40px;

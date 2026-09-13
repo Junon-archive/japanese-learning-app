@@ -7,18 +7,20 @@
  *     바꾸면 `renders no translation node before the reveal`이 빨개진다. 그 구조에서는
  *     번역 문자열이 이미 DOM에 있으므로 `translation_revealed` event가 "사용자가 번역을
  *     봤다"를 뜻하지 못한다.
- * -   `explanation-revealed`는 패널이 **렌더된 뒤에** 나가고, `click`이 실패한 경로에서는
- *     **나가지 않는다.** 하나로 합치거나 tap과 동시에 보내면 "탭했지만 표시되지 않은
- *     경우"가 관측되지 않는다(05_API_SPEC.md).
- * -   접었다 펴는 것은 event가 아니다. UI 조작 횟수가 raw history에 쌓이면 안 된다.
+ * -   `explanation-revealed`는 설명이 **시트에 삽입된 직후에** 나가고(`transitionend`를 기다리지 않는다),
+ *     `click`이 실패했거나 응답 전에 화면을 떠난(`signal` abort) 경로에서는 **나가지 않는다.** 하나로
+ *     합치거나 tap과 동시에 보내면 "탭했지만 표시되지 않은 경우"가 관측되지 않는다(05_API_SPEC.md).
+ * -   시트를 닫고 다시 여는 것은 event가 아니다. `/click`도 `explanation-revealed`도 presentation +
+ *     item당 1회다. UI 조작 횟수가 raw history에 쌓이면 안 된다.
+ * -   번역은 시트가 아니라 상호작용 영역 안의 인라인 노드다.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createInteractions } from '../../src/ui/interactions'
 import type { InteractionFailure, InteractionOps } from '../../src/ui/interactions'
 import type { Explanation, Presentation } from '../../src/types'
-import type { FakeElement } from './fake-dom'
-import { byClass, fakeDocument, flatText } from './fake-dom'
+import type { FakeDocument, FakeElement } from './fake-dom'
+import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
 
 const KOREAN = '연구실에 갈 생각이었지만 왠지 마음이 내키지 않아 집에 있었다.'
 
@@ -75,6 +77,7 @@ type Failures = Partial<Record<keyof InteractionOps, unknown>>
 function setup(
   failures: Failures = {},
   failure: InteractionFailure = { kind: 'message', text: '저장하지 못했습니다.' },
+  clickItem?: (sentenceItemId: number) => Promise<Explanation>,
 ) {
   const calls: string[] = []
   /** 렌더 상태를 호출 시점에 기록한다. "렌더된 뒤에 보냈는가"를 단정하려면 필요하다. */
@@ -88,11 +91,12 @@ function setup(
     clickItem: async (sentenceItemId) => {
       calls.push(`click:${sentenceItemId}`)
       if (reject('clickItem')) throw failures['clickItem']
+      if (clickItem !== undefined) return clickItem(sentenceItemId)
       return { ...EXPLANATION, sentence_item_id: sentenceItemId }
     },
     markExplanationRevealed: async (sentenceItemId) => {
       calls.push(`revealed:${sentenceItemId}`)
-      seenAtCall[`revealed:${sentenceItemId}`] = flatText(handle.element as unknown as FakeElement)
+      seenAtCall[`revealed:${sentenceItemId}`] = flatText(screen)
       if (reject('markExplanationRevealed')) throw failures['markExplanationRevealed']
     },
     revealTranslation: async () => {
@@ -119,13 +123,37 @@ function setup(
     },
   }
 
-  const handle = createInteractions(PRESENTATION, ops)
-  const element = handle.element as unknown as FakeElement
-  return { handle, element, calls, seenAtCall, reported, text: () => flatText(element) }
+  /** 실제 화면처럼 상호작용 영역을 담은 화면 요소. 설명 시트가 여기에 붙는다. */
+  const screen = createFakeElement('main')
+  const controller = new AbortController()
+  const handle = createInteractions(PRESENTATION, ops, {
+    signal: controller.signal,
+    sheetContainer: screen as unknown as HTMLElement,
+  })
+  const box = handle.element as unknown as FakeElement
+  screen.append(box)
+  return {
+    handle,
+    /** 화면 전체(상호작용 영역 + 시트). */
+    element: screen,
+    box,
+    controller,
+    calls,
+    seenAtCall,
+    reported,
+    text: () => flatText(screen),
+  }
 }
 
+function closeSheet(screen: FakeElement): void {
+  byClass(screen, 'sheet-close')[0]!.click()
+}
+
+let doc: FakeDocument
+
 beforeEach(() => {
-  vi.stubGlobal('document', fakeDocument())
+  doc = fakeDocument()
+  vi.stubGlobal('document', doc)
 })
 
 afterEach(() => {
@@ -154,6 +182,17 @@ describe('translation reveal', () => {
     expect(text()).toContain(KOREAN)
   })
 
+  it('shows the translation inline in the interaction area, not in a sheet', async () => {
+    const { element, box } = setup()
+
+    byClass(element, 'reveal-translation')[0]?.click()
+    await flush()
+
+    expect(byClass(element, 'sheet')).toEqual([])
+    expect(byClass(box, 'translation')).toHaveLength(1)
+    expect(byClass(box, 'translation')[0]!.classList.contains('inline-expand')).toBe(true)
+  })
+
   it('says it failed instead of showing an empty translation', async () => {
     const { element, text } = setup({ revealTranslation: new Error('boom') })
 
@@ -178,15 +217,50 @@ describe('translation reveal', () => {
 })
 
 describe('item tap', () => {
-  it('sends explanation-revealed only after the panel is on screen', async () => {
-    const { handle, calls, seenAtCall } = setup()
+  it('sends explanation-revealed right after the explanation is in the sheet, without transitionend', async () => {
+    const { handle, element, calls, seenAtCall } = setup()
 
     handle.tapItem(5512)
     await flush()
 
     expect(calls).toEqual(['click:5512', 'revealed:5512'])
-    // 그 시점의 화면에 설명이 이미 있었다 --- "표시된 뒤에 보낸다"가 참이다.
+    // 그 시점의 화면(시트 안)에 설명이 이미 있었다 --- "표시된 뒤에 보낸다"가 참이다. 이 스텁에서는
+    // transitionend가 오지 않는다.
     expect(seenAtCall['revealed:5512']).toContain(EXPLANATION.core_meaning)
+    const sheet = byClass(element, 'sheet')
+    expect(sheet).toHaveLength(1)
+    expect(sheet[0]!.getAttribute('role')).toBe('dialog')
+    expect(flatText(sheet[0]!)).toContain(EXPLANATION.core_meaning)
+  })
+
+  it('draws nothing and sends no explanation-revealed when the screen was left before the response', async () => {
+    let answer: (explanation: Explanation) => void = () => {}
+    const { handle, element, controller, calls, text } = setup({}, undefined, () =>
+      new Promise<Explanation>((resolve) => {
+        answer = resolve
+      }),
+    )
+
+    handle.tapItem(5512)
+    await flush()
+    controller.abort()
+    answer(EXPLANATION)
+    await flush()
+
+    // `item_clicked`만 남는다.
+    expect(calls).toEqual(['click:5512'])
+    expect(byClass(element, 'sheet')).toEqual([])
+    expect(text()).not.toContain(EXPLANATION.core_meaning)
+  })
+
+  it('closes an open sheet when the signal is aborted', async () => {
+    const { handle, element, controller } = setup()
+
+    handle.tapItem(5512)
+    await flush()
+    controller.abort()
+
+    expect(byClass(element, 'sheet-scrim')[0]!.classList.contains('is-closing')).toBe(true)
   })
 
   it('sends no explanation-revealed when the click fails', async () => {
@@ -223,31 +297,67 @@ describe('item tap', () => {
   })
 
   it('does not retry an explanation_revealed that failed', async () => {
-    // presentation당 1회를 **시도 기준**으로 센다(보수적 선택). 접었다 펴도 다시 보내지
+    // presentation당 1회를 **시도 기준**으로 센다(보수적 선택). 닫았다 다시 열어도 보내지
     // 않는다 --- 실패한 event는 영구 부재이고 auxiliary라 학습을 막지 않는다.
-    const { handle, calls } = setup({ markExplanationRevealed: new Error('409') })
+    const { handle, element, calls } = setup({ markExplanationRevealed: new Error('409') })
 
     handle.tapItem(5512)
     await flush()
+    closeSheet(element)
     handle.tapItem(5512)
+    closeSheet(element)
     handle.tapItem(5512)
     await flush()
 
     expect(calls).toEqual(['click:5512', 'revealed:5512'])
   })
 
-  it('collapses and reopens the panel without sending anything', async () => {
-    const { handle, calls, text } = setup()
+  it('closes the sheet and reopens it from the cache without sending anything', async () => {
+    const { handle, element, calls } = setup()
 
     handle.tapItem(5512)
     await flush()
-    handle.tapItem(5512) // 접기
-    expect(text()).not.toContain(EXPLANATION.core_meaning)
-    handle.tapItem(5512) // 다시 펴기
+    const first = byClass(element, 'explain')[0]
+    closeSheet(element)
+    expect(byClass(element, 'sheet-scrim').every((scrim) => scrim.classList.contains('is-closing'))).toBe(true)
+
+    handle.tapItem(5512) // 다시 탭
     await flush()
 
-    expect(text()).toContain(EXPLANATION.core_meaning)
+    const open = byClass(element, 'sheet-scrim').filter((scrim) => !scrim.classList.contains('is-closing'))
+    expect(open).toHaveLength(1)
+    expect(flatText(open[0]!)).toContain(EXPLANATION.core_meaning)
+    // 내용은 다시 만든 것이다. 숨겨 둔 노드를 재사용하지 않는다.
+    expect(byClass(open[0]!, 'explain')[0]).not.toBe(first)
     expect(calls).toEqual(['click:5512', 'revealed:5512'])
+  })
+
+  it('retries the first click when it failed, since that is not a reopen', async () => {
+    const failures: Failures = { clickItem: new Error('503') }
+    const { handle, element, calls } = setup(failures)
+
+    handle.tapItem(5512)
+    await flush()
+    delete failures.clickItem
+    handle.tapItem(5512)
+    await flush()
+
+    expect(calls).toEqual(['click:5512', 'click:5512', 'revealed:5512'])
+    expect(byClass(element, 'sheet')).toHaveLength(1)
+  })
+
+  it('returns focus to the tapped expression when the sheet closes', async () => {
+    const { handle, element } = setup()
+    const token = createFakeElement('button')
+    element.append(token)
+    token.focus()
+
+    handle.tapItem(5512)
+    await flush()
+    expect(doc.activeElement).not.toBe(token)
+    closeSheet(element)
+
+    expect(doc.activeElement).toBe(token)
   })
 
   it('treats a double tap as one click', async () => {
@@ -261,10 +371,11 @@ describe('item tap', () => {
   })
 
   it('keeps each item separate', async () => {
-    const { handle, calls } = setup()
+    const { handle, element, calls } = setup()
 
     handle.tapItem(5511)
     await flush()
+    closeSheet(element)
     handle.tapItem(5512)
     await flush()
 
@@ -391,7 +502,10 @@ describe('probe', () => {
   })
 
   it('is absent when the payload has no probe', () => {
-    const handle = createInteractions({ ...PRESENTATION, probe: null }, quietOps())
+    const handle = createInteractions({ ...PRESENTATION, probe: null }, quietOps(), {
+      signal: new AbortController().signal,
+      sheetContainer: createFakeElement('main') as unknown as HTMLElement,
+    })
     const element = handle.element as unknown as FakeElement
 
     expect(byClass(element, 'probe')).toEqual([])
