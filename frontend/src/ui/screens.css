@@ -520,3 +520,225 @@ button.history-back {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* --- 누름 반응 --------------------------------------------------------- */
+/* :active에만 반응한다. hover 효과는 두지 않는다. 기본 탭 하이라이트를 끄는 대신
+   :focus-visible 윤곽선을 둔다. disabled는 반응하지 않는다. tappable 표현(.token)은
+   크기를 줄이지 않는다 --- 문장 줄바꿈이 흔들린다. 배경색 변화만 쓴다. */
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    scale var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(79, 109, 245, 0.55);
+  outline-offset: 2px;
+}
+
+/* showScreen·openSheet가 포커스를 옮기는 제목. 조작 대상이 아니다. */
+[tabindex='-1']:focus {
+  outline: none;
+}
+
+button:not(.token):active:not(:disabled) {
+  scale: var(--press-scale-small);
+  background-color: #eceff3;
+}
+
+button.primary:active:not(:disabled),
+button.secondary:active:not(:disabled) {
+  scale: var(--press-scale);
+}
+
+button.primary:active:not(:disabled) {
+  background-color: #3f5be0;
+}
+
+/* --- 화면 진입 --------------------------------------------------------- */
+/* 들어오는 화면만 10px 아래에서 떠오르며 나타난다. 나가는 화면은 바로 떼어진다. */
+
+@keyframes nc-screen-in {
+  from {
+    opacity: 0;
+    translate: var(--enter-translate);
+  }
+}
+
+.screen-enter {
+  animation: nc-screen-in var(--motion-slow) var(--ease-move);
+}
+
+/* --- 상단바 ------------------------------------------------------------ */
+
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 56px;
+  padding: 0 8px;
+  background: rgba(244, 246, 248, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* 화면의 첫 줄로 들어갈 때 .screen의 안쪽 여백을 걷어 낸다. */
+.screen > .topbar {
+  margin: -20px -18px 0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.topbar-button {
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.topbar-brand {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.topbar-login {
+  color: var(--accent);
+}
+
+/* 확인 중. 흐리게만 하고 글자는 읽히게 둔다. */
+.topbar-login:disabled {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* --- 설명 시트 --------------------------------------------------------- */
+/* 가림막은 투명도만(기본), 시트는 아래에서 올라온다(느림). 닫힘은 .is-closing의
+   transition이고, DOM에서 떼는 것만 transitionend를 기다린다. */
+
+@keyframes nc-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes nc-sheet-in {
+  from {
+    opacity: var(--sheet-from-opacity);
+    translate: var(--sheet-translate);
+  }
+}
+
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(15, 20, 30, 0.4);
+  animation: nc-fade-in var(--motion-base) var(--ease-standard);
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+
+.sheet {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 20px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--panel);
+  animation: nc-sheet-in var(--motion-slow) var(--ease-move);
+  transition:
+    translate var(--motion-slow) var(--ease-move),
+    opacity var(--motion-slow) var(--ease-standard);
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 17px;
+}
+
+.sheet-scrim.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  animation: none;
+}
+
+.sheet-scrim.is-closing .sheet {
+  opacity: var(--sheet-from-opacity);
+  translate: var(--sheet-translate);
+  animation: none;
+}
+
+/* --- 번역 인라인 펼침 --------------------------------------------------- */
+/* 응답을 받은 뒤 만든 노드에 붙인다. 숨겨 둔 노드를 펼치는 규칙이 아니다. */
+
+@keyframes nc-expand-in {
+  from {
+    opacity: 0;
+    translate: var(--expand-translate);
+  }
+}
+
+.inline-expand {
+  animation: nc-expand-in var(--motion-base) var(--ease-move);
+}
+
+/* --- 토스트 ------------------------------------------------------------ */
+/* 정보성 안내만. #app 밖에 붙고 다음 문장 버튼 위에 뜬다. */
+
+@keyframes nc-toast-in {
+  from {
+    opacity: 0;
+    translate: var(--toast-translate);
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 60;
+  width: fit-content;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 13px 18px;
+  border-radius: 16px;
+  background: #1f2733;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  animation: nc-toast-in var(--motion-base) var(--ease-move);
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    translate var(--motion-base) var(--ease-move);
+}
+
+.toast.is-leaving {
+  opacity: 0;
+  translate: var(--toast-translate);
+  pointer-events: none;
+  animation: none;
+}

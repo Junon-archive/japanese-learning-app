@@ -74,3 +74,44 @@ export function renderNotice(
 
   return box
 }
+
+/** 토스트가 떠 있는 시간. 03_UI_UX_SPEC.md의 `토스트와 오류`. */
+const TOAST_MS = 4000
+
+let currentToast: HTMLElement | null = null
+
+/**
+ * 한 번 사라지는 **정보성** 안내(예: 세션 시작 안내, `기록했어요`). **오류에는 쓰지 않는다** ---
+ * 사라지는 오류는 놓치고 재시도 버튼을 붙일 수 없으므로 오류는 `renderNotice`로 그 자리에 둔다.
+ *
+ * `#app` 밖(`document.body`)에 붙는다. 화면이 바뀌어도 안내가 끊기지 않고 학습 진행을 막지 않는다.
+ * 4초 뒤, 또는 탭하면 바로 사라지기 시작한다. 한 번에 하나만 둔다. DOM에서 떼는 것은
+ * `transitionend`이고, 그 이벤트가 오지 않으면 다음 토스트가 뗀다.
+ */
+export function showToast(message: string): void {
+  currentToast?.remove()
+
+  const toast = document.createElement('div')
+  toast.className = 'toast'
+  toast.setAttribute('role', 'status')
+  toast.textContent = message
+  currentToast = toast
+
+  let leaving = false
+  function dismiss(): void {
+    if (leaving) return
+    leaving = true
+    clearTimeout(timer)
+    toast.classList.add('is-leaving')
+  }
+  const timer = setTimeout(dismiss, TOAST_MS)
+
+  toast.addEventListener('click', dismiss)
+  toast.addEventListener('transitionend', (event) => {
+    if (!leaving || event.target !== toast) return
+    toast.remove()
+    if (currentToast === toast) currentToast = null
+  })
+
+  document.body.append(toast)
+}

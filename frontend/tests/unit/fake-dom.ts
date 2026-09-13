@@ -4,17 +4,47 @@
  *
  * `src/ui/*`가 실제로 쓰는 API만 있다. 여기에 기능을 늘리기 전에 그 테스트가 정말
  * DOM을 필요로 하는지 먼저 생각한다(순수 함수로 뽑을 수 있으면 그쪽이 낫다).
+ *
+ * 실제 DOM과 맞춘 동작 몇 가지(화면 전환·시트 테스트가 기댄다):
+ *
+ * -   event는 부모로 올라간다(`parentNode` 사슬). `target`은 처음 받은 요소다.
+ * -   `append`/`replaceChildren`는 노드를 옛 부모에서 떼어 옮긴다.
+ * -   `focus()`는 자신이나 조상이 `inert`면 아무것도 하지 않고, 아니면 전역 `document`의
+ *     `activeElement`를 바꾼다.
+ * -   `transitionend`는 저절로 오지 않는다. 테스트가 `fire`로 흘리지 않으면 영영 없다.
  */
+
+export type FakeEvent = {
+  type: string
+  target: FakeElement
+  currentTarget: FakeElement
+  /** `keydown`의 키. 그 밖의 event에서는 ''. */
+  key: string
+  defaultPrevented: boolean
+  preventDefault: () => void
+  stopPropagation: () => void
+}
+
+export type FakeClassList = {
+  add: (...names: string[]) => void
+  remove: (...names: string[]) => void
+  contains: (name: string) => boolean
+}
 
 export type FakeElement = {
   tagName: string
   className: string
+  /** `className`을 원본으로 읽고 쓴다. */
+  classList: FakeClassList
   type: string
   lang: string
   textContent: string
   /** `<textarea>`. 실제 DOM처럼 입력값을 들고 있다. */
   value: string
   disabled: boolean
+  inert: boolean
+  scrollTop: number
+  parentNode: FakeElement | null
   children: FakeElement[]
   attributes: Record<string, string>
   style: Record<string, string>
@@ -22,24 +52,66 @@ export type FakeElement = {
   getAttribute: (name: string) => string | null
   append: (...nodes: FakeElement[]) => void
   replaceChildren: (...nodes: FakeElement[]) => void
-  addEventListener: (type: string, listener: () => void) => void
-  click: () => void
-  /** `click` 밖의 event(예: `input`)를 흘린다. */
-  fire: (type: string) => void
-  /** 로그인 화면이 첫 입력에 부른다. 스텁에서는 할 일이 없다. */
-  focus: () => void
+  remove: () => void
+  /** 태그 이름 선택자(`'h1'`)만 받는다. 자신은 빼고 후손에서 찾는다. */
+  querySelector: (selector: string) => FakeElement | null
+  addEventListener: (type: string, listener: (event: FakeEvent) => void) => void
+  click: () => FakeEvent
+  /** `click` 밖의 event(예: `input`, `keydown`, `transitionend`)를 흘린다. */
+  fire: (type: string, init?: { key?: string }) => FakeEvent
+  focus: (options?: unknown) => void
+}
+
+export type FakeDocument = {
+  createElement: (tagName: string) => FakeElement
+  documentElement: FakeElement
+  body: FakeElement
+  activeElement: FakeElement | null
+}
+
+const LISTENERS = new WeakMap<FakeElement, Record<string, ((event: FakeEvent) => void)[]>>()
+
+function detach(node: FakeElement): void {
+  const parent = node.parentNode
+  if (parent === null) return
+  parent.children = parent.children.filter((child) => child !== node)
+  node.parentNode = null
+}
+
+function isInert(element: FakeElement): boolean {
+  for (let node: FakeElement | null = element; node !== null; node = node.parentNode) {
+    if (node.inert) return true
+  }
+  return false
 }
 
 export function createFakeElement(tagName: string): FakeElement {
-  const listeners: Record<string, (() => void)[]> = {}
+  const listeners: Record<string, ((event: FakeEvent) => void)[]> = {}
+  const names = (): string[] => element.className.split(' ').filter((name) => name !== '')
   const element: FakeElement = {
     tagName: tagName.toUpperCase(),
     className: '',
+    classList: {
+      add(...added) {
+        element.className = [...new Set([...names(), ...added])].join(' ')
+      },
+      remove(...removed) {
+        element.className = names()
+          .filter((name) => !removed.includes(name))
+          .join(' ')
+      },
+      contains(name) {
+        return names().includes(name)
+      },
+    },
     type: '',
     lang: '',
     textContent: '',
     value: '',
     disabled: false,
+    inert: false,
+    scrollTop: 0,
+    parentNode: null,
     children: [],
     attributes: {},
     style: {},
@@ -50,28 +122,67 @@ export function createFakeElement(tagName: string): FakeElement {
       return element.attributes[name] ?? null
     },
     append(...nodes) {
-      element.children.push(...nodes)
+      for (const node of nodes) {
+        detach(node)
+        node.parentNode = element
+        element.children.push(node)
+      }
     },
     replaceChildren(...nodes) {
-      element.children = [...nodes]
+      for (const child of element.children) child.parentNode = null
+      element.children = []
+      element.append(...nodes)
+    },
+    remove() {
+      detach(element)
+    },
+    querySelector(selector) {
+      const wanted = selector.toUpperCase()
+      return descendants(element).find((node) => node !== element && node.tagName === wanted) ?? null
     },
     addEventListener(type, listener) {
       ;(listeners[type] ??= []).push(listener)
     },
     click() {
-      element.fire('click')
+      return element.fire('click')
     },
-    fire(type) {
-      for (const listener of listeners[type] ?? []) listener()
+    fire(type, init) {
+      let stopped = false
+      const event: FakeEvent = {
+        type,
+        target: element,
+        currentTarget: element,
+        key: init?.key ?? '',
+        defaultPrevented: false,
+        preventDefault() {
+          event.defaultPrevented = true
+        },
+        stopPropagation() {
+          stopped = true
+        },
+      }
+      for (let node: FakeElement | null = element; node !== null && !stopped; node = node.parentNode) {
+        event.currentTarget = node
+        for (const listener of LISTENERS.get(node)?.[type] ?? []) listener(event)
+      }
+      return event
     },
-    focus() {},
+    focus() {
+      if (isInert(element)) return
+      const doc = (globalThis as { document?: { activeElement?: unknown } }).document
+      if (doc !== undefined) doc.activeElement = element
+    },
   }
+  LISTENERS.set(element, listeners)
   return element
 }
 
 /** `vi.stubGlobal('document', fakeDocument())`로 쓴다. */
-export function fakeDocument(): { createElement: (tagName: string) => FakeElement } {
-  return { createElement: createFakeElement }
+export function fakeDocument(): FakeDocument {
+  const documentElement = createFakeElement('html')
+  const body = createFakeElement('body')
+  documentElement.append(body)
+  return { createElement: createFakeElement, documentElement, body, activeElement: null }
 }
 
 export function isTappable(element: FakeElement): boolean {
