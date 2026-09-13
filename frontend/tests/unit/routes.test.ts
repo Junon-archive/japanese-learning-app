@@ -4,7 +4,7 @@
  * 갈리는 지점:
  *
  * -   `''`와 `#/`는 선택 홈, `#/demo`는 Demo, 모르는 hash는 선택 홈이고 URL이 `#/`로 바뀐다(state는 null).
- * -   하위 경로는 그것을 허용한다고 선언한 route만 받는다(`#/kana`는 Wave 3에서 등록된다).
+ * -   하위 경로는 그것을 허용한다고 선언한 route만 받는다(`#/kana`).
  * -   `navigate`가 같은 hash에서도 화면을 다시 적용한다(hashchange가 오지 않으므로).
  * -   뒤로 가기(`hashchange`)로 공개 화면 사이를 오가고, 떠난 route의 늦은 동적 import는 화면을 덮지 못한다.
  * -   `hashchange` 리스너는 `routes.ts` 한 곳이다. 요청은 0건이다.
@@ -90,7 +90,7 @@ describe('resolveHash', () => {
     loadFailure: '',
     acceptsSubpath: true,
   }
-  const ROUTES = [...PUBLIC_ROUTES, KANA]
+  const ROUTES = [KANA, ...PUBLIC_ROUTES]
 
   it('reads an empty hash and #/ as the home', () => {
     expect(resolveHash('')).toEqual({ kind: 'home' })
@@ -122,8 +122,16 @@ describe('resolveHash', () => {
     expect(resolveHash('#/kanax', ROUTES)).toEqual({ kind: 'unknown' })
   })
 
-  it('does not know #/kana before the kana route is registered', () => {
-    expect(resolveHash('#/kana')).toEqual({ kind: 'unknown' })
+  it('finds the registered kana route with and without a subpath', () => {
+    for (const [hash, subpath] of [
+      ['#/kana', ''],
+      ['#/kana/hiragana', 'hiragana'],
+    ] as const) {
+      const resolved = resolveHash(hash)
+      expect(resolved.kind === 'route' && resolved.route.prefix).toBe('#/kana')
+      expect(resolved.kind === 'route' && resolved.subpath).toBe(subpath)
+    }
+    expect(resolveHash('#/kanax')).toEqual({ kind: 'unknown' })
     expect(resolveHash('#/unknown')).toEqual({ kind: 'unknown' })
   })
 })

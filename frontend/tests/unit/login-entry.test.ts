@@ -505,21 +505,35 @@ describe('leaving after logging in', () => {
 })
 
 describe('url values', () => {
-  const HOSTILE = ['#/<img src=x onerror=alert(1)>', '#/demo/<img src=x onerror=alert(1)>', '#/kana/<img src=x>']
+  function printed(): string {
+    return descendants(root)
+      .flatMap((node) => [node.textContent, node.className, ...Object.values(node.attributes)])
+      .join(' ')
+  }
+
+  const HOSTILE = ['#/<img src=x onerror=alert(1)>', '#/demo/<img src=x onerror=alert(1)>']
 
   for (const hash of HOSTILE) {
     it(`never prints ${hash}`, async () => {
       await boot(hash)
 
       expect(location.hash).toBe('#/')
-      const everything = descendants(root)
-        .flatMap((node) => [node.textContent, node.className, ...Object.values(node.attributes)])
-        .join(' ')
-      expect(everything).not.toContain('img')
-      expect(everything).not.toContain('onerror')
+      expect(printed()).not.toContain('img')
+      expect(printed()).not.toContain('onerror')
       expect(screenClass()).toContain('home')
     })
   }
+
+  // #/kana는 하위 경로를 받는다. 모르는 하위 경로도 가나 화면이고 그 값은 화면에 나오지 않는다.
+  const KANA_HOSTILE = '#/kana/<img src=x onerror=alert(1)>'
+
+  it(`never prints ${KANA_HOSTILE}`, async () => {
+    await boot(KANA_HOSTILE)
+
+    expect(screenClass()).toContain('kana')
+    expect(printed()).not.toContain('img')
+    expect(printed()).not.toContain('onerror')
+  })
 })
 
 // ---------------------------------------------------------------------------------------------

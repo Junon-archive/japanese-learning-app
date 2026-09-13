@@ -51,6 +51,8 @@ export const MESSAGES = {
   loggedOut: '로그아웃했어요.',
   /** demo route의 동적 import 실패. */
   demoLoadFailed: '체험용 문장을 불러오지 못했어요. 새로고침해 주세요.',
+  /** 가나 학습 route의 동적 import 실패. */
+  kanaLoadFailed: '글자 배우기를 불러오지 못했어요. 새로고침해 주세요.',
 } as const
 
 export type NoticeTone = 'info' | 'error'

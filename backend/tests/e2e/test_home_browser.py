@@ -7,10 +7,8 @@
 -   `로그인`을 누를 때만 `GET /api/auth/me`가 1건 나간다. 401이면 Login, 로그인하면 Study Screen.
     로그인 영역에는 hash가 없으므로 새로고침하면 선택 홈이고, 다시 `로그인`을 누르면 곧바로 Study Screen이다.
     로그아웃하면 선택 홈이다.
--   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 선택 홈(`#/`)이다.
-
-**Wave 2에는 가나 학습 화면이 없다.** `#/kana`는 route 표에 없어 선택 홈(`#/`)으로 떨어진다. Wave 3
-kana-ui 레인이 화면을 더하면서 가나 경로의 단정을 바꾼다.
+-   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 선택 홈(`#/`)이다. `#/kana`는 가나 학습이다
+    (카드로 들어가도, 직접 열어도). 가나 학습 자체의 흐름은 `test_kana_browser.py`가 본다.
 """
 
 from __future__ import annotations
@@ -56,6 +54,12 @@ def phone(browser: Browser, playwright_driver: Playwright) -> Iterator[Page]:
 
 def _home(page: Page) -> None:
     page.locator(".screen.home").wait_for(
+        state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000
+    )
+
+
+def _kana(page: Page) -> None:
+    page.locator(".screen.kana").wait_for(
         state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000
     )
 
@@ -113,19 +117,21 @@ def test_back_returns_home_from_the_public_screens(frontend: Frontend, phone: Pa
     assert phone.locator(".screen.demo").count() == 0
 
     phone.locator(".home-card", has_text=CARDS[1][0]).click()
-    # Wave 2: 가나 학습 route가 없어 선택 홈(`#/`)이다. Wave 3 kana-ui가 가나 화면 단정으로 바꾼다.
-    expect(phone).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
-    _home(phone)
+    _kana(phone)
+    expect(phone).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
+    assert _topbar_right(phone) == [flow.LOGIN_LABEL]
     phone.go_back()
     _home(phone)
+    assert phone.locator(".screen.kana").count() == 0
 
     phone.goto(f"{frontend.url}/#/unknown")
     expect(phone).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
     _home(phone)
 
     phone.goto(f"{frontend.url}/{KANA_ROUTE}")
-    expect(phone).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
-    _home(phone)
+    _kana(phone)
+    expect(phone).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
+    assert phone.locator(".screen.home").count() == 0
 
     traffic.assert_none_outside()
     assert traffic.api_calls == []
