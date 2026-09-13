@@ -812,3 +812,32 @@ def test_saving_an_explanation_does_not_touch_ruby(
     reloaded = db.get(Sentence, sentence.id, populate_existing=True)
     assert reloaded is not None
     assert reloaded.ruby_json == stored_ruby
+
+
+@pytest.mark.integration
+def test_a_failing_ruby_log_does_not_block_storing_or_promotion(
+    db: Session,
+    study_clock: MutableClock,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """로그 단계의 예외가 저장 트랜잭션을 되돌리지 않는다. 문장은 validated, ruby_json은 저장된다."""
+
+    def broken_log(**kwargs: object) -> Never:
+        raise RuntimeError("simulated log failure")
+
+    monkeypatch.setattr(observability, "log_ruby_computed", broken_log)
+
+    with caplog.at_level(logging.WARNING, logger="app.jobs"):
+        sentence = _save_one(db, study_clock, explanation=_explanation())
+
+    assert sentence.status is SentenceStatus.VALIDATED
+    assert sentence.ruby_json is not None
+    job = db.execute(sa.select(GenerationJob)).scalar_one()
+    assert job.status is GenerationJobStatus.COMPLETED
+    (record,) = [r for r in caplog.records if r.getMessage() == "ruby log failed"]
+    assert record.levelno == logging.WARNING
+    assert (record.__dict__["sentence_id"], record.__dict__["error_type"]) == (
+        sentence.id,
+        "RuntimeError",
+    )
