@@ -2,7 +2,7 @@ UV ?= $(shell command -v uv || echo $(HOME)/.local/bin/uv)
 # --env-file을 명시하지 않으면 compose가 infra/.env를 찾는다. 루트 .env를 쓴다.
 COMPOSE ?= docker compose --env-file .env -f infra/docker-compose.yml
 
-.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset db-migrate db-backup db-restore-check seed create-user prompts backfill-ruby
+.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset db-migrate db-backup db-restore-check seed create-user prompts backfill-ruby demo-fixture
 
 install:
 	$(UV) sync
@@ -105,6 +105,12 @@ create-user:
 # 예: make backfill-ruby / make backfill-ruby ARGS="--apply --pg-bin <PG_BIN>"
 backfill-ruby:
 	$(UV) run python scripts/backfill_ruby.py $(ARGS)
+
+# Public Demo fixture(frontend/src/demo/fixture-data.ts)를 seed/에서 다시 만든다. DB·LLM 없음.
+# seed/, 분석기, config/default.yaml의 learning.max_new_items_per_sentence가 바뀌면 다시 만들어 커밋한다.
+# 예: make demo-fixture / make demo-fixture ARGS=--check (다르면 exit 2)
+demo-fixture:
+	$(UV) run python scripts/build_demo_fixture.py $(ARGS)
 
 # seed/의 starter set을 적재한다. 재적재는 지원하지 않는다 (seed/README.md).
 seed:

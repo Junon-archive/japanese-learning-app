@@ -1,0 +1,104 @@
+/*
+ * demo 화면 전용 스타일(`03_UI_UX_SPEC.md`의 `Demo`). 공통 화면 스타일은 `ui/screens.css`에 있다.
+ * 새 움직임은 누름 반응과 색 변화뿐이고 motion 토큰을 쓴다. reduced-motion은 토큰 치환으로 끝난다.
+ * 진행 표시는 숫자 텍스트 하나다(진행바 없음).
+ */
+
+.demo-banner-separator {
+  color: var(--muted);
+}
+
+button.demo-reset {
+  min-height: var(--tap-target);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 진도 초기화 인라인 확인. 시트가 아니다. */
+.demo-confirm {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+
+.demo-confirm-question {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.demo-confirm-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.demo-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.demo-confirm-actions button {
+  flex: 1;
+  min-height: var(--tap-target);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.demo-confirm-actions button.demo-reset-confirm {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.demo-progress {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 완료 화면 --------------------------------------------------------- */
+
+.demo-complete-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.demo-complete-title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.demo-complete-thanks {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* 한 손 조작: 두 행동은 화면 아래에 둔다. */
+.demo-complete-foot {
+  display: grid;
+  gap: 10px;
+}
+
+.demo-restart-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
