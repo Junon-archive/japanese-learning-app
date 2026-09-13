@@ -183,9 +183,17 @@ button:disabled {
 
 /* --- 로그인 ------------------------------------------------------------ */
 
+/* 상단바는 화면 맨 위에 두고, 제목과 폼만 남은 높이의 가운데에 둔다. */
 .login {
-  justify-content: center;
   gap: 20px;
+}
+
+.login > .login-title {
+  margin-top: auto;
+}
+
+.login > .login-form {
+  margin-bottom: auto;
 }
 
 .login-title {
