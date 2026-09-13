@@ -14,7 +14,9 @@ WORKDIR /app
 # root 소유로 두어 런타임 사용자가 덮어쓸 수 없게 한다
 # (spec/04_SECURITY_AND_DATA.md).
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+# 기본 group 없이 furigana group(분석기·사전)만 더한다(ADR-021 결정 6). Dockerfile.backend와 함께 바꾼다.
+# `--no-build`: sdist를 빌드하지 않고 wheel만 설치한다.
+RUN uv sync --frozen --no-default-groups --group furigana --no-build
 
 RUN useradd --create-home --uid 10001 appuser
 

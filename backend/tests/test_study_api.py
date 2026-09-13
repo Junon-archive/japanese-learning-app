@@ -18,6 +18,7 @@ httpx cookie jar에 저장되지 않고, 그러면 login은 200인데 이어지�
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from collections.abc import Iterator
@@ -40,6 +41,7 @@ from app.models import (
     LearningEvent,
     ReviewState,
     Sentence,
+    SentenceItemSpan,
     StudyPresentation,
     StudySession,
     User,
@@ -178,11 +180,184 @@ def test_the_next_response_has_no_offsets_and_rebuilds_the_sentence(
 
     assert "".join(segment["text"] for segment in payload["render_segments"]) == sentence.japanese
     for segment in payload["render_segments"]:
-        assert set(segment) == {"text", "sentence_item_id"}
+        assert set(segment) == {"text", "sentence_item_id", "ruby"}
     assert isinstance(payload["presentation_id"], int)
     assert isinstance(payload["sentence_id"], int)
     assert isinstance(payload["tappable_items"][0]["sentence_item_id"], int)
     assert isinstance(payload["tappable_items"][0]["learning_item_id"], int)
+
+
+# --------------------------------------------------------------------------
+# render_segments[].ruby (MVP-02, 05_API_SPEC.md R1~R7)
+#
+# "それは君に任せる。": そ0 れ1 は2 君3 に4 任5 せ6 る7 。8, tappable `任せる` = [5, 8).
+# --------------------------------------------------------------------------
+
+_VALID_RUBY: dict[str, object] = {
+    "algorithm_version": 2,
+    "analyzer": {"name": "sudachipy", "version": "0.6.11"},
+    "dictionary": {"name": "sudachidict_core", "version": "20260723"},
+    "split_mode": "C",
+    "computed_at": "2026-09-13T09:00:00Z",
+    "spans": [[3, 4, "きみ"], [5, 6, "まか"]],
+    "omitted": {"tappable_boundary": 0, "numeric": 0, "no_reading": 0},
+    "corrected": {"explanation_tokens": 1, "table_rules": 0},
+}
+
+
+def _with_spans(spans: object) -> dict[str, object]:
+    return {**_VALID_RUBY, "spans": spans}
+
+
+def _next_with_ruby(api: TestClient, db: Session, ruby_json: object) -> dict[str, object]:
+    user = _login(api, db)
+    sentence = _seed_ready_sentence(db, user)
+    sentence.ruby_json = cast(dict[str, object] | None, ruby_json)
+    db.flush()
+    response = _next(api, _start(api))
+    assert response.status_code == 200, response.text
+    payload = response.json()["presentation"]
+    assert payload is not None
+    return cast(dict[str, object], payload)
+
+
+def _ruby_by_segment(payload: dict[str, object]) -> list[tuple[str, list[dict[str, object]]]]:
+    segments = cast(list[dict[str, object]], payload["render_segments"])
+    return [
+        (cast(str, segment["text"]), cast(list[dict[str, object]], segment["ruby"]))
+        for segment in segments
+    ]
+
+
+def test_stored_ruby_is_cut_into_segment_parts(api: TestClient, db_session: Session) -> None:
+    payload = _next_with_ruby(api, db_session, _VALID_RUBY)
+
+    assert _ruby_by_segment(payload) == [
+        (
+            "それは君に",
+            [
+                {"text": "それは", "reading": None},
+                {"text": "君", "reading": "きみ"},
+                {"text": "に", "reading": None},
+            ],
+        ),
+        ("任せる", [{"text": "任", "reading": "まか"}, {"text": "せる", "reading": None}]),
+        ("。", []),
+    ]
+    for text, parts in _ruby_by_segment(payload):
+        assert parts == [] or "".join(cast(str, part["text"]) for part in parts) == text  # R1
+    # 좌표를 싣지 않는다. frontend는 index를 계산하지 않는다.
+    assert "spans" not in json.dumps(payload) and "algorithm_version" not in json.dumps(payload)
+
+
+@pytest.mark.parametrize("ruby_json", [None, _with_spans([])], ids=["null", "empty-spans"])
+def test_r5_uncomputed_or_empty_ruby_gives_empty_parts(
+    api: TestClient, db_session: Session, ruby_json: object
+) -> None:
+    payload = _next_with_ruby(api, db_session, ruby_json)
+
+    assert [parts for _, parts in _ruby_by_segment(payload)] == [[], [], []]
+
+
+# R6: 저장값이 검증을 통과하지 못하는 경우. 모두 200 + 모든 segment `[]` + `ruby.invalid_stored`.
+_INVALID_STORED: dict[str, object] = {
+    "out of range": _with_spans([[8, 10, "まる"]]),
+    "overlap": _with_spans([[3, 4, "きみ"], [3, 5, "きみに"]]),
+    "descending": _with_spans([[5, 6, "まか"], [3, 4, "きみ"]]),
+    "crosses tappable": _with_spans([[4, 6, "にま"]]),
+    "empty reading": _with_spans([[3, 4, ""]]),
+    "katakana": _with_spans([[3, 4, "キミ"]]),
+    "kanji": _with_spans([[3, 4, "君"]]),
+    "ascii": _with_spans([[3, 4, "kimi"]]),
+    "after U+3096": _with_spans([[3, 4, "き" + chr(0x3097)]]),
+    "control char": _with_spans([[3, 4, "き\x1bみ"]]),
+    "not an object": [[3, 4, "きみ"]],
+    "no spans": {"algorithm_version": 2},
+    "spans not an array": _with_spans({"0": [3, 4, "きみ"]}),
+    "element not a triple": _with_spans([[3, 4]]),
+    "start not an integer": _with_spans([["3", 4, "きみ"]]),
+    "reading not a string": _with_spans([[3, 4, None]]),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_INVALID_STORED))
+def test_r6_invalid_stored_ruby_answers_200_without_ruby_and_logs(
+    api: TestClient, db_session: Session, caplog: pytest.LogCaptureFixture, case: str
+) -> None:
+    with caplog.at_level(logging.WARNING, logger="app.services.presentation"):
+        payload = _next_with_ruby(api, db_session, _INVALID_STORED[case])
+
+    assert [parts for _, parts in _ruby_by_segment(payload)] == [[], [], []]
+    records = [record for record in caplog.records if record.getMessage() == "ruby.invalid_stored"]
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+    assert records[0].__dict__["sentence_id"] == payload["sentence_id"]
+    # 로그에 문장 텍스트·읽기가 없다.
+    assert "君" not in records[0].getMessage() and "sentence_id" not in records[0].getMessage()
+
+
+def test_a_broken_tappable_span_is_still_500_even_with_valid_ruby(
+    api: TestClient, db_session: Session
+) -> None:
+    """R6이 500이 아닌 것은 ruby뿐이다. tappable span 오류(`RenderSpanError`)는 그대로 500이다."""
+    user = _login(api, db_session)
+    sentence = _seed_ready_sentence(db_session, user)
+    sentence.ruby_json = dict(_VALID_RUBY)
+    span = db_session.execute(sa.select(SentenceItemSpan)).scalars().one()
+    span.end_codepoint = len(sentence.japanese) + 3
+    db_session.flush()
+    session_id = _start(api)
+
+    lenient = TestClient(
+        cast(FastAPI, api.app),
+        base_url="https://testserver",
+        headers={"Origin": ORIGIN},
+        cookies=api.cookies,
+        raise_server_exceptions=False,
+    )
+    response = lenient.post(f"/api/study/session/{session_id}/next")
+
+    assert response.status_code == 500
+
+
+def test_r7_ruby_does_not_depend_on_any_toggle_input(api: TestClient) -> None:
+    """토글은 서버로 가지 않는다. `/next`에는 path의 session_id 말고 받을 입력이 없다."""
+    (route,) = [
+        context.original_route
+        for context in iter_route_contexts(cast(FastAPI, api.app).routes)
+        if isinstance(context.original_route, APIRoute)
+        and context.path == "/api/study/session/{session_id}/next"
+    ]
+    assert [param.name for param in route.dependant.path_params] == ["session_id"]
+    assert route.dependant.query_params == []
+    assert route.dependant.header_params == []
+    assert route.dependant.cookie_params == []
+    assert route.dependant.body_params == []
+
+
+def test_click_and_probe_payloads_carry_no_ruby(api: TestClient, db_session: Session) -> None:
+    """표시 범위는 학습 문장뿐이다. 설명 응답과 probe에는 ruby가 없다."""
+    user = _login(api, db_session)
+    sentence = _seed_ready_sentence(db_session, user)
+    sentence.ruby_json = dict(_VALID_RUBY)
+    db_session.flush()
+    session_id = _start(api)
+    payload = _next(api, session_id).json()["presentation"]
+    presentation_id = payload["presentation_id"]
+    sentence_item_id = payload["tappable_items"][0]["sentence_item_id"]
+
+    clicked = api.post(
+        f"/api/study/presentations/{presentation_id}/items/{sentence_item_id}/click",
+        json={"client_event_id": str(uuid.uuid4())},
+    )
+    _show_probe(db_session, payload, user, session_id)
+    again = _next(api, session_id).json()["presentation"]
+
+    assert clicked.status_code == 200
+    assert "ruby" not in clicked.json()
+    assert again["probe"] is not None
+    assert "ruby" not in again["probe"]
+    assert again["render_segments"] == payload["render_segments"]
 
 
 def test_revealing_the_translation_is_the_only_way_to_get_it(

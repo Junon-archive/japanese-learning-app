@@ -187,9 +187,20 @@ class StartSessionResponse(BaseModel):
     timed_out_session_id: int | None
 
 
+class RubyPartPayload(BaseModel):
+    """segment 안의 표시 조각. `reading`이 null이면 후리가나 없이 text만 그린다."""
+
+    text: str
+    reading: str | None
+
+
 class RenderSegmentPayload(BaseModel):
     text: str
     sentence_item_id: int | None
+    # 후리가나 표시 보조(MVP-02, 05_API_SPEC.md R1~R7). 학습 신호가 아니다. 달 읽기가 없거나
+    # 미계산·저장값 무효면 `[]`이고, 그 밖에는 parts의 text를 이으면 `text`와 같다.
+    # 토글 상태와 무관하게 항상 싣는다(R7).
+    ruby: list[RubyPartPayload]
 
 
 class TappableItemPayload(BaseModel):

@@ -93,9 +93,22 @@ export type StartSessionResponse = {
  * `text`를 순서대로 이어 붙이면 `japanese`가 된다. **frontend는 index를 계산하지
  * 않는다**(05_API_SPEC.md). `sentence_item_id`가 non-null이면 tap 가능한 span이다.
  */
+/** segment 안의 표시 조각. reading이 null이면 후리가나 없이 text만 그린다. */
+export type RubyPart = {
+  text: string
+  reading: string | null
+}
+
 export type RenderSegment = {
   text: string
   sentence_item_id: number | null
+  /**
+   * 후리가나 표시 보조(MVP-02, 05_API_SPEC.md R1~R7). 학습 신호가 아니다.
+   * []  이 segment에 달 읽기가 없다 (한자 없음 / 생략 / 미계산 / 저장값 무효 --- 구분하지 않는다)
+   * 그 밖  parts.map(p => p.text).join('') === text
+   * 토글 상태와 무관하게 서버가 항상 싣는다.
+   */
+  ruby: RubyPart[]
 }
 
 export type TappableItem = {

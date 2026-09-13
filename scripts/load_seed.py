@@ -7,6 +7,10 @@
 
 재적재는 지원하지 않는다. `origin = seed` 행이 이미 있으면 거부한다.
 seed를 고쳤으면 `make db-reset ARGS=--yes && make seed`로 다시 만든다.
+
+문장마다 후리가나를 계산한다(ADR-021). 분석기를 적재하지 못하면 DB에 닿기 전에 예외로
+끝난다(fail-closed). 문장 하나의 계산 실패는 그 문장만 `ruby_json = NULL`로 두고 요약의
+`failed`로 센다.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.clock import utc_now  # noqa: E402
 from app.db import new_session  # noqa: E402
+from app.furigana import format_summary_lines, load_analyzer  # noqa: E402
 from app.services.seed_loader import SeedError, load_seed  # noqa: E402
 
 EXIT_OK = 0
@@ -47,6 +52,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    # 분석기 부재는 배포 결함이다. 문장별 NULL로 흡수하지 않고 여기서 그대로 던진다.
+    load_analyzer()
 
     try:
         session = new_session()
@@ -68,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{summary.items} items, {summary.sentences} sentences, "
         f"{summary.spans} spans, {summary.explanations} explanations\n"
     )
+    sys.stdout.write("".join(f"{line}\n" for line in format_summary_lines(summary.ruby)))
     return EXIT_OK
 
 

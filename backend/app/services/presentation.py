@@ -19,10 +19,15 @@ FSRS evidence         기억에 대한 증거              (무신호면 만들�
 **provider를 부르지 않는다**(불변식 #1). Ready Pool이 비면 job을 enqueue하고 200으로
 `presentation: null`을 돌려준다. 트랜잭션은 이 모듈의 진입점이 소유하고 끝에서
 commit을 한 번 한다(ADR-007).
+
+**후리가나(ruby)는 저장값을 자르기만 한다**(MVP-02, 05_API_SPEC.md의 `render_segments[].ruby`).
+형태소 분석기(`app.furigana`)를 import하지 않는다(불변식 15, G14). 저장값이 없으면(R5) 또는
+검증을 통과하지 못하면(R6) ruby 없이 제시한다 --- 표시 보조가 학습을 막지 않는다.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,10 +56,12 @@ from app.models.study import LearningEvent, StudyPresentation
 from app.models.user import User
 from app.render import (
     RenderSegment,
+    RubySpanError,
     SpanRef,
     TappableItem,
     build_render_segments,
     build_tappable_items,
+    parse_stored_ruby,
 )
 from app.services.events import record_event, server_client_event_id
 from app.services.study_session import (
@@ -98,6 +105,12 @@ PROBE_RESPONSE_EVENTS: Mapping[ExplicitSignal | None, EventType] = {
 # FSRS rating을 만들지 않지만(위 `FSRS_RATING_EVENTS`에 없다) 응답이기는 하므로 같은
 # probe를 다시 싣지 않는다.
 PROBE_ANSWER_EVENTS: frozenset[EventType] = frozenset(PROBE_RESPONSE_EVENTS.values())
+
+logger = logging.getLogger(__name__)
+
+# 11_OBSERVABILITY.md의 `MVP-02 추가: 후리가나 계산 결과`. 필드는 sentence_id뿐이다 --- 문장
+# 텍스트와 읽기 문자열, 검증 오류 메시지(좌표가 들어 있다)는 싣지 않는다.
+RUBY_INVALID_STORED = "ruby.invalid_stored"
 
 
 class PresentationNotFoundError(Exception):
@@ -640,7 +653,7 @@ def _build_view(
         presentation_id=presentation.id,
         sentence_id=sentence.id,
         japanese=sentence.japanese,
-        render_segments=build_render_segments(sentence.japanese, spans),
+        render_segments=_render_segments(sentence, spans),
         tappable_items=build_tappable_items(spans),
         presentation_role=presentation.presentation_role,
         review_reason=presentation.review_reason,
@@ -657,6 +670,24 @@ def _build_view(
             fresh=fresh,
         ),
     )
+
+
+def _render_segments(sentence: Sentence, spans: Sequence[SpanRef]) -> list[RenderSegment]:
+    """tappable segment를 **먼저** 만든다. 그 실패(`RenderSpanError`)는 그대로 500이다.
+
+    ruby는 그 뒤에 따로 붙인다. NULL이면 모든 segment가 `()`(R5), 모양이 틀렸거나 검증을 통과하지
+    못하면 `ruby.invalid_stored`를 남기고 모든 segment가 `()`(R6)다. tappable 검증이 이미
+    통과했으므로 두 번째 호출에서 나오는 오류는 `RubySpanError`뿐이다.
+    """
+    segments = build_render_segments(sentence.japanese, spans)
+    if sentence.ruby_json is None:
+        return segments
+    try:
+        ruby = parse_stored_ruby(sentence.ruby_json)
+        return build_render_segments(sentence.japanese, spans, ruby=ruby)
+    except RubySpanError:
+        logger.warning(RUBY_INVALID_STORED, extra={"sentence_id": sentence.id})
+        return segments
 
 
 def _probe_view(

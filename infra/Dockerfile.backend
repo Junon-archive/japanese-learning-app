@@ -14,7 +14,9 @@ WORKDIR /app
 # root 소유로 두어 런타임 사용자가 덮어쓸 수 없게 한다
 # (spec/04_SECURITY_AND_DATA.md).
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+# 기본 group(dev, furigana) 없이 sync한다. API는 분석기를 import하지 않는다(ADR-021 결정 6).
+# `--no-dev`로는 furigana group이 빠지지 않는다. `--no-build`: sdist를 빌드하지 않고 wheel만 설치한다.
+RUN uv sync --frozen --no-default-groups --no-build
 
 RUN useradd --create-home --uid 10001 appuser
 
