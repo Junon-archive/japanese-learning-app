@@ -52,4 +52,4 @@ Login, demo 학습·설명 시트·probe·완료 화면, 가나 학습(표, 보�
     데이터의 `reading`을 짝지어 보여주고 기본형은 따로 적는다(`Explanation`).
 
 파일 머리 주석의 상대 경로(`../guitar-riff-motion.md`)와 `seed/` 문장 번호는 요청 참고 자료
-위치(`updates/U-001-ui-ux-overhaul/refs/`)에서 작성할 때의 표기다. 이 사본은 원본과 같은 내용이다(후리가나를 `rt` 상시 생성 + documentElement class 전환으로 고친 판을 다시 복사했다).
+위치(`updates/done/U-001-ui-ux-overhaul/refs/`)에서 작성할 때의 표기다. 이 사본은 원본과 같은 내용이다(후리가나를 `rt` 상시 생성 + documentElement class 전환으로 고친 판을 다시 복사했다).

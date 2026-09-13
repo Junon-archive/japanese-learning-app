@@ -4,7 +4,7 @@
 |---|---|
 | 번호 | U-003 |
 | 제목 | 후리가나 on/off |
-| 상태 | 배포 대기 |
+| 상태 | 완료 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `spec/mvp-01-core/03_UI_UX_SPEC.md`, `04_DB_SPEC.md`, `05_API_SPEC.md`, `08_LLM_SPEC.md`, `14_CONFIGURATION.md`, `spec/02_ARCHITECTURE.md`, `spec/06_LLM_ENGINEERING_PRINCIPLES.md`, `AGENTS.md` |

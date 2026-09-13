@@ -143,7 +143,7 @@
 
 - **vanilla CSS만으로 충분하다.** 관찰한 움직임은 전부 CSS transition·@keyframes와 클래스 토글이다.
   프레임워크·애니메이션 라이브러리가 필요하지 않다. 따라서 "참고 사이트 방식을 따르려면 프레임워크나
-  라이브러리가 필요하면 멈추고 보고한다"는 조건(`updates/U-001-ui-ux-overhaul/request.md` 7절)에 해당하지
+  라이브러리가 필요하면 멈추고 보고한다"는 조건(`updates/done/U-001-ui-ux-overhaul/request.md` 7절)에 해당하지
   않는다.
 - **View Transitions API는 쓰지 않는다(Wave 2 기준).** 이유:
   - 우리 앱은 한 문서 안에서 `replaceChildren`으로 화면을 바꾼다. 들어오는 화면의 CSS 진입 애니메이션

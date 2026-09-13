@@ -4,7 +4,7 @@
 |---|---|
 | 번호 | U-004 |
 | 제목 | 히라가나·가타카나 학습 |
-| 상태 | 배포 대기 |
+| 상태 | 완료 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `spec/mvp-01-core/00_SCOPE.md`, `01_USER_FLOW.md`, `03_UI_UX_SPEC.md`, `spec/04_SECURITY_AND_DATA.md`, `spec/reference/ui/` |

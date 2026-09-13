@@ -1532,7 +1532,7 @@ coordinator가 넘긴 4건(H1\~H4)을 **결정 없이 공백으로만** 기록�
 ## MVP-02 Onboarding 명세 --- 2026-09-13
 
 MVP-02(선택 홈, 로그인 진입, 문구와 화면 전환, 후리가나, 가나 학습, demo 확장)를 명세에 반영했다.
-출처는 사용자 결정(2026-09-13)과 그 결정을 기록한 요청서 `updates/U-001`\~`U-005`, 그리고 같은 날
+출처는 사용자 결정(2026-09-13)과 그 결정을 기록한 요청서 `updates/done/U-001`\~`U-005`, 그리고 같은 날
 Wave 1에서 정한 보완 결정이다. **요청서는 명세가 아니며** 이 절의 변경이 구현 근거다. 새 버전 번호를
 만들지 않았다(Spec Version v0.2 유지). 번호는 위 후속 보완의 [57]에 이어 붙였다.
 
@@ -1775,7 +1775,7 @@ ADR-022(선택 홈 route와 로그인 진입, 격리 경계 확장)가 확정되
     안의 보장이며 새로고침·학습 기록 왕복 뒤에는 다시 남을 수 있다고 적었다.
 
 3부에서 `updates/backlog.md`에 CSP 항목 한 줄을 더했다. 같은 결정으로 ADR-021·022는 architect가,
-`updates/U-001-ui-ux-overhaul/refs/`는 frontend-implementer가 함께 고쳤다(이 명세 반영의 범위 밖).
+`updates/done/U-001-ui-ux-overhaul/refs/`는 frontend-implementer가 함께 고쳤다(이 명세 반영의 범위 밖).
 
 **4부 (Wave 2 착수 전 보완):** 로그인 진입의 공백 두 곳을 Wave 2 보완 결정(2026-09-13)으로 채웠다.
 
@@ -1929,3 +1929,26 @@ Wave 3 보완 결정(2026-09-13)으로 채웠다. 위 서술 중 아래가 바�
 `isDemoProgress`의 위치 검사 범위, e2e `self_report` 도우미와 닫히는 시트의 겹침, 새 문맥 재등장 불약속의 직접 단언 부재,
 저장값에 `login_id`·서버 응답이 없다는 직접 테스트 부재, 소리·획순 부재 전용 테스트 부재, 부하 중 PWA e2e 로그인 폼 대기
 시간 초과)을 상태 `대기`로 더했다. 코드·테스트, `05_API_SPEC.md`, `11_OBSERVABILITY.md`, ADR은 변경하지 않았다.
+
+## MVP-02 배포 완료 --- 2026-09-14
+
+사용자가 MVP-02를 운영에 배포하고 휴대폰까지 확인했다(2026-09-14). 명세 조항은 바꾸지 않았다. 새 버전 번호를 만들지
+않았다(Spec Version v0.2 유지). 번호는 위 7부의 [112]에 이어 붙였다.
+
+-   **[113] 요청 5건 완료와 운영 확인 사실** (`updates/`, `infra/DEPLOY.md`, 요청서 경로를 적은 문서):
+    -   U-001\~U-005의 상태를 `완료`로 바꾸고(`updates/ROADMAP.md`와 각 요청서 머리) 요청서를 이름·번호 그대로
+        `updates/done/`으로 옮겼다(U-001은 디렉터리째). 요청서 경로를 적은 곳(`updates/ROADMAP.md`의 링크,
+        `docs/decisions/ADR-020`\~`ADR-022`, `spec/reference/ui/README.md`, 이 changelog의 MVP-02 절, U-001 `refs/`의
+        두 문서)은 경로만 `updates/done/...`으로 고쳤다.
+    -   `infra/DEPLOY.md` 17절: 리허설에서 확인 필요로 남았던 이전 이미지 보존(17.2, `latest`와 `pre-mvp02`의 IMAGE ID
+        동일)과 이미지 안의 확인(17.3, worker `analyzer ok`, backend `sudachipy absent`)을 운영에서 확인한 사실로
+        고쳤다. 17.4\~17.8의 출력이 운영에서도 리허설과 같았다는 줄(서버 16.15, 문장 765, 통계 동일,
+        `updated 765 of 765 sentences`, health 모두 ok)을 더했다. 17.11 A는 운영에서 하지 않아 확인 필요로 남는다.
+    -   `infra/DEPLOY.md` 6.2·6.3·17.9: wrangler 4.131.1의 설정 파일 없는 `deploy`가 매번 `workers_dev`와 Preview
+        URLs를 다시 켠다(경고 두 줄)는 것이 운영에서 확인되었다. "확인하지 않았다" 서술을 사실로 고치고, 배포마다
+        대시보드에서 두 설정을 다시 끄는 절차를 두었다. ADR-020 결정 5의 전환 조건에 해당하지만 설정 파일은 이번에
+        만들지 않았고 `updates/backlog.md` 5절에 한 줄(상태 `대기`)로 더했다.
+    -   `infra/DEPLOY.md` 2.3·14절: 새 터미널에서 docker 소켓 권한 오류가 나면 `newgrp docker` 뒤 2.3 블록을 다시
+        붙여 넣는다는 안내와 문제 해결 행을 더했다.
+
+코드·테스트와 `spec/mvp-01-core/*`, `spec/mvp-02-onboarding/*`의 조항은 변경하지 않았다.

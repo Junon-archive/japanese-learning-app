@@ -6,11 +6,11 @@
 
 | 번호 | 제목 | 우선순위 | 상태 | 관련 명세 | 커밋 |
 |---|---|---|---|---|---|
-| U-001 | [선택 홈, 로그인 진입, 말투와 화면 전환](U-001-ui-ux-overhaul/request.md) | 높음 | 배포 대기 | `01_USER_FLOW`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 42548b7, 7178f41, 0b405c9 · 머지 5a95fc2, 7c3cab0, ec581a7 · 직접 f196c9a |
-| U-002 | [README 재작성과 문서 계층](U-002-readme.md) | 높음 | 배포 대기 | `README.md`, `AGENTS.md`, ADR-020 | 명세 b1ea50d · 문서 655f5b6 |
-| U-003 | [후리가나 on/off](U-003-furigana.md) | 높음 | 배포 대기 | `03_UI_UX_SPEC`, `04_DB_SPEC`, `05_API_SPEC`, `08_LLM_SPEC`, `14_CONFIGURATION` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 8b89619, 82e9794, a55ce3a, ec581a7 |
-| U-004 | [히라가나·가타카나 학습](U-004-kana-learning.md) | 높음 | 배포 대기 | `00_SCOPE`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 db32fc7, 6b131ab |
-| U-005 | [demo 확장과 방문자 진도 저장](U-005-demo-expansion.md) | 높음 | 배포 대기 | `01_USER_FLOW`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 1305fc2 · 직접 526a48d |
+| U-001 | [선택 홈, 로그인 진입, 말투와 화면 전환](done/U-001-ui-ux-overhaul/request.md) | 높음 | 완료 | `01_USER_FLOW`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 42548b7, 7178f41, 0b405c9 · 머지 5a95fc2, 7c3cab0, ec581a7 · 직접 f196c9a |
+| U-002 | [README 재작성과 문서 계층](done/U-002-readme.md) | 높음 | 완료 | `README.md`, `AGENTS.md`, ADR-020 | 명세 b1ea50d · 문서 655f5b6 |
+| U-003 | [후리가나 on/off](done/U-003-furigana.md) | 높음 | 완료 | `03_UI_UX_SPEC`, `04_DB_SPEC`, `05_API_SPEC`, `08_LLM_SPEC`, `14_CONFIGURATION` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 8b89619, 82e9794, a55ce3a, ec581a7 |
+| U-004 | [히라가나·가타카나 학습](done/U-004-kana-learning.md) | 높음 | 완료 | `00_SCOPE`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 db32fc7, 6b131ab |
+| U-005 | [demo 확장과 방문자 진도 저장](done/U-005-demo-expansion.md) | 높음 | 완료 | `01_USER_FLOW`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 1305fc2 · 직접 526a48d |
 | - | 비밀번호 규칙과 로그인 방식 | - | 검토 후 유지 | `03_UI_UX_SPEC`의 `Login`, `05_API_SPEC`의 `Authentication` | - |
 | - | README 스크린샷 | - | 보류 | `README.md`(U-002) | - |
 

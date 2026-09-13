@@ -29,8 +29,8 @@ localStorage       src/local-store.ts  nc.furigana.v1 / nc.kana.v1 / nc.demo.v1 
 
 ## 맥락
 
-사용자 결정(2026-09-13, `updates/U-001-ui-ux-overhaul/request.md`, `updates/U-003-furigana.md`,
-`updates/U-004-kana-learning.md`, `updates/U-005-demo-expansion.md`와 그 요청서들의 불변식 13·14·16·18)은 확정이다.
+사용자 결정(2026-09-13, `updates/done/U-001-ui-ux-overhaul/request.md`, `updates/done/U-003-furigana.md`,
+`updates/done/U-004-kana-learning.md`, `updates/done/U-005-demo-expansion.md`와 그 요청서들의 불변식 13·14·16·18)은 확정이다.
 
 지금 구조(`frontend/src/main.ts`):
 
@@ -83,7 +83,7 @@ hash                      화면        적재           API
 -   **서버 요청 0건의 "서버"는 API origin이다.** 공개 route에 들어갈 때 frontend origin에서 청크·아이콘·
     manifest를 받는 것은 정적 자산이며 여기에 들지 않는다. 기존 demo e2e가 `api_calls`와 `foreign`을
     갈라 세는 그 구분이다.
--   **demo fixture의 동적 import(`updates/U-005-demo-expansion.md`)는 route 단위 동적 import로 충족한다.** `demo/demo.ts`가 fixture를
+-   **demo fixture의 동적 import(`updates/done/U-005-demo-expansion.md`)는 route 단위 동적 import로 충족한다.** `demo/demo.ts`가 fixture를
     정적으로 import해도 그 둘은 홈 번들 밖의 청크다. fixture를 한 번 더 동적으로 나누지 않는다.
 -   **가나 라운드 진행 상태는 hash에 두지 않는다.** 하위 hash가 바뀌면 라우터가 kana 화면을 다시 mount
     하므로 메모리 상태가 사라진다. 하위 hash는 메뉴 수준(예: 히라가나/가타카나 선택)에만 쓴다.
@@ -269,15 +269,15 @@ PRIVATE      private.ts
 ``` text
 key              값 형식을 정하는 곳        저장하는 것
 nc.furigana.v1   src/ui/furigana.ts         {"on": boolean}
-nc.kana.v1       src/kana/ (kana-core)      글자·단어별 맞음/틀림 수, 전체 마지막 학습 시각 (`updates/U-004-kana-learning.md`)
+nc.kana.v1       src/kana/ (kana-core)      글자·단어별 맞음/틀림 수, 전체 마지막 학습 시각 (`updates/done/U-004-kana-learning.md`)
 nc.demo.v1       src/demo/ (demo)           fixture 식별자, 현재 위치, 표현별 자기평가, 다시 보기 대기열,
-                                            본 문장 수 (`updates/U-005-demo-expansion.md`)
+                                            본 문장 수 (`updates/done/U-005-demo-expansion.md`)
 ```
 
 -   **네임스페이스 `nc.`, 끝에 형식 버전.** 형식을 호환되지 않게 바꾸면 key 이름의 버전을 올린다
     (`nc.demo.v2`). 옛 key는 옮기지 않는다.
 -   **fixture가 바뀐 경우는 key 버전이 아니라 값 안의 fixture 식별자로 판정한다.** 식별자는 fixture 생성
-    스크립트가 fixture 내용에서 결정적으로 만든다. 다르면 조용히 처음부터(`updates/U-005-demo-expansion.md`).
+    스크립트가 fixture 내용에서 결정적으로 만든다. 다르면 조용히 처음부터(`updates/done/U-005-demo-expansion.md`).
 -   후리가나 설정은 로그인 학습 화면과 demo가 **하나를 공유한다**(Wave 1 보완 결정, 2026-09-13).
 
 ### 인터페이스
@@ -348,7 +348,7 @@ slot 소유      nc.furigana.v1 -> src/ui/furigana.ts   nc.kana.v1 -> src/kana/ 
 
 값(duration, easing, 화면 진입 이동 거리 10px, reduced-motion 대체)과 무엇을 시트로 보여주는가는
 `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `화면 전환과 시트` 절이 canonical이다. 참고 관찰 기록
-(`updates/U-001-ui-ux-overhaul/refs/guitar-riff-motion.md`)의 수치는 근거일 뿐이며 명세와 다르면 명세를 따른다.
+(`updates/done/U-001-ui-ux-overhaul/refs/guitar-riff-motion.md`)의 수치는 근거일 뿐이며 명세와 다르면 명세를 따른다.
 이 ADR은 **어디에 두고 무엇이 무엇을 기다리지 않는가**만 정한다.
 
 ``` text
@@ -517,7 +517,7 @@ export function renderFuriganaToggle(): HTMLElement
     동작을 `main.ts`에서 주입받는 것이 기존 `mountDemo(root, onExit)`의 방식이다.
 -   **기능마다 storage wrapper.** try/catch·메모리 대체가 세 벌이 되고 key 허용 목록을 한 곳에서 강제할 수
     없다.
--   **sessionStorage / IndexedDB.** sessionStorage는 탭을 닫으면 사라져 "다시 열면 이어서"(`updates/U-005-demo-expansion.md`)가 안 된다.
+-   **sessionStorage / IndexedDB.** sessionStorage는 탭을 닫으면 사라져 "다시 열면 이어서"(`updates/done/U-005-demo-expansion.md`)가 안 된다.
     IndexedDB는 비동기 API라 저장 불가 시의 메모리 대체와 초기 렌더가 복잡해지고, 저장량이 작다.
 -   **토글 시 문장 재렌더링.** Wave 1 보완 결정(2026-09-13)으로 CSS class 전환만 쓴다. tappable 버튼이 새로 만들어져 포커스와 시트의 포커스 복귀 대상이
     사라지고, interactions handle을 다시 묶어야 한다.
@@ -538,7 +538,7 @@ export function renderFuriganaToggle(): HTMLElement
     유일한 이동 수단이다.
 -   **localStorage는 브라우저·설치 형태마다 따로다.** iOS에서 Safari와 홈 화면에 설치한 앱은 저장소를
     공유하지 않는다. WebKit은 설치하지 않은 사이트의 스크립트 저장소를 7일간 상호작용이 없으면 지울 수
-    있다. 방문자가 하루쯤 쓴다는 전제(`updates/U-005-demo-expansion.md`)에서는 받아들인다.
+    있다. 방문자가 하루쯤 쓴다는 전제(`updates/done/U-005-demo-expansion.md`)에서는 받아들인다.
 -   **격리 검사가 TypeScript의 JS 컴파일러 API에 기댄다.** 그 API가 없는 TypeScript 판(네이티브 구현)으로
     올리면 테스트가 import 단계에서 실패한다. 조용히 통과하지 않는다. 그때 도구를 다시 정한다.
 -   **`import.meta.glob`을 저장소 전체에서 쓸 수 없다.** 가나 데이터 파일은 명시적으로 import한다.
@@ -555,7 +555,7 @@ export function renderFuriganaToggle(): HTMLElement
 
 ``` text
 spec/mvp-01-core/01_USER_FLOW.md   Private Learning 시작을 "상단바 로그인 누름 -> fetchMe"로 (불변식 14).
-                                   Public Demo를 홈 카드 경유로. demo 진도는 localStorage(`updates/U-005-demo-expansion.md`)
+                                   Public Demo를 홈 카드 경유로. demo 진도는 localStorage(`updates/done/U-005-demo-expansion.md`)
 spec/mvp-01-core/03_UI_UX_SPEC.md  머리 단락(상단바가 모든 화면에), 선택 홈, 로그인 폼의 demo 버튼 제거,
                                    새로고침·뒤로 가기 동작, 전환·시트 규칙(값은 이 문서 `화면 전환과 시트` 절이 canonical), 시트와 event 시점,
                                    후리가나 토글 위치와 표시 범위

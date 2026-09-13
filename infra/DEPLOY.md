@@ -220,6 +220,9 @@ prod_db() { [ "$APP_ENV" = production ] && [ "$DATABASE_URL" = "postgresql+psyco
     아니면(개발 DSN이 남았다, `APP_ENV`가 다르다) `STOP: ...`을 출력하고 실패해서 뒤의 명령이 하나도
     실행되지 않는다. 함수를 정의하지 않은 터미널에서는 `prod_db: command not found`로 역시 멈춘다. DSN
     문자열은 위 `export` 줄과 글자 그대로 같게 채운다.
+-   **새 터미널에서 `docker`나 `C ...`가 `permission denied ... docker.sock`으로 실패하면** 그 셸에 docker 그룹
+    권한이 없는 것이다(운영에서 겪었다). `newgrp docker`를 친 뒤 **위 블록을 다시 붙여 넣는다.** `newgrp`가 연 새
+    셸에는 `PG_BIN`과 `C`·`prod_db` 함수가 없다.
 
 **운영 셸 확인** --- 넷 다 통과해야 한다.
 
@@ -576,18 +579,22 @@ cd <REPO>/frontend \
 -   `VITE_API_BASE_URL`은 **이 명령의 환경변수로만** 준다. `frontend/.env.production` 같은 파일을
     만들지 않는다. 만들면 같은 머신의 개발 빌드에도 운영 주소가 들어간다.
 -   체인이 중간에 멈추면(아무 메시지 없이 끝나면) grep 단계에서 걸린 것이다. `echo $?`가 0이 아니다.
+-   **배포가 끝날 때마다 6.3의 2단계(`workers.dev`와 Preview URLs 끄기)를 다시 한다.** wrangler 4.131.1의 설정
+    파일 없는 `deploy`는 **매번 `workers_dev`와 Preview URLs를 다시 켠다**(운영에서 확인했다. deploy 출력에 그
+    경고가 두 줄 나온다).
 
-### 6.3 Custom Domain 연결과 `workers.dev` 끄기 (대시보드, 처음 한 번)
+### 6.3 Custom Domain 연결과 `workers.dev` 끄기 (대시보드. 연결은 처음 한 번, 끄기는 배포마다)
 
 메뉴 이름과 위치는 Cloudflare가 바꿀 수 있다(확인 필요).
 
 1.  Workers & Pages → `<WORKER_NAME>` → Settings → Domains & Routes → Add → **Custom domain**
     → `<FRONTEND_HOST>`. DNS 레코드와 인증서는 Cloudflare가 만든다.
 2.  같은 화면에서 **`workers.dev`를 끈다(Disable).** **Preview URLs도 끈다.**
-3.  **첫 배포 뒤 다시 배포했을 때 `workers.dev`가 다시 켜지는지 확인한다 (확인 필요).** 설정
-    파일 없는 `wrangler deploy`가 매번 다시 켜는지는 wrangler 버전에 달려 있고 확인하지 않았다.
-    다시 켜진다면 ADR-020 결정 5의 전환 조건대로 `frontend/wrangler.jsonc`에
-    `workers_dev: false`와 `preview_urls: false`만 두는 변경을 따로 한다(도메인은 적지 않는다).
+3.  **6.2로 다시 배포할 때마다 2단계를 다시 한다.** 설정 파일 없는 `wrangler deploy`(4.131.1)가 배포할 때마다
+    `workers.dev`와 Preview URLs를 다시 켜는 것을 운영에서 확인했다. 이것은 ADR-020 결정 5의 전환 조건(설정 파일로
+    옮기는 조건)에 해당한다. `frontend/wrangler.jsonc`에 `workers_dev: false`와 `preview_urls: false`만 두는
+    변경(도메인은 적지 않는다)은 아직 하지 않았고 `updates/backlog.md`에 대기로 있다. 그 전까지는 이 단계를
+    배포마다 손으로 한다.
 
 확인:
 
@@ -1075,6 +1082,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<API_HOST>/api/health
 | 생성이 멈춘 것 같다 | 3.4의 `grep cost.ceiling_reached` | 한도 도달. 한국시간 오전 9시에 풀린다. `jobs_with_unknown_tokens`가 0이 아니면 token 수를 모르는 호출 때문이다. 0이나 음수 한도를 넣었다면 영구 정지다(3.3). |
 | 생성 job이 전부 `failed`, `last_error`에 `Error code: 401` | 8.2의 두 번째 SQL | OpenAI 키 오류. 4.6의 키 확인 → `.env` 수정 → `C up -d --no-deps worker`. |
 | health의 `worker`가 `stale` | `C ps worker`, 로그 | worker가 멈췄거나 DB에 쓰지 못한다. |
+| `docker`나 `C ...`가 `permission denied ... docker.sock` | `id -nG` (`docker`가 있어야 한다) | 이 셸에 docker 그룹 권한이 없다. `newgrp docker` 뒤 2.3 블록을 다시 붙여 넣는다. |
 | `make ...`가 엉뚱한 target을 출력 | `printf '%s\n' "$DATABASE_URL"` | 운영 셸이 아니다. 터미널을 닫고 2.3부터 다시. |
 | 백업이 `--pg-bin` 실행 파일 오류 | `ls "$PG_BIN"/pg_dump` | `.venv`가 없거나 Python minor가 바뀌었다. `uv sync` 뒤 경로를 다시 확인한다(ADR-020 결정 2). |
 
@@ -1156,9 +1164,11 @@ MVP-01이 돌고 있는 운영에 MVP-02를 올리는 첫 업데이트다. **11�
 운영 셸에서 친다.
 
 이 절의 기대 출력은 운영과 분리된 로컬 DB(pgserver, seed만 적재)에서 **옛 코드로 계정·학습 기록을 만든 뒤
-새 코드로 17.4\~17.7을 실제로 실행한 결과**다. 운영에서는 문장 수(`765`)와 통계 숫자가 다르고, 서버 버전은
-`16.x`다. 이 리허설은 docker 없이 했다. 그래서 이미지 태그(17.2, 17.11 A)와 이미지 안의 확인(17.3)은
-**확인 필요**다.
+새 코드로 17.4\~17.7을 실제로 실행한 결과**다. 서버 버전은 `16.x`로 적었다. 이 리허설은 docker 없이 했다.
+그래서 이미지 태그(17.11 A)는 **확인 필요**다. 17.2와 17.3은 운영에서 확인했다(각 절).
+
+**운영 배포(2026-09-14)에서도 17.4\~17.8의 출력은 리허설과 같았다:** 서버 버전 `16.15`, 문장 `765`, backfill 통계
+동일, `updated 765 of 765 sentences`, health 모두 `ok`.
 
 ### 17.0 무엇이 바뀌나
 
@@ -1202,7 +1212,7 @@ df -h .
     `.venv`로 돈다.
 -   `df`의 Avail을 본다. worker 이미지 증가분, 보존하는 옛 이미지(17.2), 백업 세 개(17.4, 17.5, 17.7)가 더 필요하다.
 
-### 17.2 이전 이미지 보존 (확인 필요)
+### 17.2 이전 이미지 보존
 
 재빌드(17.3)는 `latest` 이름을 새 이미지로 옮긴다. 그 전에 지금 이미지에 이름을 하나 더 붙여 둔다. 이름이
 없어진 옛 이미지는 되돌리기(17.11 A)에 쓸 수 없다.
@@ -1213,7 +1223,8 @@ docker tag <WORKER_IMAGE>:latest <WORKER_IMAGE>:pre-mvp02
 docker image ls <BACKEND_IMAGE>; docker image ls <WORKER_IMAGE>   # 각각 latest와 pre-mvp02의 IMAGE ID가 같다
 ```
 
--   **확인 필요:** 리허설은 docker 없이 했다. `C images`의 TAG 열이 `latest`가 아니면 그 값으로 바꿔 친다.
+-   **운영에서 확인했다:** 두 `docker tag` 뒤 `latest`와 `pre-mvp02`의 IMAGE ID가 같았다(리허설은 docker 없이
+    했다). `C images`의 TAG 열이 `latest`가 아니면 그 값으로 바꿔 친다.
 
 ### 17.3 이미지 재빌드
 
@@ -1231,7 +1242,8 @@ docker run --rm --pull never --network none <BACKEND_IMAGE>:latest python -c 'im
     `uv sync` 명령이 바뀐 것이다. 멈춘다(ADR-021 결정 6).
 -   두 `docker run`은 이미지만 돌린다. `.env`, mount, 네트워크가 없다. `--pull never`: 이 호스트에서 방금 빌드한
     이미지만 쓰고, 이름이 틀려도 레지스트리에서 받아 오지 않고 실패한다.
--   **확인 필요:** 같은 두 명령을 호스트 Python으로는 확인했다(`analyzer ok`). 이미지 안에서는 확인하지 않았다.
+-   **운영에서 확인했다:** 새 이미지 안에서 worker는 `analyzer ok`, backend는 `sudachipy absent`였다(리허설은 같은
+    명령을 호스트 Python으로만 확인했다).
 
 ### 17.4 정지와 백업 (rotation 밖)
 
@@ -1462,7 +1474,8 @@ health 기대값은 4.7과 같다(`database`와 `worker`가 `ok`).
 
 **6.2의 체인을 그대로 한 덩어리로** 실행한다. 명령은 바뀌지 않았다. 체인의 두 grep은 MVP-02 번들에서도
 그대로 성립한다(로컬 빌드로 확인: API 주소는 로그인 영역 청크에만 들어 있고 `localhost:8000`은 없다). backend
-재기동(17.8) 뒤에 한다.
+재기동(17.8) 뒤에 한다. 배포 뒤 **6.3의 2단계(`workers.dev`와 Preview URLs 끄기)를 다시 한다**(운영에서 deploy가 두
+설정을 다시 켰다).
 
 ### 17.10 확인
 

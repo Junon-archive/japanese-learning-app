@@ -31,7 +31,7 @@ payload       render_segments[].ruby: RubyPart[]   []  또는  parts.text 이음
 
 ## 맥락
 
-사용자 결정(2026-09-13, `updates/U-003-furigana.md`, `updates/U-005-demo-expansion.md`)은 이미 확정이다. 이 ADR이 정하는 것은
+사용자 결정(2026-09-13, `updates/done/U-003-furigana.md`, `updates/done/U-005-demo-expansion.md`)은 이미 확정이다. 이 ADR이 정하는 것은
 그 결정을 구현할 수 있게 하는 다섯 가지다.
 
 1.  어느 분석기와 사전인가(라이선스·wheel·크기·버전 조회)
@@ -252,7 +252,7 @@ computed_at   UTC ISO-8601. 호출자가 주입한 now (ADR-007: 계산 모듈�
 
 -   **원문 `sentences.japanese`와 `sentence_item_spans`는 바꾸지 않는다.** ruby는 옆 컬럼이다.
 -   **migration은 `ADD COLUMN ruby_json JSONB NULL` 하나다.** default가 없는 nullable 컬럼 추가는
-    PostgreSQL에서 테이블을 다시 쓰지 않는다. 기존 학습 기록은 건드리지 않는다(`updates/U-003-furigana.md`의 불변식 19).
+    PostgreSQL에서 테이블을 다시 쓰지 않는다. 기존 학습 기록은 건드리지 않는다(`updates/done/U-003-furigana.md`의 불변식 19).
     additive migration만으로 저장할 수 없으면 멈춘다는 중단 조건에 해당하지 않는다.
 -   **provenance는 이 값 안에 둔다.** `sentences.provenance_json`에 넣지 않는다 --- 그 컬럼은 생성
     provenance(provider/model/prompt_version)이고 seed 행은 `{}`다. backfill이 그 컬럼을 고치게 되면

@@ -4,7 +4,7 @@
 |---|---|
 | 번호 | U-002 |
 | 제목 | README 재작성과 문서 계층 |
-| 상태 | 배포 대기 |
+| 상태 | 완료 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `README.md`, `AGENTS.md`, `docs/decisions/ADR-020-production-topology.md` |

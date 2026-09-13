@@ -75,7 +75,7 @@ MVP-01에서 다음 사이클로 미룬 항목이다. **명세가 아니고 구�
 | 모바일에서 세션 시작/진행/종료 가능 (#1) | iOS 실기기에서 세션 종료까지 진행한다 | 대기 |
 | Postgres 직접 인터넷 노출 없음 (#37) | 외부에서 DB 포트 접속이 실패하는지 확인한다 | 대기 |
 
-## 5. MVP-02에서 제기된 항목 (16건)
+## 5. MVP-02에서 제기된 항목 (17건)
 
 MVP-02 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 항목이다.
 
@@ -97,3 +97,4 @@ MVP-02 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 �
 | localStorage 저장값에 `login_id`·서버 응답이 들어가지 않는다는 직접 테스트가 없다(정확한 키 집합 형식 검증이 막고 있다) | MVP-02 Wave 3 구현에서 제기(검증 후보). `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)` | 대기 |
 | 가나 학습에 소리(발음 재생)·획순이 없다는 전용 테스트가 없다 | MVP-02 Wave 3 구현에서 제기(검증 후보). `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `가나 학습` | 대기 |
 | 부하가 걸린 상태에서 PWA e2e의 `.login-form` 15초 대기가 시간 초과로 1회 실패했다(단독 재실행은 통과) | MVP-02 Wave 3 구현에서 제기. `backend/tests/e2e/test_pwa_installable.py`가 쓰는 로그인 도우미 `backend/tests/e2e/study_flow.py` | 대기 |
+| wrangler 설정 파일로 `workers_dev`·`preview_urls` 끄기 고정(설정 파일 없는 `deploy`가 배포마다 두 설정을 다시 켜서 지금은 대시보드에서 손으로 끈다) | MVP-02 운영 배포(2026-09-14)에서 확인. `docs/decisions/ADR-020-production-topology.md`의 결정 5 `설정 파일로 옮기는 조건`, `infra/DEPLOY.md` 6.3 | 대기 |

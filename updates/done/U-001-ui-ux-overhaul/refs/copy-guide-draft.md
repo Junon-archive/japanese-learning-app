@@ -3,7 +3,7 @@
 | 항목 | 값 |
 |---|---|
 | 지위 | **요청 참고 자료다. 명세가 아니다.** spec-sync가 `03_UI_UX_SPEC.md`로 옮긴 뒤에만 구현 근거가 된다 |
-| 근거 | 사용자 결정(2026-09-13), `updates/U-001-ui-ux-overhaul/request.md`의 "말투" 절 |
+| 근거 | 사용자 결정(2026-09-13), `updates/done/U-001-ui-ux-overhaul/request.md`의 "말투" 절 |
 | 범위 | 말투만 다룬다. 폰트는 범위 밖이다 |
 | 조사 대상 | `frontend/src/ui/*.ts`, `frontend/src/demo/*.ts`, `frontend/src/main.ts`, `frontend/index.html`, `frontend/public/manifest.webmanifest` (2026-09-13 `main` 기준) |
 
