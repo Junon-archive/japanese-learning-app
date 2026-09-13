@@ -10,7 +10,8 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 
 ## 담당 명세
 
-`spec/mvp-01-core/12_TEST_PLAN.md` 전체 + `13_ACCEPTANCE_CRITERIA.md`
+`spec/mvp-01-core/12_TEST_PLAN.md` 전체 + `13_ACCEPTANCE_CRITERIA.md`,
+`spec/mvp-02-onboarding/12_TEST_PLAN.md` + `13_ACCEPTANCE_CRITERIA.md`
 
 ## 반드시 커버해야 하는 것
 

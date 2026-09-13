@@ -10,6 +10,7 @@ tools: Read, Grep, Glob, Bash
 ## 담당 명세
 
 `spec/mvp-01-core/{02_LEARNING_POLICY,06_LEARNING_ENGINE,07_SRS_SPEC}.md`
+(MVP-02: 후리가나 표시·토글, 가나 학습, demo 진행은 learning event·exposure·evidence를 만들지 않는다)
 + `12_TEST_PLAN.md`의 Scenario A~H + `14_CONFIGURATION.md`
 
 ## 검증 체크리스트

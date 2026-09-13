@@ -11,7 +11,10 @@ Browser는 OpenAI secret을 받지 않는다. normal tap은 live LLM에 의존�
 **Public Demo는 API를 사용하지 않는다.** demo endpoint를 만들지 않으며
 익명 요청을 받는 학습 API도 두지 않는다
 (`spec/04_SECURITY_AND_DATA.md`의 Public Demo 구조). 모든 학습 API는
-인증된 private user 전용이다.
+인증된 private user 전용이다. MVP-02에서 API를 쓰지 않는 화면은 **선택 홈, Public Demo, 가나 학습**
+셋이다. 가나 학습 endpoint, 후리가나 설정 endpoint, 방문자 진도 endpoint를 만들지 않는다.
+`GET /api/auth/me`는 계약이 그대로이고 부르는 시점만 바뀌었다 --- 상단바 `로그인`을 누를 때만
+부른다(`03_UI_UX_SPEC.md`의 `상단바`).
 
 audio 관련 endpoint와 event는 MVP에 없다(`00_SCOPE.md`).
 
@@ -482,10 +485,14 @@ GET /api/study/session 을 한 번 다시 호출해 session payload를 갱신한
   "sentence_id": 1907,
   "japanese": "今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。",
   "render_segments": [
-    {"text": "今日は", "sentence_item_id": null},
-    {"text": "なんとなく", "sentence_item_id": 5511},
-    {"text": "気が乗らなくて", "sentence_item_id": 5512},
-    {"text": "家にいた。", "sentence_item_id": null}
+    {"text": "今日は", "sentence_item_id": null,
+     "ruby": [{"text": "今日", "reading": "きょう"}, {"text": "は", "reading": null}]},
+    {"text": "なんとなく", "sentence_item_id": 5511, "ruby": []},
+    {"text": "気が乗らなくて", "sentence_item_id": 5512,
+     "ruby": [{"text": "気", "reading": "き"}, {"text": "が", "reading": null},
+              {"text": "乗", "reading": "の"}, {"text": "らなくて", "reading": null}]},
+    {"text": "家にいた。", "sentence_item_id": null,
+     "ruby": [{"text": "家", "reading": "いえ"}, {"text": "にいた。", "reading": null}]}
   ],
   "presentation_role": "review",
   "review_reason": "fsrs_due",
@@ -505,6 +512,61 @@ GET /api/study/session 을 한 번 다시 호출해 session payload를 갱신한
 -   **번역은 reveal 전 응답에 포함하지 않는다.** reveal API 호출 후
     반환하여 `translation_revealed` event가 의미 있게 남도록 한다.
 -   `probe`가 non-null이면 해당 presentation에 probe를 함께 표시한다.
+-   `ruby`는 MVP-02에서 더한 후리가나 표시 조각이다(아래 `render_segments[].ruby`).
+
+### `render_segments[].ruby` (MVP-02 확정)
+
+각 segment에 후리가나 표시 조각 `ruby`를 싣는다. 출처는 `sentences.ruby_json`이다
+(`04_DB_SPEC.md`의 `ruby_json`). 결정 배경은 ADR-021이다.
+
+``` json
+"render_segments": [
+  {"text": "この仕事、田中さんに", "sentence_item_id": null,
+   "ruby": [{"text": "この", "reading": null}, {"text": "仕事", "reading": "しごと"},
+            {"text": "、", "reading": null},   {"text": "田中", "reading": "たなか"},
+            {"text": "さんに", "reading": null}]},
+  {"text": "任せ", "sentence_item_id": 5511,
+   "ruby": [{"text": "任", "reading": "まか"}, {"text": "せ", "reading": null}]},
+  {"text": "てもいい", "sentence_item_id": 5512, "ruby": []},
+  {"text": "？", "sentence_item_id": null, "ruby": []}
+]
+```
+
+``` text
+RubyPart          {text: string, reading: string | null}
+RenderSegment     {text, sentence_item_id, ruby: RubyPart[]}
+
+R1  ruby는 [] 이거나, parts의 text를 이으면 segment.text와 같다
+R2  segment 안에 ruby span이 하나도 없으면 []. 있으면 segment 전체를 덮는 parts
+R3  part.text는 비어 있지 않다. reading이 null인 인접 part는 하나로 합친다 (정규형)
+R4  reading은 비어 있지 않은 히라가나 문자열이다
+R5  ruby_json이 NULL이면 모든 segment의 ruby = []
+R6  표시 시점에 저장값을 다시 검증한다. 다음 중 하나라도 어기면 모든 segment의 ruby = [] 이고
+    로그 ruby.invalid_stored를 남긴다. 500을 내지 않는다
+      - spans가 배열이고 각 원소가 [정수, 정수, 문자열] 모양이다 (아니면 저장값 무효)
+      - 모든 span이 원문 codepoint 범위 안이고 start < end
+      - start 오름차순이고 서로 겹치지 않는다
+      - 어떤 span도 is_tappable span의 경계를 넘지 않는다 (안에 있거나 완전히 밖)
+      - reading이 비어 있지 않고 히라가나 코드포인트(U+3041..U+3096, ゝ ゞ ー)만으로 되어 있다
+R7  후리가나 토글 상태와 무관하게 항상 싣는다
+```
+
+-   **서버가 자른다**(`app/render.py`). 좌표 `[start, end, reading]`을 payload에 싣지 않는다. frontend가
+    code point를 UTF-16 index로 바꾸지 않는다는 위 규칙이 ruby에도 그대로 적용된다.
+-   **`null`을 쓰지 않는다.** 한자 없음, 생략, 미계산, 저장값 무효는 모두 `[]`이고 frontend는 넷을 구분하지
+    않는다. 네 경우의 화면 동작이 "그 segment는 글자만 그린다" 하나다.
+-   **R2의 `[]`는 "달 것이 없다"만 뜻한다.** `[{"text": "てもいい", "reading": null}]`로 보내지 않는다.
+    정규형이 하나여야 demo fixture와 API 출력의 일치 테스트가 결정적이다.
+-   **R6이 500이 아닌 이유:** 표시 보조가 학습을 막지 않는다. tappable span 오류(`RenderSpanError`)는
+    여전히 500이다 --- 그것은 탭 대상 자체가 틀린 것이다.
+-   **R7:** 토글은 브라우저 localStorage에만 있고 서버로 가지 않는다. 서버는 토글을 모르므로 조건부로 실을
+    수 없고, 조건부로 싣게 하려면 토글을 요청에 실어야 해서 불변식 16을 어긴다.
+-   **API 요청 경로는 분석기를 import하지 않는다.** 저장된 값을 자르기만 한다(불변식 15,
+    `spec/02_ARCHITECTURE.md`).
+-   ruby는 **학습 신호가 아니다.** 싣는다고 event·exposure·evidence가 생기지 않는다
+    (`02_LEARNING_POLICY.md`의 `학습 신호가 아닌 것 (MVP-02)`).
+-   probe의 `expression`과 Explanation 응답(`canonical_form`, `reading`, `example_sentence`)에는 ruby가 없다.
+    표시 범위는 학습 문장뿐이다(`03_UI_UX_SPEC.md`의 `Translation/Furigana`).
 
 ``` json
 "probe": {
@@ -592,7 +654,7 @@ Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
   "sentence_item_id": 5512,
   "learning_item_id": 772,
   "canonical_form": "気が乗らない",
-  "reading": "き が のらない",
+  "reading": "きがのらなくて",
   "item_type": "expression",
   "core_meaning": "내키지 않다 / 할 마음이 나지 않다",
   "meaning_in_context": "연구실에 갈 생각이었지만 마음이 내키지 않았다",
@@ -602,9 +664,28 @@ Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
 }
 ```
 
+`reading`은 **문장 속 표면형의 읽기**다(위 예시에서 span `気が乗らなくて`의 읽기). 기본형 `canonical_form`의
+읽기가 아니다(`04_DB_SPEC.md`의 `sentence_item_explanations`).
+
 해당 item에 explanation이 없으면 그 문장은 애초에 Ready가 아니다
 (`08_LLM_SPEC.md`의 Ready invariant). 즉 이 endpoint는 **live LLM fallback을 하지
 않는다.**
+
+**Explanation의 `reading`과 문장 ruby의 관계(MVP-02).**
+
+``` text
+Explanation reading   sentence_item_explanations.reading. /click 응답에만 있다
+                      item_clicked·explanation_revealed의 대상. MVP-02에서 바뀌지 않았다
+문장 ruby             sentences.ruby_json에서 온 render_segments[].ruby
+                      문장 전체 한자의 표시 보조. presentation 응답에 항상 있다. event를 만들지 않는다
+```
+
+-   ruby 계산은 tappable item의 span에 `explanation.reading`을 먼저 쓴다(ADR-021의 교정 계층 1). 그래서
+    후리가나를 켜면 tappable 표현의 읽기가 탭하기 전에 보일 수 있고, 그 값은 대개 이 응답의 `reading`과
+    같다. 어떤 정책도 "읽기를 보았는가"를 입력으로 쓰지 않으므로 `item_clicked`와
+    `explanation_revealed`의 의미는 그대로다.
+-   두 값이 어긋나도 이 응답의 `reading`을 고치지 않는다(`11_OBSERVABILITY.md`의
+    `MVP-02 추가: 후리가나 계산 결과`).
 
 ### `explanation_revealed`를 언제 보내는가
 
@@ -612,7 +693,7 @@ Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
 
 ``` text
 item_clicked           사용자가 tappable span을 탭한 직후 (설명을 요청했다)
-explanation_revealed   설명 패널/시트가 실제로 렌더된 직후 (설명이 표시됐다)
+explanation_revealed   떠나지 않은 학습 화면의 DOM에 설명 내용이 삽입된 직후 (설명이 표시됐다)
 ```
 
 두 event를 모두 두는 이유는 **탭했지만 설명이 표시되지 않은 경우를 구분할 수 있게
@@ -623,9 +704,23 @@ explanation_revealed   설명 패널/시트가 실제로 렌더된 직후 (설�
 
 -   `explanation_revealed`는 **표시된 뒤에** 보낸다. 탭과 동시에 보내면 두 event가
     항상 1:1이 되어 뒤엣것이 앞엣것의 복사본이 되고, 위의 구분이 불가능해진다.
+-   **화면을 떠났으면 보내지 않는다(MVP-02).** `/click` 응답을 기다리는 동안 사용자가 화면을 떠나(상단바 앱
+    이름, 뒤로 가기 등) 그 화면의 `signal`이 abort됐으면, 늦게 온 응답으로 설명을 그리지 않고
+    `explanation_revealed`도 보내지 않는다. 위 "응답 도착 전에 화면을 떠나면 `item_clicked`만 남는다"가 그대로
+    성립한다.
+-   **"표시됐다"는 떠나지 않은 학습 화면의 DOM에 설명 내용이 삽입된 시점이다(MVP-02).** 설명 시트의 올라오는
+    애니메이션이 끝나기를 기다리지 않는다. 끝을 기다리면 애니메이션이 끊기거나 종료 이벤트가 오지 않는
+    환경(reduced-motion, 테스트)에서 event가 사라져, 같은 설명이 환경에 따라 기록되거나 안 되는 상태가
+    된다(ADR-022, `03_UI_UX_SPEC.md`의 `설명 시트`).
 -   같은 item의 패널을 접었다 다시 펴도 **한 presentation에서 1회만** 보낸다. client
     발급 key는 UUIDv4이므로 매번 보내면 그때마다 새 event가 쌓이고, raw history가
     학습 신호가 아니라 UI 조작 횟수를 세게 된다.
+-   **설명 시트 재열기(MVP-02):** 시트를 닫고 같은 표현을 다시 탭해도 `item_clicked`와 `explanation_revealed`는
+    **presentation + item당 1회**다. 두 번째 탭부터는 이미 받은 설명을 다시 보여주고 `/click`을 다시 부르지
+    않으며 `explanation-revealed`도 보내지 않는다. 첫 `/click`이 실패해 설명을 받지 못한 경우의 다시 탭은
+    재열기가 아니라 첫 요청의 재시도다. **presentation + item당 1회는 한 화면 mount 안에서의 보장이다.**
+    새로고침이나 학습 기록 왕복 뒤 같은 presentation으로 돌아오면 다시 남을 수 있다(MVP-01부터의 동작이고 둘 다
+    auxiliary signal이다).
 -   둘 다 auxiliary signal이며 mastery도 FSRS rating도 만들지 않는다
     (`02_LEARNING_POLICY.md`의 `Auxiliary signal`, `07_SRS_SPEC.md`의
     `No-signal review`). 보내지 않아도 학습 진행은 막히지 않는다.

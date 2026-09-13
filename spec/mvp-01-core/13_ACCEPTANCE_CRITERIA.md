@@ -53,7 +53,8 @@
     세션은 계속 진행됨
 -   신규 사용자가 seed 기반으로 첫 세션을 시작 가능
 -   **Demo는 backend/DB/LLM과 구조적으로 분리** (paid LLM 0, private data
-    접근 0)
+    접근 0). MVP-02에서 넓힌 기준(선택 홈·가나 학습, 동적 import, localStorage)은
+    `spec/mvp-02-onboarding/13_ACCEPTANCE_CRITERIA.md`에 있다
 -   DB migration 재현 가능
 -   Postgres 직접 인터넷 노출 없음
 -   secret frontend/Git 노출 없음
@@ -82,5 +83,6 @@ default_session_minutes      = 12
 ```
 
 기술 검증 후 실제 2\~4주 사용하여 지속 사용성, 설명 마찰, 자연스러움,
-contextual SRS 효과, 12분 적합성을 평가한다. 이 결과가 MVP-02 또는 정책
-수정의 근거가 된다.
+contextual SRS 효과, 12분 적합성을 평가한다. 이 결과가 "실사용 평가 후 정책 조정" 또는 정책
+수정의 근거가 된다. 이 이름은 `spec/mvp-02-onboarding/`의 MVP-02(선택 홈·후리가나·가나 학습·demo
+확장)와 다른 것이다. 원래 "MVP-02"라고 적었으나 이름이 겹쳐 바꿨다.

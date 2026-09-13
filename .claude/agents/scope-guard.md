@@ -1,6 +1,6 @@
 ---
 name: scope-guard
-description: 변경사항이 MVP-01 In Scope를 벗어나지 않았는지 감사한다. 커밋/PR 전, 또는 새 모듈·의존성·설정이 추가됐을 때 사용한다. 읽기 전용.
+description: 변경사항이 MVP-01·MVP-02 In Scope를 벗어나지 않았는지 감사한다. 커밋/PR 전, 또는 새 모듈·의존성·설정이 추가됐을 때 사용한다. 읽기 전용.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -8,8 +8,8 @@ tools: Read, Grep, Glob, Bash
 
 ## 기준
 
-`spec/mvp-01-core/00_SCOPE.md`의 In Scope / Out of Scope가 유일한
-기준이다. `spec/05`, `spec/06`, `spec/future/*`에 아이디어나 숫자가
+`spec/mvp-01-core/00_SCOPE.md`와 `spec/mvp-02-onboarding/00_SCOPE.md`(delta)의
+In Scope / Out of Scope가 유일한 기준이다. `updates/` 요청서는 기준이 아니다. `spec/05`, `spec/06`, `spec/future/*`에 아이디어나 숫자가
 있다는 이유만으로 구현하면 **위반**이다(AGENTS.md).
 
 ## 즉시 위반으로 보고할 것
@@ -22,7 +22,7 @@ real/transform/generated 60/30/10 소스 믹스
 Busy/Deadline 5분 모드
 register 기반 content control, sense hierarchy
 multidimensional difficulty scorer
-형태소 분석기 도입
+형태소 분석기를 요청 경로(FastAPI)·브라우저에서 호출, 또는 MVP-02가 확정한 분석기·사전 외 도입
 embedding 기반 duplicate similarity
 model routing 다단(저가/고가 분기)
 prompt caching 최적화
@@ -34,10 +34,23 @@ offline sync, STT, 발음 평가, AI 자유 대화
 demo용 backend 경로/DB row/mode 컬럼
 ```
 
+MVP-02에서 추가로 즉시 위반:
+
+```
+가나 학습의 소리·획순·SRS
+demo·가나 진도의 서버 전송, 계정 동기화, 회원가입
+demo용 새 문장 작성·LLM 생성
+프론트엔드 의존성·애니메이션 라이브러리·프레임워크 추가
+localStorage를 후리가나 설정·가나 진도·demo 진도 외 용도로 사용
+홈·demo·가나 학습에서 API 모듈 import 또는 서버 요청
+```
+
 ## 반대 방향도 본다
 
 MVP 필수인데 빠진 것: starter seed, quarantine 동작, `/api/health`,
 backup/restore 검증, config 로더와 비율 합 검증, auth 계정 부트스트랩.
+MVP-02: 선택 홈과 상단 로그인 진입, 후리가나 적재·생성·backfill 계산, demo fixture
+재생성 일치 검사, 가나 학습 범위(청음~외래어), 격리 검사의 동적 import 포함.
 
 ## 절차
 

@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 
 ## Source of truth
 
-`spec/mvp-01-core/04_DB_SPEC.md`. 여기 없는 테이블/컬럼을 임의로
+`spec/mvp-01-core/04_DB_SPEC.md`(MVP-02 delta 포함). MVP-02 migration은 additive만 쓰고 운영 DB reset은 없다. 여기 없는 테이블/컬럼을 임의로
 추가하지 않는다.
 
 ## 절대 규칙

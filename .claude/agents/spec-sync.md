@@ -16,7 +16,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 ## 절차
 
 1. 충돌/공백을 정확히 인용한다(`파일:줄`).
-2. `spec/mvp-01-core/*` > `spec/00~06` > UI reference > 구현 편의
+2. `spec/mvp-01-core/*` + `spec/mvp-02-onboarding/*`(delta) > `spec/00~06` > UI reference > 구현 편의
    순서로 우선순위를 적용한다(README.md).
 3. **최소 patch**로 수정한다. 기존 상세 내용을 요약·압축·삭제하지
    않는다. v0.2 압축 때 구현 정보가 대량 소실된 전례가 있다.
@@ -26,6 +26,9 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 6. `spec/CHANGELOG.md`에 기록한다. 새 버전 번호를 임의로 만들지 않는다.
 
 ## 절대 규칙
+
+- `updates/` 요청서는 명세가 아니다. 사용자가 결정한 요청을 명세로 옮기는 것은
+  이 에이전트의 일이지만, 요청서 자체를 source of truth로 인용하지 않는다.
 
 - **Future 기능을 구현 명세로 승격시키지 않는다.** 범위 확대가
   필요하면 그렇게 판단한 근거를 적고 사람의 승인을 요청한다.

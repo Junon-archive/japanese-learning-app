@@ -24,9 +24,12 @@ Decision:
 ``` text
 L0  models config settings clock db  render  normalization    app 내부 의존 없음
 L1  srs/*   learning/*   llm/*        L0만. 서로 import 금지
+    furigana.py                       (MVP-02) L0 중 render + sudachipy만. importer 제한은 G14
 L2  services/*   jobs/*               L0 + L1 + L2
 L3  api/*                             L0 + L2 + schemas. L1 금지
 ```
+
+`furigana.py`의 줄은 MVP-02(2026-09-13)에 더했다. 근거와 검사는 ADR-021 `결정 4`의 G14다.
 
 `llm/`을 `learning/`·`srs/`와 같은 줄에 두는 이유는 같은 모양이기 때문이다.
 정책 판단과 외부 생성은 **둘 다 트랜잭션을 모르는 계산**이고, DB를 읽어 값을
@@ -114,6 +117,9 @@ G12  (a) app/jobs/ 밖에서 import 가능한 jobs 모듈은 ENQUEUE_MODULES뿐�
 G13  importlib / __import__ 는 backend/app/ 어디에도 없다.
 G7   (확장) app/jobs/ 안의 commit/rollback 은 jobs/queue.py 와
            jobs/persistence.py 에만 있다.
+G14  (MVP-02, ADR-021) 형태소 분석기 import는 app/furigana.py 에서만, app.furigana import는
+     services/seed_loader.py 와 jobs/persistence.py 에서만. 런타임 탐침이 API 프로세스에서
+     app.furigana 와 sudachipy 가 적재되지 않았음을 본다
 ```
 
 G4만으로는 불변식 #1이 지켜지지 않는다. `app/jobs/`는 `app.llm`을 **합법적으로**

@@ -90,6 +90,8 @@ MVP-01에는 audio가 전혀 없다(`spec/mvp-01-core/00_SCOPE.md`).
 
 -   multidimensional difficulty scorer
 -   morphological analyzer 도입
+    (주석, MVP-02: 콘텐츠 적재·생성 시점의 후리가나 계산 용도로만 도입했다(ADR-021). 나머지 용도는
+    여전히 Future다)
 -   `LearningItem → Sense` 확장
 -   register metadata와 active-use/recognize-only 구분
 -   explanation language progression

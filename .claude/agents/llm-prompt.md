@@ -9,6 +9,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 ## 담당 명세
 
 `spec/mvp-01-core/08_LLM_SPEC.md` + `spec/06_LLM_ENGINEERING_PRINCIPLES.md`
+(MVP-02: 후리가나 읽기는 형태소 분석기가 계산한다. prompt·LLM으로 만들지 않는다)
 
 ## MVP task (이 3개만)
 

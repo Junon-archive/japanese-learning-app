@@ -1,6 +1,6 @@
 # ADR-020 --- 운영 토폴로지: 단일 호스트 compose, 호스트 운영 CLI, 기존 터널
 
-Status: Accepted
+Status: Accepted (결정 6 개정 2026-09-13)
 
 Decision: MVP 운영은 **이 머신 한 대**에서 한다.
 PostgreSQL·API·worker는 `infra/docker-compose.yml`로 띄우고, API는 이 호스트에
@@ -31,6 +31,7 @@ Browser ── https://<FRONTEND_HOST> ── Workers Static Assets (Custom Doma
 5  frontend 배포          wrangler CLI flag 배포 (설정 파일 없음), Custom Domain은 대시보드,
                           workers.dev 끄기, 빌드 산출물 grep으로 API origin 확인 후에만 배포
 6  도메인 표기            커밋되는 모든 파일은 <FRONTEND_HOST> / <API_HOST> 자리표시자
+                          (개정 2026-09-13: README의 사이트 주소 1개만 예외)
 7  seed 초기화 경로       db_reset의 production 거부를 유지한다. 새 코드 없이 문서의
                           수동 절차로 하되, 대상 DSN 확인 → 백업 → DROP을 하나의 && 체인으로
                           묶는다. compose는 셸 환경을 비운 wrapper(env -i)로 부른다
@@ -428,6 +429,32 @@ Cloudflare 대시보드            Custom Domain, DNS
 들어 있으므로(`VITE_*`는 공개값) `<FRONTEND_HOST>`를 여는 사람은 누구나 API 호스트를 안다.
 Universal SSL 인증서는 zone과 `*.zone`으로 발급되므로 CT 로그로 개별 서브도메인이 드러나지는
 않지만, DNS 열거까지 막아 주지는 않는다. 방어의 중심은 여전히 password 엔트로피다(ADR-006).
+
+### 개정 (2026-09-13) --- README의 사이트 주소 1개만 예외
+
+사용자 결정(2026-09-13, `updates/U-002`)으로 이 결정에 **예외 하나**를 둔다.
+
+``` text
+예외        루트 README.md에 방문자가 여는 사이트 주소 1개 (<FRONTEND_HOST>의 실제 값)
+그대로      README를 포함한 모든 커밋 파일에 운영 환경의 실제 값을 쓰지 않는다:
+            <API_HOST>, <TUNNEL_NAME>, <TUNNEL_SERVICE>, <WORKER_NAME>의 실제 값,
+            운영 포트·서버 경로·IP·계정 ID
+그대로      README 밖의 커밋 파일(infra/, docs/, scripts/, Makefile, 예시 설정, 운영 문서,
+            테스트, spec/, updates/, 이 ADR)은 사이트 주소도 자리표시자로 쓴다
+대상 아님   다음은 운영 환경의 실제 값이 아니므로 이 결정의 대상이 아니다
+            loopback 기본값(localhost, 127.0.0.1)과 로컬 개발·검증용 포트
+            문서 예시 자리표시자(<API_HOST>, example.com 류)
+            제3자 참고 URL(화면 전환 참고 사이트 등)
+```
+
+-   **이유:** 저장소가 공개되었고, 루트 README는 포트폴리오 방문자가 앱을 바로 써 보게 하는
+    문서가 되었다(`updates/U-002`). 사이트 주소는 방문자에게 알리려고 있는 주소다.
+-   **이 예외가 바꾸는 것:** 위 `한계`대로 사이트를 여는 사람은 공개 번들에서 API 호스트를 알 수
+    있다. README에 사이트 주소가 있으면 저장소를 읽는 사람도 그 경로로 API 호스트에 닿는다. 즉
+    "저장소를 통한 발견"을 막는 효과가 API 호스트에 대해서도 약해진다. 방어의 중심이 password
+    엔트로피(ADR-006)라는 판단은 그대로이며, 이 개정으로 login endpoint의 방어를 바꾸지 않는다.
+-   예외는 **README 한 파일, 주소 한 개**다. 늘리려면 이 절을 다시 개정한다. 실제 주소 값은 이
+    ADR에 적지 않는다.
 
 ---
 

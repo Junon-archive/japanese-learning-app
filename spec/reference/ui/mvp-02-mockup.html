@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Nihongo Context MVP-02 정적 목업</title>
+<!--
+  MVP-02 Wave 1 정적 목업 (U-001 / U-004 / U-005).
+
+  - 외부 요청 없음. 폰트 지정 없음(시스템 폰트). 서버 호출 없음. 저장소(localStorage) 사용 없음 ---
+    목업 상태는 전부 메모리에만 있다.
+  - 기능·상태의 기준은 명세다. 이 파일은 화면 구성·문구·움직임의 참고용이며 pixel-perfect 대상이 아니다.
+  - 움직임 토큰과 규칙은 `../guitar-riff-motion.md`의 "Nihongo Context 적용안"을 따른다.
+  - 번역문은 "문장 뜻 보기"를 누른 뒤에야 DOM에 만든다. 숨겨 둔 번역 노드가 없다.
+  - <ruby>/<rt>는 후리가나 설정과 무관하게 항상 만든다. 켜고 끄는 것은 documentElement의
+    `furigana-on` class이고, class가 없으면(기본) CSS가 .sentence 안의 rt를 숨긴다(ADR-022).
+    토글할 때 문장을 다시 그리지 않는다.
+  - span 경계는 손으로 나눈 조각 데이터 그대로 그린다. 문자열 인덱스를 계산하지 않는다.
+  - 예시 문장은 seed/sentences.yaml의 sn_0001, sn_0002, sn_0003이다. 가나 데이터는 목업용 표본이다.
+-->
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --line: #e6e9ee;
+    --text: #17202a;
+    --muted: #697586;
+    --faint: #98a2b3;
+    --accent: #4f6df5;
+    --accent-press: #3f5be0;
+    --accent-soft: #eef1ff;
+    --grey-soft: #eceff3;
+    --ok: #1f8f5a;
+    --ok-soft: #e8f6ee;
+    --no: #c24545;
+    --no-soft: #fbeeee;
+    --radius-card: 20px;
+    --radius-ctl: 14px;
+    --tap: 44px;
+
+    /* motion 토큰 (guitar-riff-motion.md 5.2) */
+    --motion-fast: 120ms;
+    --motion-base: 240ms;
+    --motion-slow: 360ms;
+    --ease-out: cubic-bezier(.2, .9, .25, 1);
+    --ease-standard: ease;
+    --motion-shift: 12px;
+    --motion-shift-sm: 8px;
+    --press-card: .98;
+    --press-btn: .97;
+    --press-small: .95;
+    --stagger: 30ms;
+
+    color-scheme: light;
+  }
+
+  /*
+   * reduced-motion (guitar-riff-motion.md 5.4): 이동을 없애고 짧은 페이드만 남긴다.
+   * 실제 앱은 @media (prefers-reduced-motion: reduce) 하나로 같은 토큰을 바꾼다.
+   * 목업은 OS 설정 없이 확인하려고 JS가 matchMedia 결과(또는 목업 스위치)를 data-motion에 적는다.
+   */
+  :root[data-motion="reduce"] {
+    --motion-base: var(--motion-fast);
+    --motion-slow: var(--motion-fast);
+    --motion-shift: 0px;
+    --motion-shift-sm: 0px;
+    --press-card: 1;
+    --press-btn: 1;
+    --press-small: 1;
+    --stagger: 0ms;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-text-size-adjust: 100%;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+  [data-focus]:focus { outline: none; }
+  h1, h2, h3, p { margin: 0; }
+  [hidden] { display: none !important; }
+
+  /* ---------- 앱 칼럼 ---------- */
+  .app { max-width: 480px; margin: 0 auto; background: var(--bg); min-height: 100vh; min-height: 100dvh; }
+  @media (min-width: 600px) { .app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); } }
+
+  .screen { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(var(--motion-shift)); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(var(--motion-shift-sm)); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* 화면 진입: 들어오는 화면만 움직인다. 나가는 화면은 바로 뗀다. */
+  .screen.is-entering { animation: rise-in var(--motion-slow) var(--ease-out) both; }
+  .screen.is-entering .stagger > * { animation: rise-in var(--motion-slow) var(--ease-out) both; }
+  .screen.is-entering .stagger > :nth-child(2) { animation-delay: var(--stagger); }
+  .screen.is-entering .stagger > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+  /* 다음 문장: 문장 영역만 페이드. 떠오름 없음. */
+  .is-swapping { animation: fade-in var(--motion-base) var(--ease-standard) both; }
+  /* 탭·범위 전환 패널 */
+  .is-panel-in { animation: panel-in var(--motion-base) var(--ease-out) both; }
+
+  /* ---------- 상단바 ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 4px;
+    min-height: 56px; padding: env(safe-area-inset-top) 8px 0 8px;
+    background: rgba(244, 246, 248, .9);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  }
+  .topbar .brand { padding-left: 8px; font-weight: 800; font-size: 17px; letter-spacing: -.02em; }
+  .topbar .title { font-weight: 700; font-size: 16px; }
+  .topbar .spacer { flex: 1; }
+  .icon-btn {
+    width: var(--tap); height: var(--tap); border: 0; background: none; border-radius: 12px;
+    display: grid; place-items: center;
+    transition: background-color var(--motion-fast) var(--ease-standard);
+  }
+  .icon-btn:active { background: var(--grey-soft); }
+  .text-btn {
+    min-height: var(--tap); padding: 0 10px; border: 0; background: none; border-radius: 10px;
+    color: var(--muted); font-size: 14px; font-weight: 600;
+    transition: background-color var(--motion-fast) var(--ease-standard);
+  }
+  .text-btn:active { background: var(--grey-soft); }
+  .text-btn:disabled { color: var(--faint); cursor: default; }
+  .text-btn.accent { color: var(--accent); }
+
+  /* ---------- 본문 ---------- */
+  .content { flex: 1; padding: 8px 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+  .display { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.35; margin-top: 12px; }
+  .lead { color: var(--muted); font-size: 15px; }
+  .section-title { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-card);
+    padding: 20px; text-align: left; width: 100%;
+  }
+  .pressable { transition: transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
+  .card.pressable { display: block; cursor: pointer; }
+  .card.pressable:active:not(:disabled) { transform: scale(var(--press-card)); background: #fafbfc; }
+  .card.pressable:disabled { opacity: .5; cursor: default; }
+  .card h2 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+  .card .desc { margin-top: 4px; color: var(--muted); font-size: 14.5px; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .pill { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--grey-soft); padding: 4px 10px; border-radius: 999px; }
+  .preview {
+    margin-bottom: 14px; padding: 14px 16px; border-radius: var(--radius-ctl);
+    background: var(--accent-soft); font-size: 20px; line-height: 1.5;
+  }
+  .preview u { text-decoration: none; border-bottom: 2px solid rgba(79, 109, 245, .45); }
+  .preview.kana { font-size: 28px; letter-spacing: .3em; }
+
+  /* ---------- 버튼 ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; min-height: 52px; padding: 0 16px; border: 0; border-radius: var(--radius-ctl);
+    font-size: 16px; font-weight: 700; letter-spacing: -.01em;
+    transition: transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+  }
+  .btn:active:not(:disabled) { transform: scale(var(--press-btn)); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:active:not(:disabled) { background: var(--accent-press); }
+  .btn-secondary { background: var(--grey-soft); color: var(--text); }
+  .btn-secondary:active:not(:disabled) { background: #e1e5eb; }
+  .btn-ghost { background: transparent; color: var(--muted); min-height: var(--tap); }
+  .btn-caution { background: var(--no-soft); color: var(--no); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  .footer {
+    position: sticky; bottom: 0; z-index: 10;
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 75%, rgba(244, 246, 248, 0));
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  /* ---------- 안내 ---------- */
+  .info {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 6px 6px 14px; border-radius: var(--radius-ctl); background: var(--accent-soft);
+    font-size: 13.5px; color: #3b4a7a;
+  }
+  .info p { flex: 1; }
+  .notice { padding: 14px 16px; border-radius: var(--radius-ctl); background: var(--panel); border: 1px solid var(--line); font-size: 14.5px; }
+  .notice .actions { margin-top: 10px; }
+  .notice.error { border-color: #f0d3d3; background: #fff8f8; }
+
+  /* ---------- 진행 + 후리가나 ---------- */
+  .progress-row { display: flex; align-items: center; gap: 10px; }
+  .progress-row .label { font-size: 14px; font-weight: 700; }
+  .progress-row .readout { font-size: 13px; color: var(--muted); }
+  .bar { height: 6px; border-radius: 999px; background: #e3e7ed; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width var(--motion-slow) var(--ease-out); }
+  :root[data-motion="reduce"] .bar > i { transition: none; }
+
+  .switch-row { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); padding: 0 2px 0 8px; border: 0; background: none; border-radius: 12px; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .switch { position: relative; width: 44px; height: 26px; border-radius: 999px; background: #cfd5de; transition: background-color var(--motion-fast) var(--ease-standard); flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform var(--motion-fast) var(--ease-standard); }
+  .switch-row[aria-checked="true"] { color: var(--text); }
+  .switch-row[aria-checked="true"] .switch { background: var(--accent); }
+  .switch-row[aria-checked="true"] .switch::after { transform: translateX(18px); }
+
+  /* ---------- 문장 ---------- */
+  .sentence-card { padding: 28px 20px 18px; }
+  .sentence { font-size: 25px; line-height: 1.9; letter-spacing: .01em; word-break: normal; }
+  .sentence rt { display: none; font-size: .46em; color: var(--muted); letter-spacing: 0; }
+  :root.furigana-on .sentence { line-height: 2.35; }
+  :root.furigana-on .sentence rt { display: revert; }
+  .token {
+    /* 버튼은 inline-block으로 그려지므로 줄 높이를 문장보다 낮춰 밑줄이 글자에 붙게 한다.
+       밑줄은 border가 아니라 text-decoration이다(ruby 주석에는 번지지 않고, 좌우 padding만큼 토큰 사이가 끊긴다). */
+    display: inline-block; margin: 0; padding: 0 2px; border: 0; background: none;
+    font: inherit; line-height: 1.5; letter-spacing: inherit; color: inherit; vertical-align: baseline;
+    text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px;
+    text-decoration-color: rgba(79, 109, 245, .35); border-radius: 6px;
+    transition: background-color var(--motion-fast) var(--ease-standard), text-decoration-color var(--motion-fast) var(--ease-standard);
+  }
+  .token:active, .token[aria-expanded="true"] { background: var(--accent-soft); text-decoration-color: var(--accent); }
+  .hint { margin-top: 14px; font-size: 13px; color: var(--faint); }
+
+  /* ---------- probe ---------- */
+  .probe { padding: 16px; }
+  .probe .kicker { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+  .probe .prompt { margin-top: 2px; font-size: 15px; font-weight: 700; }
+  .probe .expr { margin-top: 6px; font-size: 22px; }
+  .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .choice-grid .btn { min-height: var(--tap); font-size: 14.5px; font-weight: 600; }
+  .done-line { margin-top: 10px; font-size: 14px; color: var(--muted); }
+
+  /* ---------- 가나 ---------- */
+  .seg { display: flex; padding: 4px; gap: 4px; border-radius: 999px; background: var(--grey-soft); }
+  .seg button { flex: 1; min-height: 40px; border: 0; border-radius: 999px; background: none; font-weight: 700; color: var(--muted); transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard); }
+  .seg button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 20px 4px; margin: 0 -20px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; min-height: 38px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--grey-soft); color: var(--muted); font-size: 14px; font-weight: 700; transition: transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
+  .chip:active { transform: scale(var(--press-small)); }
+  .chip[aria-pressed="true"] { background: var(--text); color: #fff; }
+  .kana-grid { display: grid; gap: 6px; }
+  .kana-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+  .kana-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .kana-cell { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 2px 6px; text-align: center; min-height: 72px; }
+  .kana-cell.empty { background: transparent; border-color: transparent; }
+  .kana-cell .ch { font-size: 24px; line-height: 1.2; }
+  .kana-cell .ro { font-size: 12px; font-weight: 700; color: var(--text); }
+  .kana-cell .ko { font-size: 11px; color: var(--muted); }
+  .word-list { display: flex; flex-direction: column; gap: 8px; }
+  .word-row { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .word-row .w { font-size: 22px; min-width: 104px; }
+  .word-row .r { font-size: 14px; font-weight: 700; }
+  .word-row .m { font-size: 13px; color: var(--muted); }
+  .mode-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .mode-list .card { padding: 16px 18px; }
+  .mode-list h3 { font-size: 16px; font-weight: 800; }
+
+  .quiz-card { text-align: center; padding: 36px 20px 28px; }
+  .quiz-q { font-size: 64px; line-height: 1.2; }
+  .quiz-q.word { font-size: 42px; }
+  .answer { margin-top: 18px; }
+  .answer .ro { font-size: 28px; font-weight: 800; letter-spacing: .02em; }
+  .answer .ko { font-size: 16px; color: var(--muted); }
+  .answer .m { margin-top: 4px; font-size: 14px; color: var(--muted); }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .option {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 0 18px;
+    background: var(--panel); border: 1.5px solid var(--line); border-radius: var(--radius-ctl); text-align: left;
+    transition: transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+  }
+  .option:active:not(:disabled) { transform: scale(var(--press-btn)); }
+  .option:disabled { cursor: default; }
+  .option .ro { font-size: 18px; font-weight: 800; }
+  .option .ko { font-size: 14px; color: var(--muted); }
+  .option.is-correct { border-color: var(--ok); background: var(--ok-soft); }
+  .option.is-wrong { border-color: var(--no); background: var(--no-soft); }
+  .feedback { font-size: 14.5px; min-height: 24px; }
+  .result-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .result-chips span { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; font-size: 14px; }
+
+  /* ---------- 로그인 ---------- */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .field input {
+    min-height: 52px; padding: 0 16px; border-radius: var(--radius-ctl); border: 1.5px solid var(--line);
+    background: var(--panel); font: inherit; color: var(--text);
+    transition: border-color var(--motion-fast) var(--ease-standard);
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+
+  /* ---------- 바텀시트 (guitar-riff-motion.md 5.3) ---------- */
+  .scrim {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: flex-end; justify-content: center;
+    background: rgba(15, 20, 30, .4);
+    opacity: 0; transition: opacity var(--motion-base) var(--ease-standard);
+  }
+  .scrim.is-open { opacity: 1; }
+  .sheet {
+    width: 100%; max-width: 480px; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain;
+    background: var(--panel); border-radius: 20px 20px 0 0;
+    padding: 8px 20px calc(16px + env(safe-area-inset-bottom));
+    transform: translateY(100%); transition: transform var(--motion-slow) var(--ease-out);
+  }
+  .scrim.is-open .sheet { transform: none; }
+  :root[data-motion="reduce"] .sheet { transform: none; opacity: 0; transition: opacity var(--motion-fast) var(--ease-standard); }
+  :root[data-motion="reduce"] .scrim.is-open .sheet { opacity: 1; }
+  .grip { width: 40px; height: 4px; border-radius: 4px; background: #d5dae1; margin: 4px auto 14px; }
+  .sheet-title { font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+  .sheet-body { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+  .sheet .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .ex-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .ex-word { font-size: 28px; font-weight: 700; line-height: 1.3; }
+  .ex-reading { font-size: 15px; color: var(--muted); }
+  .tag { flex: none; margin-top: 6px; font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; }
+  .ex-block h4 { margin: 0 0 2px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+  .ex-block p { font-size: 15px; }
+  .ex-block .core { font-size: 17px; font-weight: 700; }
+  .example { padding: 12px 14px; border-radius: 12px; background: var(--bg); }
+  .example .ja { font-size: 16px; }
+  .example .ko { font-size: 13.5px; color: var(--muted); }
+  .report { border-top: 1px solid var(--line); padding-top: 14px; }
+  .report .q { font-size: 15px; font-weight: 700; }
+  .report .sub { font-size: 13px; color: var(--muted); }
+  .report .choice-grid { grid-template-columns: repeat(3, 1fr); }
+  .translation-text { font-size: 17px; line-height: 1.7; }
+
+  /* ---------- 토스트 ---------- */
+  .toast-wrap {
+    position: fixed; left: 0; right: 0; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 60;
+    display: flex; justify-content: center; padding: 0 20px; pointer-events: none;
+  }
+  .toast {
+    max-width: 440px; pointer-events: auto;
+    background: #1f2733; color: #fff; border: 0; border-radius: 16px; padding: 13px 18px;
+    font-size: 14.5px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    opacity: 0; transform: translateY(var(--motion-shift));
+    transition: opacity var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-out);
+  }
+  .toast.is-shown { opacity: 1; transform: none; }
+
+  /* ---------- 목업 전용 탐색 ---------- */
+  .mock-nav {
+    max-width: 480px; margin: 24px auto 40px; padding: 16px; border: 2px dashed #c5ccd6; border-radius: 16px;
+    font-size: 13px; background: #fff;
+  }
+  .mock-nav h2 { font-size: 14px; margin-bottom: 4px; }
+  .mock-nav p { color: var(--muted); margin-bottom: 10px; }
+  .mock-nav .group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .mock-nav button, .mock-nav select { font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); min-height: 32px; }
+  .mock-nav label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  @media (min-width: 1100px) {
+    .mock-nav { position: fixed; left: 16px; top: 16px; width: 260px; max-height: calc(100vh - 32px); overflow-y: auto; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- (a) 선택 홈 -->
+  <section class="screen" data-screen="home" hidden>
+    <header class="topbar">
+      <span class="brand">Nihongo Context</span>
+      <span class="spacer"></span>
+      <button type="button" class="text-btn accent" id="login-entry">로그인</button>
+    </header>
+    <main class="content">
+      <h1 class="display" tabindex="-1" data-focus>일본어 표현을 실제 문장 속에서 익히는 앱이에요.</h1>
+      <div id="home-notice"></div>
+      <div class="stagger" style="display:flex;flex-direction:column;gap:14px;margin-top:6px">
+        <button type="button" class="card pressable" data-go="demo">
+          <div class="preview" lang="ja" aria-hidden="true">ちょっと<u>手伝って</u>もらえますか？</div>
+          <h2>표현 학습 체험해 보기</h2>
+          <p class="desc">모르는 표현을 눌러 뜻을 확인해요.</p>
+          <div class="pills"><span class="pill">200문장</span><span class="pill">로그인 없이</span></div>
+        </button>
+        <button type="button" class="card pressable" data-go="kana">
+          <div class="preview kana" lang="ja" aria-hidden="true">あア</div>
+          <h2>글자부터 배우기</h2>
+          <p class="desc">히라가나와 가타카나를 표와 퀴즈로 익혀요.</p>
+          <div class="pills"><span class="pill">히라가나</span><span class="pill">가타카나</span></div>
+        </button>
+      </div>
+    </main>
+  </section>
+
+  <!-- (f) 로그인 -->
+  <section class="screen" data-screen="login" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="home" aria-label="홈으로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1 class="title" tabindex="-1" data-focus>로그인</h1>
+    </header>
+    <main class="content">
+      <form id="login-form" novalidate style="display:flex;flex-direction:column;gap:14px;margin-top:12px">
+        <div class="field">
+          <label for="login-id">아이디</label>
+          <input id="login-id" type="text" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">비밀번호</label>
+          <input id="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary" id="login-submit">로그인</button>
+        <div id="login-notice" role="alert"></div>
+      </form>
+    </main>
+  </section>
+
+  <!-- (b)(c) demo 학습 -->
+  <section class="screen" data-screen="demo" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="home" aria-label="홈으로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1 class="title" tabindex="-1" data-focus>표현 학습 체험</h1>
+    </header>
+    <main class="content">
+      <div class="info" role="status">
+        <p>체험 중이에요. 기록은 이 브라우저에만 남아요.</p>
+        <button type="button" class="text-btn" id="demo-reset">진도 초기화</button>
+      </div>
+      <div>
+        <div class="progress-row">
+          <span class="label" id="demo-progress-label"></span>
+          <span class="spacer" style="flex:1"></span>
+          <button type="button" class="switch-row" role="switch" data-furigana aria-checked="false">후리가나<span class="switch" aria-hidden="true"></span></button>
+        </div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="200" id="demo-bar"><i></i></div>
+      </div>
+      <div class="card sentence-card" id="demo-sentence"></div>
+      <div id="demo-probe"></div>
+    </main>
+    <footer class="footer">
+      <div class="row">
+        <button type="button" class="btn btn-secondary" id="demo-translate">문장 뜻 보기</button>
+        <button type="button" class="btn btn-primary" id="demo-next">다음 문장</button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- (d) demo 완료 -->
+  <section class="screen" data-screen="demo-done" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="home" aria-label="홈으로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <span class="title">표현 학습 체험</span>
+    </header>
+    <main class="content" style="justify-content:center;text-align:center">
+      <h1 class="display" tabindex="-1" data-focus>200문장을 모두 봤어요.</h1>
+      <p class="lead">끝까지 둘러봐 주셔서 고마워요.</p>
+    </main>
+    <footer class="footer">
+      <button type="button" class="btn btn-primary" data-go="kana">글자 배우기</button>
+      <button type="button" class="btn btn-secondary" id="demo-restart">처음부터 다시</button>
+      <p class="small muted" style="text-align:center">처음부터 다시 하면 체험 기록이 지워져요.</p>
+    </footer>
+  </section>
+
+  <!-- (e) 가나 학습: 표 + 퀴즈 선택 -->
+  <section class="screen" data-screen="kana" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="home" aria-label="홈으로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1 class="title" tabindex="-1" data-focus>글자 배우기</h1>
+    </header>
+    <main class="content">
+      <div class="seg" role="tablist" aria-label="글자 종류">
+        <button type="button" role="tab" data-script="hira" aria-selected="true">히라가나</button>
+        <button type="button" role="tab" data-script="kata" aria-selected="false">가타카나</button>
+      </div>
+      <div class="chips" id="kana-chips" aria-label="범위"></div>
+      <div id="kana-panel"></div>
+
+      <section class="card" aria-labelledby="quiz-title" style="margin-top:6px">
+        <h2 class="section-title" id="quiz-title">퀴즈로 연습해요</h2>
+        <p class="small muted" id="quiz-scope" style="margin-top:2px"></p>
+        <div class="mode-list">
+          <button type="button" class="card pressable" id="start-read">
+            <h3>보고 읽기</h3>
+            <p class="small muted">읽어 본 뒤 정답을 확인해요.</p>
+          </button>
+          <button type="button" class="card pressable" id="start-choice">
+            <h3>보고 고르기</h3>
+            <p class="small muted">알맞은 읽기를 4개 중에서 골라요.</p>
+          </button>
+        </div>
+      </section>
+
+      <div style="display:flex;align-items:center;gap:8px">
+        <p class="small muted" style="flex:1">푼 기록은 이 브라우저에만 남아요.</p>
+        <button type="button" class="text-btn" id="kana-reset">진도 초기화</button>
+      </div>
+    </main>
+  </section>
+
+  <!-- (e) 보고 읽기 -->
+  <section class="screen" data-screen="kana-read" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="kana" aria-label="글자 표로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1 class="title" tabindex="-1" data-focus>보고 읽기</h1>
+      <span class="spacer"></span>
+      <span class="small muted" style="padding-right:12px" data-quiz-count></span>
+    </header>
+    <main class="content">
+      <div class="bar"><i data-quiz-bar></i></div>
+      <div class="card quiz-card" id="read-card"></div>
+    </main>
+    <footer class="footer" id="read-actions"></footer>
+  </section>
+
+  <!-- (e) 보고 고르기 -->
+  <section class="screen" data-screen="kana-choice" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="kana" aria-label="글자 표로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h1 class="title" tabindex="-1" data-focus>보고 고르기</h1>
+      <span class="spacer"></span>
+      <span class="small muted" style="padding-right:12px" data-quiz-count></span>
+    </header>
+    <main class="content" id="choice-body">
+      <div class="bar"><i data-quiz-bar></i></div>
+      <div class="card quiz-card" id="choice-card"></div>
+      <div class="options" id="choice-options"></div>
+      <p class="feedback" id="choice-feedback" role="status"></p>
+    </main>
+    <footer class="footer" id="choice-actions"></footer>
+  </section>
+
+  <!-- (e) 라운드 결과 -->
+  <section class="screen" data-screen="kana-result" hidden>
+    <header class="topbar">
+      <button type="button" class="icon-btn" data-go="kana" aria-label="글자 표로">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <span class="title">퀴즈 결과</span>
+    </header>
+    <main class="content">
+      <h1 class="display" tabindex="-1" data-focus>이번 라운드를 마쳤어요.</h1>
+      <p class="lead" id="result-line"></p>
+      <div id="result-wrong"></div>
+    </main>
+    <footer class="footer">
+      <button type="button" class="btn btn-primary" id="result-again">한 번 더 풀기</button>
+      <button type="button" class="btn btn-secondary" data-go="kana">글자 표로 돌아가기</button>
+    </footer>
+  </section>
+
+  <!-- (g) 로그인 사용자 학습 화면 (상단 배치 예시) -->
+  <section class="screen" data-screen="study" hidden>
+    <header class="topbar">
+      <span class="brand">Nihongo Context</span>
+      <span class="spacer"></span>
+      <button type="button" class="text-btn" id="study-history">학습 기록</button>
+      <button type="button" class="text-btn" id="study-logout">로그아웃</button>
+    </header>
+    <main class="content">
+      <h1 class="sr-title" tabindex="-1" data-focus style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">오늘의 학습</h1>
+      <div>
+        <div class="progress-row">
+          <span class="label">오늘 약 12분</span>
+          <span class="readout">2분 / 12분</span>
+          <span style="flex:1"></span>
+          <button type="button" class="switch-row" role="switch" data-furigana aria-checked="false">후리가나<span class="switch" aria-hidden="true"></span></button>
+        </div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="720" aria-valuenow="120" aria-label="오늘 약 12분"><i style="width:16.6%"></i></div>
+      </div>
+      <div id="study-notice"></div>
+      <div class="card sentence-card" id="study-sentence"></div>
+    </main>
+    <footer class="footer">
+      <div class="row">
+        <button type="button" class="btn btn-secondary" id="study-translate">문장 뜻 보기</button>
+        <button type="button" class="btn btn-primary" id="study-next">다음 문장</button>
+      </div>
+    </footer>
+  </section>
+</div>
+
+<!-- 바텀시트: 컨테이너만 있고 내용은 열 때 만든다. -->
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1" id="sheet">
+    <div class="grip" aria-hidden="true"></div>
+    <div id="sheet-content"></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<aside class="mock-nav" aria-label="목업 전용 탐색">
+  <h2>목업 전용 탐색</h2>
+  <p>실제 앱에는 없는 영역이에요. 화면과 상태를 바로 열어 볼 수 있어요.</p>
+  <div class="group">
+    <button type="button" data-mock="home">(a) 선택 홈</button>
+    <button type="button" data-mock="demo">(b) 체험 학습</button>
+    <button type="button" data-mock="demo-ruby">(b) 후리가나 켬</button>
+    <button type="button" data-mock="demo-sheet">(b) 설명 시트</button>
+    <button type="button" data-mock="demo-probe">(c) 확인 질문</button>
+    <button type="button" data-mock="demo-done">(d) 체험 완료</button>
+    <button type="button" data-mock="kana">(e) 글자 표</button>
+    <button type="button" data-mock="kana-read">(e) 보고 읽기</button>
+    <button type="button" data-mock="kana-choice">(e) 보고 고르기</button>
+    <button type="button" data-mock="kana-result">(e) 라운드 결과</button>
+    <button type="button" data-mock="login">(f) 로그인</button>
+    <button type="button" data-mock="login-fail">(f) 로그인 실패</button>
+    <button type="button" data-mock="study">(g) 로그인 학습 상단</button>
+  </div>
+  <label><input type="checkbox" id="mock-reduce" /> 움직임 줄이기 (reduced-motion 흉내)</label>
+  <label>로그인 누름 결과
+    <select id="mock-login-check">
+      <option value="401">로그인 안 됨 (401 → 로그인 폼)</option>
+      <option value="ok">로그인됨 (→ 학습 화면)</option>
+      <option value="down">연결 실패</option>
+    </select>
+  </label>
+  <label>로그인 제출 결과
+    <select id="mock-login-result">
+      <option value="fail">실패 (401)</option>
+      <option value="ok">성공</option>
+    </select>
+  </label>
+</aside>
+
+<script>
+(() => {
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // 작은 도우미
+  // ------------------------------------------------------------------
+  function h(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs || {})) {
+      if (value === null || value === undefined || value === false) continue;
+      if (key === 'class') node.className = value;
+      else if (key === 'text') node.textContent = value;
+      else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value === true ? '' : value);
+    }
+    for (const child of children.flat()) {
+      if (child === null || child === undefined || child === false) continue;
+      node.append(child);
+    }
+    return node;
+  }
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+  function restartAnimation(node, className) {
+    node.classList.remove(className);
+    void node.offsetWidth;
+    node.classList.add(className);
+  }
+  // 애니메이션이 끝나면 클래스를 뗀다. 남겨 두면 fill-mode가 transform을 붙잡아 누름 반응(scale)이 막힌다.
+  document.addEventListener('animationend', (event) => {
+    if (event.animationName === 'fade-in') event.target.classList.remove('is-swapping');
+    if (event.animationName === 'panel-in') event.target.classList.remove('is-panel-in');
+  });
+
+  // ------------------------------------------------------------------
+  // reduced-motion: 실제 앱은 CSS 미디어 쿼리만 쓴다. 목업은 스위치로도 확인한다.
+  // ------------------------------------------------------------------
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const reduceBox = $('#mock-reduce');
+  function applyMotion() {
+    document.documentElement.dataset.motion = reduceBox.checked || motionQuery.matches ? 'reduce' : 'full';
+  }
+  reduceBox.checked = motionQuery.matches;
+  reduceBox.addEventListener('change', applyMotion);
+  motionQuery.addEventListener('change', () => { reduceBox.checked = motionQuery.matches; applyMotion(); });
+  applyMotion();
+
+  function motionMs(token) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    return raw.endsWith('ms') ? parseFloat(raw) : parseFloat(raw) * 1000;
+  }
+
+  // ------------------------------------------------------------------
+  // 토스트: 정보성 안내만. 4초 뒤 사라지고 탭하면 바로 닫힌다. 오류는 토스트로 띄우지 않는다.
+  // ------------------------------------------------------------------
+  const toastWrap = $('#toast-wrap');
+  function toast(message) {
+    toastWrap.replaceChildren();
+    const node = h('div', { class: 'toast', role: 'status', text: message });
+    toastWrap.append(node);
+    requestAnimationFrame(() => requestAnimationFrame(() => node.classList.add('is-shown')));
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      node.classList.remove('is-shown');
+      setTimeout(() => node.remove(), motionMs('--motion-base') + 40);
+    };
+    const timer = setTimeout(close, 4000);
+    node.addEventListener('click', () => { clearTimeout(timer); close(); });
+  }
+
+  // ------------------------------------------------------------------
+  // 바텀시트
+  // ------------------------------------------------------------------
+  const app = $('#app');
+  const scrim = $('#scrim');
+  const sheet = $('#sheet');
+  const sheetContent = $('#sheet-content');
+  let sheetReturnFocus = null;
+  let sheetOnClose = null;
+  let sheetCloseTimer = null;
+
+  function openSheet(build, { returnFocus = null, onClose = null } = {}) {
+    clearTimeout(sheetCloseTimer);
+    sheetReturnFocus = returnFocus;
+    sheetOnClose = onClose;
+    sheetContent.replaceChildren(...build());
+    scrim.hidden = false;
+    app.inert = true;
+    document.body.style.overflow = 'hidden';
+    void scrim.offsetWidth;
+    scrim.classList.add('is-open');
+    const title = $('#sheet-title', sheetContent);
+    (title || sheet).focus({ preventScroll: true });
+  }
+
+  function closeSheet(immediate = false) {
+    if (scrim.hidden) return;
+    scrim.classList.remove('is-open');
+    app.inert = false;
+    document.body.style.overflow = '';
+    const finish = () => {
+      scrim.hidden = true;
+      sheetContent.replaceChildren();
+    };
+    if (immediate) finish();
+    else sheetCloseTimer = setTimeout(finish, motionMs('--motion-slow') + 40);
+    const back = sheetReturnFocus;
+    const cb = sheetOnClose;
+    sheetReturnFocus = null;
+    sheetOnClose = null;
+    if (cb) cb();
+    if (back && !immediate && document.contains(back)) back.focus({ preventScroll: true });
+  }
+
+  scrim.addEventListener('click', (event) => { if (event.target === scrim) closeSheet(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeSheet(); });
+
+  function sheetTitle(text, lang) {
+    return h('h2', { class: 'sheet-title', id: 'sheet-title', tabindex: '-1', lang, text });
+  }
+  function closeButton(label = '닫기') {
+    return h('button', { type: 'button', class: 'btn btn-secondary', text: label, onclick: () => closeSheet() });
+  }
+
+  function openConfirm({ title, body, confirmLabel, onConfirm, returnFocus }) {
+    openSheet(() => [
+      sheetTitle(title),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'muted', text: body }),
+        h('div', { class: 'actions' },
+          h('button', { type: 'button', class: 'btn btn-caution', text: confirmLabel, onclick: () => { closeSheet(); onConfirm(); } }),
+          closeButton('취소'))),
+    ], { returnFocus });
+  }
+
+  // ------------------------------------------------------------------
+  // 화면 전환: 들어오는 화면만 진입 애니메이션. 스크롤은 즉시 맨 위, 포커스는 제목.
+  // ------------------------------------------------------------------
+  const screens = Object.fromEntries($$('.screen').map((node) => [node.dataset.screen, node]));
+  const onEnter = {};
+  let current = null;
+  let enterTimer = null;
+
+  function go(name) {
+    closeSheet(true);
+    const next = screens[name];
+    if (current && current !== next) { current.hidden = true; current.classList.remove('is-entering'); }
+    next.hidden = false;
+    current = next;
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (onEnter[name]) onEnter[name]();
+    restartAnimation(next, 'is-entering');
+    // 순차 지연이 붙은 카드까지 끝난 뒤에 뗀다.
+    clearTimeout(enterTimer);
+    enterTimer = setTimeout(() => next.classList.remove('is-entering'), motionMs('--motion-slow') + motionMs('--stagger') * 2 + 50);
+    const focusTarget = $('[data-focus]', next);
+    if (focusTarget) focusTarget.focus({ preventScroll: true });
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-go]');
+    if (target) go(target.dataset.go);
+  });
+
+  // ------------------------------------------------------------------
+  // 문장 데이터 (seed/sentences.yaml sn_0001~sn_0003)
+  //
+  // 조각은 [글자, 읽기?] 쌍이다. 읽기는 한자 run에만 있고 tappable 조각 경계를 넘지 않는다.
+  // 번역은 여기에만 있고 "문장 뜻 보기"를 누른 뒤에야 DOM에 들어간다.
+  // ------------------------------------------------------------------
+  const EXPLANATIONS = {
+    makaseru_1: { word: '任せる', reading: 'まかせる', type: '단어', core: '맡기다', context: '이 업무의 처리를 다나카 씨에게 넘긴다는 뜻이다.', nuance: '「任せる」는 판단까지 상대에게 넘기는 쪽이고, 「頼む」는 부탁에 가깝다.', ex: 'あとは私に任せてください。', exKo: '나머지는 저에게 맡겨 주세요.' },
+    temoii: { word: '〜てもいい', reading: 'てもいい', type: '문법', core: '~해도 된다 (허가)', context: '상승 억양의 의문형이라 "그렇게 해도 괜찮겠냐"고 상대의 허락을 구한다.', nuance: '평서문이면 허가를 주는 쪽, 의문문이면 허가를 구하는 쪽이 된다.', ex: 'ここに座ってもいいですか。', exKo: '여기 앉아도 될까요?' },
+    chotto: { word: 'ちょっと', reading: 'ちょっと', type: '단어', core: '조금, 좀', context: '부탁의 부담을 낮추는 완충어로, 실제 분량이 적다는 뜻은 아니다.', nuance: '한국어 "좀 도와줄래?"의 "좀"과 거의 같은 자리에 쓰인다.', ex: 'ちょっと待ってください。', exKo: '잠깐만 기다려 주세요.' },
+    tetsudau: { word: '手伝う', reading: 'てつだう', type: '단어', core: '돕다, 거들다', context: '화자가 하고 있는 일을 옆에서 거들어 달라는 요청이다.', nuance: '「助ける」가 위기에서 구한다는 뜻이라면 「手伝う」는 일손을 보탠다는 뜻이다.', ex: '引っ越しを手伝ってくれてありがとう。', exKo: '이사를 도와줘서 고마워.' },
+    otsukaresama: { word: 'お疲れ様でした', reading: 'おつかれさまでした', type: '표현', core: '수고하셨습니다', context: '일을 끝낸 상대에게 건네는 정중한 인사다.', nuance: '「ご苦労様」는 윗사람이 아랫사람에게 쓰므로 상사에게는 쓰지 않는다.', ex: '今日もお疲れ様でした。', exKo: '오늘도 수고하셨습니다.' },
+    makaseru_3: { word: '任せる', reading: 'まかせる', type: '단어', core: '맡기다', context: '남은 일을 화자가 떠맡겠다고 나서는 표현이다.', nuance: '「任せてください」는 자신감을, 「お願いします」는 부탁을 나타낸다.', ex: 'この件は任せておいてください。', exKo: '이 건은 맡겨 두세요.' },
+  };
+
+  const SENTENCES = [
+    {
+      id: 'sn_0001',
+      translation: '이 일, 다나카 씨에게 맡겨도 될까?',
+      segments: [
+        { parts: [['この'], ['仕事', 'しごと'], ['、'], ['田中', 'たなか'], ['さんに']] },
+        { item: 'makaseru_1', parts: [['任', 'まか'], ['せ']] },
+        { item: 'temoii', parts: [['てもいい']] },
+        { parts: [['？']] },
+      ],
+    },
+    {
+      id: 'sn_0002',
+      translation: '좀 도와주실 수 있나요?',
+      segments: [
+        { item: 'chotto', parts: [['ちょっと']] },
+        { item: 'tetsudau', parts: [['手伝', 'てつだ'], ['って']] },
+        { parts: [['もらえますか？']] },
+      ],
+    },
+    {
+      id: 'sn_0003',
+      translation: '수고하셨습니다. 나머지는 저에게 맡겨 주세요.',
+      probe: { item: 'otsukaresama', prompt: '이 표현을 알고 계세요?', expression: 'お疲れ様でした' },
+      segments: [
+        { item: 'otsukaresama', parts: [['お'], ['疲', 'つか'], ['れ'], ['様', 'さま'], ['でした']] },
+        { parts: [['。あとは'], ['私', 'わたし'], ['に']] },
+        { item: 'makaseru_3', parts: [['任', 'まか'], ['せて']] },
+        { parts: [['ください。']] },
+      ],
+    },
+  ];
+
+  const SELF_REPORT = [['known', '알고 있었음'], ['uncertain', '애매함'], ['unknown', '몰랐음']];
+  const PROBE_OPTIONS = [['known', '알고 있었음'], ['uncertain', '애매함'], ['unknown', '몰랐음'], ['skip', '건너뛰기']];
+
+  // 후리가나 설정: 기본은 끔. 실제 앱은 localStorage, 목업은 메모리.
+  const settings = { furigana: false };
+
+  function renderSentence(sentence, onTap) {
+    // 렌더러는 토글 상태를 모른다. <rt>는 항상 만든다.
+    const p = h('p', { class: 'sentence', lang: 'ja' });
+    p.setAttribute('aria-label', sentence.segments.map((s) => s.parts.map((part) => part[0]).join('')).join(''));
+    for (const segment of sentence.segments) {
+      const holder = segment.item
+        ? h('button', { type: 'button', class: 'token', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' })
+        : h('span');
+      for (const [text, reading] of segment.parts) {
+        if (reading) holder.append(h('ruby', {}, text, h('rt', { text: reading })));
+        else holder.append(text);
+      }
+      if (segment.item) holder.addEventListener('click', () => onTap(segment.item, holder));
+      p.append(holder);
+    }
+    return p;
+  }
+
+  // 토글은 documentElement class만 바꾼다. 문장을 다시 그리지 않고, 애니메이션도 주지 않는다.
+  function syncFuriganaSwitches() {
+    document.documentElement.classList.toggle('furigana-on', settings.furigana);
+    for (const node of $$('[data-furigana]')) node.setAttribute('aria-checked', String(settings.furigana));
+  }
+  for (const node of $$('[data-furigana]')) {
+    node.addEventListener('click', () => {
+      settings.furigana = !settings.furigana;
+      syncFuriganaSwitches();
+    });
+  }
+  syncFuriganaSwitches();
+
+  // 설명 시트. reports는 화면별 메모리. 고르지 않고 닫아도 된다.
+  function openExplanation(key, token, reports, reportKey) {
+    const e = EXPLANATIONS[key];
+    token.setAttribute('aria-expanded', 'true');
+    const build = () => {
+      const reported = reports[reportKey];
+      const report = h('div', { class: 'report' },
+        h('p', { class: 'q', text: '이 표현, 알고 있었나요?' }),
+        h('p', { class: 'sub', text: '고르지 않아도 괜찮아요.' }));
+      if (reported) {
+        report.append(h('p', { class: 'done-line', text: '기록했어요 · ' + reported }));
+      } else {
+        report.append(h('div', { class: 'choice-grid' }, SELF_REPORT.map(([, label]) =>
+          h('button', { type: 'button', class: 'btn btn-secondary', text: label, onclick: () => {
+            reports[reportKey] = label;
+            report.replaceChildren(
+              h('p', { class: 'q', text: '이 표현, 알고 있었나요?' }),
+              h('p', { class: 'done-line', text: '기록했어요 · ' + label }));
+          } }))));
+      }
+      return [
+        h('div', { class: 'ex-head' },
+          h('div', {},
+            h('h2', { class: 'ex-word', id: 'sheet-title', tabindex: '-1', lang: 'ja', text: e.word }),
+            h('p', { class: 'ex-reading', lang: 'ja', text: e.reading })),
+          h('span', { class: 'tag', text: e.type })),
+        h('div', { class: 'sheet-body' },
+          h('div', { class: 'ex-block' }, h('h4', { text: '뜻' }), h('p', { class: 'core', text: e.core })),
+          h('div', { class: 'ex-block' }, h('h4', { text: '이 문장에서' }), h('p', { text: e.context })),
+          h('div', { class: 'ex-block' }, h('h4', { text: '느낌' }), h('p', { text: e.nuance })),
+          h('div', { class: 'ex-block' }, h('h4', { text: '예문' }),
+            h('div', { class: 'example' }, h('p', { class: 'ja', lang: 'ja', text: e.ex }), h('p', { class: 'ko', text: e.exKo }))),
+          report,
+          h('div', { class: 'actions' }, closeButton())),
+      ];
+    };
+    openSheet(build, { returnFocus: token, onClose: () => token.setAttribute('aria-expanded', 'false') });
+  }
+
+  // 번역 시트. 번역 노드는 이 순간에 처음 만든다.
+  function openTranslation(sentence, trigger, onRevealed) {
+    openSheet(() => [
+      sheetTitle('문장 뜻'),
+      h('div', { class: 'sheet-body' },
+        h('p', { class: 'translation-text', text: sentence.translation }),
+        h('div', { class: 'actions' }, closeButton())),
+    ], { returnFocus: trigger });
+    onRevealed();
+  }
+
+  // ------------------------------------------------------------------
+  // (a) 홈 + 로그인 진입: 누를 때만 로그인 상태를 확인한다.
+  // ------------------------------------------------------------------
+  const loginEntry = $('#login-entry');
+  const homeNotice = $('#home-notice');
+  function checkLogin() {
+    if (loginEntry.disabled) return;
+    loginEntry.disabled = true;
+    loginEntry.textContent = '확인 중';
+    homeNotice.replaceChildren();
+    setTimeout(() => {
+      loginEntry.disabled = false;
+      loginEntry.textContent = '로그인';
+      const result = $('#mock-login-check').value;
+      if (result === '401') go('login');
+      else if (result === 'ok') go('study');
+      else {
+        homeNotice.replaceChildren(h('div', { class: 'notice error', role: 'alert' },
+          h('p', { text: '지금은 로그인 상태를 확인할 수 없어요.' }),
+          h('p', { class: 'small muted', text: '체험과 글자 배우기는 그대로 쓸 수 있어요.' }),
+          h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn btn-secondary', text: '다시 시도하기', onclick: checkLogin }))));
+      }
+    }, 500);
+  }
+  loginEntry.addEventListener('click', checkLogin);
+  onEnter.home = () => homeNotice.replaceChildren();
+
+  // ------------------------------------------------------------------
+  // (f) 로그인 폼: 두 필드와 버튼 하나. 실패 문구는 사유를 가르지 않는 한 문구.
+  // ------------------------------------------------------------------
+  const loginForm = $('#login-form');
+  const loginNotice = $('#login-notice');
+  onEnter.login = () => { loginNotice.replaceChildren(); };
+  loginForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const submit = $('#login-submit');
+    if (submit.disabled) return;
+    submit.disabled = true;
+    loginNotice.replaceChildren();
+    setTimeout(() => {
+      submit.disabled = false;
+      if ($('#mock-login-result').value === 'ok') { go('study'); return; }
+      showLoginFailure();
+    }, 400);
+  });
+  function showLoginFailure() {
+    loginNotice.replaceChildren(h('div', { class: 'notice error' }, h('p', { text: '아이디나 비밀번호를 다시 확인해 주세요.' })));
+    $('#password').value = '';
+    $('#password').focus();
+  }
+
+  // ------------------------------------------------------------------
+  // (b)(c)(d) demo
+  // ------------------------------------------------------------------
+  const DEMO_TOTAL = 200;
+  const demo = { position: 12, index: 0, revealed: false, reports: {}, probeAnswer: null };
+
+  function renderDemo(animate) {
+    const sentence = SENTENCES[demo.index];
+    $('#demo-progress-label').textContent = demo.position + ' / ' + DEMO_TOTAL;
+    const bar = $('#demo-bar');
+    bar.setAttribute('aria-valuenow', String(demo.position));
+    bar.setAttribute('aria-label', '본 문장 ' + demo.position + ' / ' + DEMO_TOTAL);
+    $('i', bar).style.width = (demo.position / DEMO_TOTAL) * 100 + '%';
+
+    const box = $('#demo-sentence');
+    box.replaceChildren(
+      renderSentence(sentence, (key, token) => openExplanation(key, token, demo.reports, demo.position + ':' + key)),
+      h('p', { class: 'hint', text: '모르는 표현을 눌러 보세요.' }));
+    if (animate) restartAnimation(box, 'is-swapping');
+
+    const probeSlot = $('#demo-probe');
+    probeSlot.replaceChildren();
+    if (sentence.probe) {
+      const card = h('section', { class: 'card probe', 'aria-label': '이해도 확인' },
+        h('p', { class: 'kicker', text: '잠깐 확인해요' }),
+        h('p', { class: 'prompt', text: sentence.probe.prompt }),
+        h('p', { class: 'expr', lang: 'ja', text: sentence.probe.expression }));
+      if (demo.probeAnswer) {
+        card.append(h('p', { class: 'done-line', text: demo.probeAnswer === '건너뛰기' ? '건너뛰었어요.' : '기록했어요 · ' + demo.probeAnswer }));
+      } else {
+        card.append(h('div', { class: 'choice-grid' }, PROBE_OPTIONS.map(([value, label]) =>
+          h('button', { type: 'button', class: 'btn ' + (value === 'skip' ? 'btn-ghost' : 'btn-secondary'), text: label, onclick: () => {
+            demo.probeAnswer = label;
+            renderDemo(false);
+          } }))));
+      }
+      probeSlot.append(card);
+      if (animate) restartAnimation(card, 'is-swapping');
+    }
+    $('#demo-translate').textContent = demo.revealed ? '문장 뜻 다시 보기' : '문장 뜻 보기';
+  }
+
+  onEnter.demo = () => renderDemo(false);
+  $('#demo-next').addEventListener('click', () => {
+    if (demo.position >= DEMO_TOTAL) { go('demo-done'); return; }
+    demo.position += 1;
+    demo.index = (demo.index + 1) % SENTENCES.length;
+    demo.revealed = false;
+    demo.probeAnswer = null;
+    renderDemo(true);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  });
+  $('#demo-translate').addEventListener('click', (event) => {
+    openTranslation(SENTENCES[demo.index], event.currentTarget, () => {
+      demo.revealed = true;
+      $('#demo-translate').textContent = '문장 뜻 다시 보기';
+    });
+  });
+  function resetDemo() {
+    demo.position = 1; demo.index = 0; demo.revealed = false; demo.reports = {}; demo.probeAnswer = null;
+  }
+  $('#demo-reset').addEventListener('click', (event) => {
+    openConfirm({
+      title: '진도를 초기화할까요?',
+      body: '이 브라우저에 남은 체험 기록이 지워져요.',
+      confirmLabel: '초기화하기',
+      returnFocus: event.currentTarget,
+      onConfirm: () => { resetDemo(); renderDemo(true); toast('진도를 초기화했어요.'); },
+    });
+  });
+  $('#demo-restart').addEventListener('click', () => { resetDemo(); go('demo'); });
+
+  // ------------------------------------------------------------------
+  // (g) 로그인 사용자 학습 화면
+  // ------------------------------------------------------------------
+  const study = { reports: {}, revealed: false };
+  function renderStudy(animate) {
+    const box = $('#study-sentence');
+    box.replaceChildren(
+      renderSentence(SENTENCES[1], (key, token) => openExplanation(key, token, study.reports, 'study:' + key)),
+      h('p', { class: 'hint', text: '모르는 표현을 눌러 보세요.' }));
+    if (animate) restartAnimation(box, 'is-swapping');
+    $('#study-translate').textContent = study.revealed ? '문장 뜻 다시 보기' : '문장 뜻 보기';
+  }
+  onEnter.study = () => { renderStudy(false); setTimeout(() => toast('이어서 학습해요.'), motionMs('--motion-slow')); };
+  $('#study-translate').addEventListener('click', (event) => {
+    openTranslation(SENTENCES[1], event.currentTarget, () => {
+      study.revealed = true;
+      $('#study-translate').textContent = '문장 뜻 다시 보기';
+    });
+  });
+  $('#study-next').addEventListener('click', () => { study.revealed = false; renderStudy(true); });
+  $('#study-history').addEventListener('click', () => toast('목업에는 학습 기록 화면이 없어요.'));
+  $('#study-logout').addEventListener('click', () => { go('login'); toast('로그아웃했어요.'); });
+
+  // ------------------------------------------------------------------
+  // (e) 가나 데이터 (목업 표본)
+  //
+  // [글자, 로마자(헵번식), 한글 발음, 뜻?]. 가타카나 표는 히라가나 코드 포인트에 0x60을 더해 만든다
+  // (목업 편의. 실제 데이터는 kana-core 레인이 정적으로 적는다).
+  // ------------------------------------------------------------------
+  const _ = null;
+  const SEION = [
+    ['あ','a','아'],['い','i','이'],['う','u','우'],['え','e','에'],['お','o','오'],
+    ['か','ka','카'],['き','ki','키'],['く','ku','쿠'],['け','ke','케'],['こ','ko','코'],
+    ['さ','sa','사'],['し','shi','시'],['す','su','스'],['せ','se','세'],['そ','so','소'],
+    ['た','ta','타'],['ち','chi','치'],['つ','tsu','츠'],['て','te','테'],['と','to','토'],
+    ['な','na','나'],['に','ni','니'],['ぬ','nu','누'],['ね','ne','네'],['の','no','노'],
+    ['は','ha','하'],['ひ','hi','히'],['ふ','fu','후'],['へ','he','헤'],['ほ','ho','호'],
+    ['ま','ma','마'],['み','mi','미'],['む','mu','무'],['め','me','메'],['も','mo','모'],
+    ['や','ya','야'],_,['ゆ','yu','유'],_,['よ','yo','요'],
+    ['ら','ra','라'],['り','ri','리'],['る','ru','루'],['れ','re','레'],['ろ','ro','로'],
+    ['わ','wa','와'],_,_,_,['を','o','오'],
+    ['ん','n','응'],_,_,_,_,
+  ];
+  const DAKUON = [
+    ['が','ga','가'],['ぎ','gi','기'],['ぐ','gu','구'],['げ','ge','게'],['ご','go','고'],
+    ['ざ','za','자'],['じ','ji','지'],['ず','zu','즈'],['ぜ','ze','제'],['ぞ','zo','조'],
+    ['だ','da','다'],['ぢ','ji','지'],['づ','zu','즈'],['で','de','데'],['ど','do','도'],
+    ['ば','ba','바'],['び','bi','비'],['ぶ','bu','부'],['べ','be','베'],['ぼ','bo','보'],
+  ];
+  const HANDAKUON = [['ぱ','pa','파'],['ぴ','pi','피'],['ぷ','pu','푸'],['ぺ','pe','페'],['ぽ','po','포']];
+  const YOON = [
+    ['きゃ','kya','캬'],['きゅ','kyu','큐'],['きょ','kyo','쿄'],
+    ['しゃ','sha','샤'],['しゅ','shu','슈'],['しょ','sho','쇼'],
+    ['ちゃ','cha','차'],['ちゅ','chu','추'],['ちょ','cho','초'],
+    ['にゃ','nya','냐'],['にゅ','nyu','뉴'],['にょ','nyo','뇨'],
+    ['ひゃ','hya','햐'],['ひゅ','hyu','휴'],['ひょ','hyo','효'],
+    ['みゃ','mya','먀'],['みゅ','myu','뮤'],['みょ','myo','묘'],
+    ['りゃ','rya','랴'],['りゅ','ryu','류'],['りょ','ryo','료'],
+    ['ぎゃ','gya','갸'],['ぎゅ','gyu','규'],['ぎょ','gyo','교'],
+    ['じゃ','ja','자'],['じゅ','ju','주'],['じょ','jo','조'],
+    ['びゃ','bya','뱌'],['びゅ','byu','뷰'],['びょ','byo','뵤'],
+    ['ぴゃ','pya','퍄'],['ぴゅ','pyu','퓨'],['ぴょ','pyo','표'],
+  ];
+  const WORDS = {
+    hira: {
+      sokuon: [['きって','kitte','킷테','우표'],['がっこう','gakkō','각코오','학교'],['ざっし','zasshi','잣시','잡지'],['いっぷん','ippun','잇푼','1분']],
+      choon: [['おかあさん','okāsan','오카아상','어머니'],['おにいさん','onīsan','오니이상','형, 오빠'],['くうき','kūki','쿠우키','공기'],['とけい','tokei','토케이','시계']],
+    },
+    kata: {
+      sokuon: [['ベッド','beddo','벳도','침대'],['ネット','netto','넷토','인터넷'],['カップ','kappu','캅푸','컵'],['クッキー','kukkī','쿡키이','쿠키']],
+      choon: [['コーヒー','kōhī','코오히이','커피'],['ケーキ','kēki','케에키','케이크'],['ノート','nōto','노오토','공책'],['スーパー','sūpā','스우파아','슈퍼마켓']],
+      gairaigo: [['テレビ','terebi','테레비','텔레비전'],['カメラ','kamera','카메라','카메라'],['ホテル','hoteru','호테루','호텔'],['ティッシュ','tisshu','팃슈','티슈'],['ファイル','fairu','파이루','파일'],['パーティー','pātī','파아티이','파티'],['フォーク','fōku','포오쿠','포크'],['メール','mēru','메에루','메일']],
+    },
+  };
+  const toKata = (s) => Array.from(s).map((c) => {
+    const code = c.codePointAt(0);
+    return code >= 0x3041 && code <= 0x3096 ? String.fromCodePoint(code + 0x60) : c;
+  }).join('');
+
+  const CATEGORIES = [
+    { key: 'seion', label: '청음' },
+    { key: 'dakuon', label: '탁음' },
+    { key: 'handakuon', label: '반탁음' },
+    { key: 'yoon', label: '요음' },
+    { key: 'sokuon', label: '촉음' },
+    { key: 'choon', label: '장음' },
+    { key: 'gairaigo', label: '외래어' },
+  ];
+  const CATEGORY_HINT = {
+    seion: { hira: '기본 글자예요.', kata: '기본 글자예요.' },
+    dakuon: { hira: '점 두 개(゛)가 붙으면 흐린 소리가 나요.', kata: '점 두 개(゛)가 붙으면 흐린 소리가 나요.' },
+    handakuon: { hira: '작은 동그라미(゜)가 붙으면 ㅍ 소리가 나요.', kata: '작은 동그라미(゜)가 붙으면 ㅍ 소리가 나요.' },
+    yoon: { hira: '작은 ゃ·ゅ·ょ가 붙으면 한 소리로 읽어요.', kata: '작은 ャ·ュ·ョ가 붙으면 한 소리로 읽어요.' },
+    sokuon: { hira: '작은 っ 자리에서 한 박자 쉬어요.', kata: '작은 ッ 자리에서 한 박자 쉬어요.' },
+    choon: { hira: 'あ·い·う 같은 모음 글자만큼 길게 읽어요.', kata: 'ー 표시만큼 길게 읽어요.' },
+    gairaigo: { hira: '외래어는 가타카나로 적어요.', kata: '다른 나라 말을 가타카나로 적어요. ティ, ファ처럼 작은 글자를 붙인 표기도 있어요.' },
+  };
+
+  const kana = { script: 'hira', category: 'seion' };
+  const kanaProgress = {}; // 글자별 { right, wrong, last } --- 실제 앱은 localStorage
+
+  function tableItems(script, category) {
+    const conv = (row) => (row ? [script === 'kata' ? toKata(row[0]) : row[0], row[1], row[2]] : null);
+    if (category === 'seion') return SEION.map(conv);
+    if (category === 'dakuon') return DAKUON.map(conv);
+    if (category === 'handakuon') return HANDAKUON.map(conv);
+    if (category === 'yoon') return YOON.map(conv);
+    return null;
+  }
+  function scopeItems() {
+    const table = tableItems(kana.script, kana.category);
+    if (table) return table.filter(Boolean).map(([q, ro, ko]) => ({ q, ro, ko, word: false }));
+    const words = (WORDS[kana.script] || {})[kana.category] || [];
+    return words.map(([q, ro, ko, m]) => ({ q, ro, ko, m, word: true }));
+  }
+  function scopeLabel() {
+    const script = kana.script === 'hira' ? '히라가나' : '가타카나';
+    return script + ' · ' + CATEGORIES.find((c) => c.key === kana.category).label;
+  }
+
+  function renderKana(animate) {
+    for (const tab of $$('[data-script]')) tab.setAttribute('aria-selected', String(tab.dataset.script === kana.script));
+    const chips = $('#kana-chips');
+    chips.replaceChildren(...CATEGORIES.map((c) => h('button', {
+      type: 'button', class: 'chip', 'aria-pressed': String(c.key === kana.category), text: c.label,
+      onclick: () => { kana.category = c.key; renderKana(true); },
+    })));
+
+    const panel = $('#kana-panel');
+    const hint = h('p', { class: 'small muted', style: 'margin-bottom:10px', text: CATEGORY_HINT[kana.category][kana.script] });
+    const table = tableItems(kana.script, kana.category);
+    let body;
+    if (table) {
+      body = h('div', { class: 'kana-grid ' + (kana.category === 'yoon' ? 'cols-3' : 'cols-5') }, table.map((cell) => cell
+        ? h('div', { class: 'kana-cell' }, h('div', { class: 'ch', lang: 'ja', text: cell[0] }), h('div', { class: 'ro', text: cell[1] }), h('div', { class: 'ko', text: cell[2] }))
+        : h('div', { class: 'kana-cell empty', 'aria-hidden': 'true' })));
+    } else {
+      const words = scopeItems();
+      body = words.length
+        ? h('div', { class: 'word-list' }, words.map((w) => h('div', { class: 'word-row' },
+            h('span', { class: 'w', lang: 'ja', text: w.q }),
+            h('div', {}, h('div', { class: 'r', text: w.ro + ' · ' + w.ko }), h('div', { class: 'm', text: w.m })))))
+        : h('div', { class: 'notice' },
+            h('p', { text: '가타카나에서 볼 수 있어요.' }),
+            h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn btn-secondary', text: '가타카나로 보기', onclick: () => { kana.script = 'kata'; renderKana(true); } })));
+    }
+    panel.replaceChildren(hint, body);
+    if (animate) restartAnimation(panel, 'is-panel-in');
+
+    const count = scopeItems().length;
+    $('#quiz-scope').textContent = count ? '지금 고른 ' + scopeLabel() + '에서 문제를 내요.' : '이 범위에는 문제로 낼 글자가 없어요.';
+    $('#start-read').disabled = count === 0;
+    $('#start-choice').disabled = count < 4;
+  }
+  for (const tab of $$('[data-script]')) tab.addEventListener('click', () => { kana.script = tab.dataset.script; renderKana(true); });
+  onEnter.kana = () => renderKana(false);
+
+  $('#kana-reset').addEventListener('click', (event) => {
+    openConfirm({
+      title: '진도를 초기화할까요?',
+      body: '이 브라우저에 남은 퀴즈 기록이 지워져요.',
+      confirmLabel: '초기화하기',
+      returnFocus: event.currentTarget,
+      onConfirm: () => { for (const k of Object.keys(kanaProgress)) delete kanaProgress[k]; toast('진도를 초기화했어요.'); },
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // (e) 퀴즈: 틀린 것은 같은 라운드 끝에 한 번 더 묻는다. 그 이상의 스케줄링은 없다.
+  // ------------------------------------------------------------------
+  const ROUND_SIZE = 8; // 목업 예시값
+  const quiz = { mode: 'read', queue: [], at: 0, firstTotal: 0, firstRight: 0, missed: [] };
+
+  function shuffle(list) {
+    const copy = list.slice();
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+  function startQuiz(mode) {
+    const picked = shuffle(scopeItems()).slice(0, ROUND_SIZE);
+    Object.assign(quiz, { mode, queue: picked.map((it) => ({ it, retry: false })), at: 0, firstTotal: picked.length, firstRight: 0, missed: [] });
+    go(mode === 'read' ? 'kana-read' : 'kana-choice');
+  }
+  $('#start-read').addEventListener('click', () => startQuiz('read'));
+  $('#start-choice').addEventListener('click', () => startQuiz('choice'));
+  $('#result-again').addEventListener('click', () => startQuiz(quiz.mode));
+
+  function record(entry, right) {
+    const p = kanaProgress[entry.it.q] || (kanaProgress[entry.it.q] = { right: 0, wrong: 0, last: null });
+    if (right) p.right += 1; else p.wrong += 1;
+    p.last = Date.now();
+    if (!entry.retry && right) quiz.firstRight += 1;
+    if (!right && !entry.retry) {
+      quiz.queue.push({ it: entry.it, retry: true });
+      quiz.missed.push(entry.it);
+      return true;
+    }
+    return false;
+  }
+  function quizHeader(screen) {
+    $('[data-quiz-count]', screen).textContent = (quiz.at + 1) + ' / ' + quiz.queue.length;
+    $('[data-quiz-bar]', screen).style.width = (quiz.at / quiz.queue.length) * 100 + '%';
+  }
+  function advance(renderFn) {
+    quiz.at += 1;
+    if (quiz.at >= quiz.queue.length) { go('kana-result'); return; }
+    renderFn(true);
+  }
+
+  function renderRead(animate) {
+    const screen = screens['kana-read'];
+    const entry = quiz.queue[quiz.at];
+    quizHeader(screen);
+    const card = $('#read-card');
+    card.replaceChildren(
+      h('p', { class: 'quiz-q' + (entry.it.word ? ' word' : ''), lang: 'ja', text: entry.it.q }),
+      h('p', { class: 'small muted', style: 'margin-top:8px', text: entry.retry ? '한 번 더 볼게요.' : '소리 내어 읽어 보세요.' }));
+    const actions = $('#read-actions');
+    actions.replaceChildren(h('button', { type: 'button', class: 'btn btn-primary', text: '정답 보기', onclick: () => {
+      // 정답 노드는 이 순간에 만든다.
+      card.append(h('div', { class: 'answer is-panel-in' },
+        h('p', { class: 'ro', text: entry.it.ro }),
+        h('p', { class: 'ko', text: entry.it.ko }),
+        entry.it.m ? h('p', { class: 'm', text: entry.it.m }) : null));
+      actions.replaceChildren(h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'btn btn-secondary', text: '틀렸어요', onclick: () => {
+          if (record(entry, false)) toast('이번 라운드에서 한 번 더 나와요.');
+          advance(renderRead);
+        } }),
+        h('button', { type: 'button', class: 'btn btn-primary', text: '맞았어요', onclick: () => { record(entry, true); advance(renderRead); } })));
+    } }));
+    if (animate) restartAnimation(card, 'is-swapping');
+  }
+  onEnter['kana-read'] = () => renderRead(false);
+
+  function renderChoice(animate) {
+    const screen = screens['kana-choice'];
+    const entry = quiz.queue[quiz.at];
+    quizHeader(screen);
+    const card = $('#choice-card');
+    card.replaceChildren(h('p', { class: 'quiz-q' + (entry.it.word ? ' word' : ''), lang: 'ja', text: entry.it.q }));
+    const pool = scopeItems().filter((it) => it.ro !== entry.it.ro);
+    const seen = new Set();
+    const distractors = shuffle(pool).filter((it) => (seen.has(it.ro) ? false : seen.add(it.ro))).slice(0, 3);
+    const options = shuffle([entry.it, ...distractors]);
+    const feedback = $('#choice-feedback');
+    feedback.textContent = '';
+    const actions = $('#choice-actions');
+    actions.replaceChildren();
+    const list = $('#choice-options');
+    list.replaceChildren(...options.map((it) => h('button', {
+      type: 'button', class: 'option',
+      onclick: (event) => {
+        const buttons = $$('.option', list);
+        buttons.forEach((b) => { b.disabled = true; });
+        const right = it.ro === entry.it.ro;
+        buttons[options.indexOf(entry.it)].classList.add('is-correct');
+        if (!right) event.currentTarget.classList.add('is-wrong');
+        const again = record(entry, right);
+        feedback.textContent = right ? '맞았어요.' : '정답은 ' + entry.it.ro + '예요.' + (again ? ' 이번 라운드에서 한 번 더 나와요.' : '');
+        const last = quiz.at + 1 >= quiz.queue.length;
+        actions.replaceChildren(h('button', { type: 'button', class: 'btn btn-primary', text: last ? '결과 보기' : '다음 문제', onclick: () => advance(renderChoice) }));
+      },
+    }, h('span', { class: 'ro', text: it.ro }), h('span', { class: 'ko', text: it.ko }))));
+    if (animate) { restartAnimation(card, 'is-swapping'); restartAnimation(list, 'is-swapping'); }
+  }
+  onEnter['kana-choice'] = () => renderChoice(false);
+
+  onEnter['kana-result'] = () => {
+    const total = quiz.firstTotal || 8;
+    const right = quiz.firstTotal ? quiz.firstRight : 6;
+    const missed = quiz.firstTotal ? quiz.missed : [{ q: kana.script === 'kata' ? 'ヌ' : 'ぬ', ro: 'nu' }, { q: kana.script === 'kata' ? 'メ' : 'め', ro: 'me' }];
+    $('#result-line').textContent = right === total ? total + '문제를 모두 바로 맞혔어요.' : total + '문제 중 ' + right + '문제를 바로 맞혔어요.';
+    const wrong = $('#result-wrong');
+    wrong.replaceChildren();
+    if (missed.length) {
+      wrong.append(h('div', { class: 'card' },
+        h('p', { class: 'small muted', text: '한 번 더 풀어 본 글자예요.' }),
+        h('div', { class: 'result-chips' }, missed.map((it) => h('span', {}, h('b', { lang: 'ja', text: it.q }), ' ' + it.ro)))));
+    }
+  };
+
+  // ------------------------------------------------------------------
+  // 목업 전용 탐색
+  // ------------------------------------------------------------------
+  const MOCK = {
+    home: () => go('home'),
+    demo: () => { settings.furigana = false; syncFuriganaSwitches(); demo.index = 0; demo.probeAnswer = null; go('demo'); },
+    'demo-ruby': () => { settings.furigana = true; syncFuriganaSwitches(); demo.index = 0; go('demo'); },
+    'demo-sheet': () => { demo.index = 0; go('demo'); const token = $('#demo-sentence .token'); openExplanation('makaseru_1', token, demo.reports, demo.position + ':makaseru_1'); },
+    'demo-probe': () => { settings.furigana = true; syncFuriganaSwitches(); demo.index = 2; demo.probeAnswer = null; go('demo'); },
+    'demo-done': () => { demo.position = DEMO_TOTAL; go('demo-done'); },
+    kana: () => go('kana'),
+    'kana-read': () => { kana.category = 'seion'; startQuiz('read'); },
+    'kana-choice': () => { kana.category = 'seion'; startQuiz('choice'); },
+    'kana-result': () => { quiz.firstTotal = 0; go('kana-result'); },
+    login: () => { $('#mock-login-result').value = 'fail'; go('login'); },
+    'login-fail': () => { go('login'); showLoginFailure(); },
+    study: () => go('study'),
+  };
+  for (const button of $$('[data-mock]')) button.addEventListener('click', () => MOCK[button.dataset.mock]());
+
+  go('home');
+})();
+</script>
+</body>
+</html>

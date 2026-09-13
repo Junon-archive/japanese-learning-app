@@ -94,6 +94,10 @@ difficulty, morphology provenance, audio metadata, production mastery는
 모두 Future다(`spec/future/` 참조). MVP에서는 nullable 확장 여지만 남기고
 구현하지 않는다.
 
+여기의 `morphology provenance`는 **item의 형태소 분석 메타데이터**(lemma·품사 등을 분석기로 채운 기록)를
+뜻하며 여전히 Future다. MVP-02의 후리가나 계산 기록은 이것이 아니다. 그것은 `sentences.ruby_json` 안의
+분석기·사전 버전이고(아래 `sentences`의 `ruby_json`, ADR-021), `learning_items`에는 아무것도 더하지 않는다.
+
 ## sentences
 
 Sentence는 **global content entity**다. "이 사용자에게 지금 어떤
@@ -112,9 +116,57 @@ Sentence는 **global content entity**다. "이 사용자에게 지금 어떤
 -   parent_sentence_id nullable (review context 재생성 lineage)
 -   normalized_hash (duplicate 검출용 정규화 해시)
 -   status: `draft | validated | quarantined | retired`
+-   ruby_json JSONB nullable (MVP-02, 후리가나. 아래 `ruby_json`)
 -   created_at
 
 `sentences`에는 `user_id`도, 사용자별 role도 두지 않는다.
+
+### ruby_json (MVP-02 확정)
+
+문장 전체 한자의 후리가나다. **표시 보조이며 학습 신호가 아니다**(`02_LEARNING_POLICY.md`의
+`학습 신호가 아닌 것 (MVP-02)`). 결정 배경은 ADR-021이다.
+
+``` json
+{
+  "algorithm_version": 2,
+  "analyzer":   {"name": "sudachipy",        "version": "0.6.11"},
+  "dictionary": {"name": "sudachidict_core", "version": "20260723"},
+  "split_mode": "C",
+  "computed_at": "2026-09-13T09:00:00Z",
+  "spans": [[5, 7, "たなか"], [10, 11, "まか"]],
+  "omitted": {"tappable_boundary": 0, "numeric": 0, "no_reading": 0},
+  "corrected": {"explanation_tokens": 1, "table_rules": 0}
+}
+```
+
+``` text
+NULL          미계산. 아직 계산하지 않았거나 계산이 예외로 끝났다. backfill의 대상이다
+spans = []    계산했고 달 읽기가 없다(한자가 없거나 전부 생략). backfill 대상이 아니다
+spans[i]      [start_codepoint, end_codepoint, reading]  sentence_item_spans와 같은 [start, end)
+              start 오름차순, 서로 겹치지 않는다
+reading       비어 있지 않은 히라가나 문자열 (U+3041..U+3096, ゝ ゞ ー)
+omitted       생략 사유 세 개의 토큰 수. 값이 0이어도 키 세 개가 항상 있다
+corrected     explanation_tokens = explanation.reading으로 덮인 분석기 토큰 수
+              table_rules        = 교정 표 규칙이 적중한 토큰 수. 두 키가 항상 있다
+computed_at   UTC ISO-8601. 호출자가 주입한 시각 (ADR-007: 계산 모듈이 시계를 읽지 않는다)
+```
+
+-   **원문 `japanese`와 `sentence_item_spans`를 바꾸지 않는다.** ruby는 옆 컬럼이다.
+-   **모든 ruby span은 `is_tappable = true`인 span과 겹치지 않거나 그 안에 들어간다.** 경계를 넘게 되는
+    토큰은 읽기를 생략한다. 정렬·교정·생략 규칙은 ADR-021이 canonical이다.
+-   **provenance는 이 값 안에 둔다**(`algorithm_version`, `analyzer`, `dictionary`, `split_mode`).
+    `provenance_json`에 넣지 않는다 --- 그 컬럼은 생성 provenance이고, backfill이 그 컬럼을 고치면 생성
+    기록과 표시 보조의 기록이 한 값에 섞인다.
+-   **`algorithm_version`**은 정렬 규칙과 교정 표를 합친 규칙 버전이다. 규칙이나 교정 표가 바뀌면 1씩
+    올린다. 첫 배포 값은 2다(1은 배포된 적이 없다).
+-   **DB CHECK를 두지 않는다.** 지켜야 하는 무결성(원문 길이 안, 겹침 없음, tappable 경계 안)은 다른
+    컬럼·테이블과 대조해야 한다. 같은 검증 함수(`app/render.py`의 ruby 검증)를 계산 시점과 표시 시점에
+    **둘 다** 부른다. 표시 시점에 통과하지 못하면 payload의 ruby를 비운다(`05_API_SPEC.md`의
+    `render_segments[].ruby`).
+-   **계산 지점은 넷이다:** seed 적재, worker 저장(검증 통과 뒤), backfill, demo fixture 생성. **API 요청
+    경로는 이 컬럼을 읽기만 한다.** 계산 실패는 NULL로 남기고 문장은 그대로 `validated`다
+    (`10_ERROR_HANDLING.md`의 `후리가나 계산 실패 (MVP-02)`).
+-   미계산 잔량은 `SELECT count(*) FROM sentences WHERE ruby_json IS NULL`로 본다. 새 테이블을 두지 않는다.
 
 `status`의 MVP 사용 범위: seed 적재와 generation 모두 검증을 마친 뒤
 `validated`로 INSERT하므로 **`draft` 행을 만드는 경로가 없다**
@@ -180,6 +232,18 @@ sentence를 render 가능한 segment list로 반환한다
 `learning_items.default_meaning`은 canonical 의미,
 `sentence_item_explanations.meaning_in_context`는 해당 sentence에서의
 의미다. 둘을 같은 필드로 섞지 않는다.
+
+**`reading`은 문장 속 표면형의 읽기다(MVP-02 확정).** 기본형(`learning_items.canonical_form`)의 읽기가 아니다.
+예: 문장의 `任せて`에 붙은 item이면 `まかせ`처럼 span 표면형을 읽은 값이다. 기존 `explain_item_v1` prompt의
+정의("the reading of the expression as it appears in this sentence")와 같다. MVP-02 후리가나 계산은 이 값을
+tappable item span의 읽기로 먼저 쓴다(교정 계층 1, ADR-021).
+
+-   **한계:** 이 뜻을 강제하는 검증은 없고 prompt도 바꾸지 않는다. **기본형 읽기가 올 가능성이 큰 곳은 현재의 주
+    생성 경로다.** 문장 생성(`sentence_gen_v1`)과 review context(`review_context_v1`) prompt에는 `reading`의
+    정의가 없고, 요청의 `target_items`에는 기본형(`learning_items.reading`)의 읽기가 실린다(`08_LLM_SPEC.md`의
+    `요청 context`). 그래서 생성 문장에서는 교정 계층 1의 정렬이 자주 성립하지 않고 분석기 읽기로 넘어가며
+    `ruby.reading_mismatch`가 늘 수 있다(`11_OBSERVABILITY.md`). 정렬이 성립하지 않으면 설명 읽기를 쓰지 않으므로
+    ruby의 경계·형식 안전성은 그대로다. 설명의 `reading` 자체는 고치지 않는다.
 
 ## user_mastery
 
@@ -735,6 +799,10 @@ starter seed set**을 둔다.
     `06_LEARNING_ENGINE.md`의 `Candidate Materialization`이 세션 시작
     시점에 이 seed 콘텐츠에서 만든다.
 -   정확한 개수는 제품 명세에 고정하지 않는다
+-   **MVP-02:** seed 적재는 문장마다 후리가나를 계산해 같은 트랜잭션에서 `sentences.ruby_json`에 넣는다.
+    입력은 원문, tappable span, seed 파일의 `explanation.reading`이다. 한 문장의 계산이 실패하면 그 문장은
+    `ruby_json = NULL`로 적재하고 적재를 계속한다. 분석기 자체를 적재하지 못하면 seed 명령이 시작에서
+    실패한다. 적재 출력에 계산 요약을 남긴다(`11_OBSERVABILITY.md`의 `MVP-02 추가: 후리가나 계산 결과`)
 
 seed는 Git으로 관리하고 migration 또는 별도 seed 절차로 적재한다.
 
@@ -763,6 +831,11 @@ seed는 Git으로 관리하고 migration 또는 별도 seed 절차로 적재한�
 Public Demo는 static frontend fixture이며 **DB를 사용하지 않는다.**
 demo user row, demo state, `mode` 컬럼을 두지 않는다. 따라서 demo가
 private mastery를 오염시킬 경로 자체가 존재하지 않는다.
+
+MVP-02의 demo fixture는 **`seed/` 파일에서 스크립트로 만든다.** DB에서 읽지도 DB에 적재하지도 않으므로
+위 `Seed Data`의 추가 적재 공백을 결정하지 않는다. 선택 규칙·검사·재생성 일치는
+`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`가 canonical이다. fixture의 ruby는 seed 적재와 같은 계산 함수로
+만든다.
 
 ## Migration Rule
 
@@ -808,3 +881,43 @@ upgrade)는 데이터를 지우고 `APP_ENV = production`에서 거부되므로 
     `learning_events`의 unique index처럼 **위반 행을 정리하는 migration 단계를 두지
     않는** 경우 migration 실패는 설계된 결과이며, 이 경로가 그 실패를 우회하지
     않는다.
+
+### MVP-02: additive migration과 후리가나 backfill (MVP-02 확정)
+
+**운영 DB는 reset하지 않는다. MVP-02의 migration은 additive만 쓰고 기존 학습 기록을 보존한다**(불변식 19).
+MVP-02 schema 변경은 `sentences`에 `ruby_json JSONB NULL`(default 없음)을 더하는 것 하나다. 적용은 위
+`운영 DB에 migration을 적용하는 경로`를 그대로 따른다.
+
+기존 문장의 ruby는 migration이 아니라 **backfill 스크립트**(`scripts/backfill_ruby.py`)가 채운다. 형태는
+`scripts/db_migrate.py`와 같다.
+
+``` text
+1 대상 출력   password를 가린 DSN, 현재 algorithm_version
+2 대상 조회   WHERE ruby_json IS NULL ORDER BY id
+              tappable span과 explanation.reading(status = validated 중 id가 가장 작은 행)을 함께 읽는다
+3 계산        메모리에서만. 요약, 규칙별 적중, 불일치 목록을 출력한다
+4 dry-run     --apply가 없으면 "dry-run: nothing written"을 출력하고 7로 간다
+5 --apply     쓸 행(계산에 성공한 행)이 0이면 백업 없이 7로 간다
+              있으면 백업을 만들고 검증한다(--pg-bin 필수). 실패하면 쓰기 없이 exit 2
+              백업을 건너뛰는 옵션은 없다
+6 쓰기        한 트랜잭션. 조회와 같은 조건을 UPDATE에 다시 건다
+              UPDATE sentences SET ruby_json = :value WHERE id = :id AND ruby_json IS NULL
+              commit 뒤 갱신 행 수를 출력한다
+7 종료 코드   계산 실패가 하나라도 있으면 쓸 행 수와 무관하게 exit 2 (dry-run, 쓸 행 0 포함)
+              그 밖은 exit 0. 실패한 문장은 NULL로 남아 다음 실행이 다시 본다
+```
+
+-   **멱등 판정은 대상 조건 하나다.** 두 번째 실행은 대상 0, 백업 없음, exit 0이다(계속 실패하는 문장이 없을 때). 동시에 들어온 worker
+    행이나 다른 backfill의 결과는 UPDATE에 다시 건 조건 때문에 덮어쓰지 않는다. 늦은 쪽은 0행 갱신으로
+    끝난다.
+-   **이미 계산된 행을 다시 계산하는 옵션은 두지 않는다.** 첫 배포 `algorithm_version`이 2라서 지금은 대상이
+    없다. 교정 표·정렬 규칙·사전 버전을 바꾸는 미래 변경이 재계산 수단을 함께 설계한다. 그때까지 옛 규칙으로
+    계산된 행은 그대로 남고, `ruby_json`의 버전 필드로 조회할 수 있다.
+-   **API와 worker를 멈추지 않아도 된다.** 읽고 쓰는 것은 `sentences`와 콘텐츠 annotation뿐이고 학습
+    테이블에 닿지 않는다. 위 migration 경로의 "3부터 4까지 멈춘다"는 migration 단계에만 적용된다.
+-   **운영 대상 확인은 절차가 한다.** 스크립트는 `APP_ENV = production`을 거부하지 않는다(목적이 운영
+    DB다). 운영 절차가 ADR-020 결정 7의 대상 확인 체인을 명령 앞에 둔다(`infra/DEPLOY.md`).
+-   `computed_at`은 진입점이 한 번 읽은 시각을 모든 행에 넣는다(ADR-007).
+-   **되돌림:** 표시 보조 컬럼이므로 `UPDATE sentences SET ruby_json = NULL`로 충분하다. 강제 백업은 이
+    되돌림과 무관하게 유지한다.
+-   Makefile 타깃 이름은 구현이 정한다.

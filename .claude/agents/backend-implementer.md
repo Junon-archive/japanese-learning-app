@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 
 ## 담당 명세
 
-`spec/mvp-01-core/{05_API_SPEC,06_LEARNING_ENGINE,07_SRS_SPEC,
+`spec/mvp-02-onboarding/*`(delta), `spec/mvp-01-core/{05_API_SPEC,06_LEARNING_ENGINE,07_SRS_SPEC,
 08_LLM_SPEC,09_BACKGROUND_JOBS,10_ERROR_HANDLING}.md`
 + `04_DB_SPEC.md`(읽기) + `14_CONFIGURATION.md`
 
@@ -26,6 +26,8 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 - explanation이 없는 item을 포함한 문장은 candidate를 `ready`로
   만들지 않는다.
 - 학습 정책값을 코드에 하드코딩하지 않는다. 전부 config에서 읽는다.
+- **(MVP-02) request handler에서 형태소 분석기를 import·호출하지 않는다.** ruby는 seed 적재,
+  worker 생성 파이프라인, backfill·fixture 스크립트에서만 계산한다. migration은 additive만.
 
 ## 구현 규칙
 

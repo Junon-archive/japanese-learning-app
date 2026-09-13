@@ -447,6 +447,31 @@ duplicate_similarity       12
 unknown_item_ref           13
 ```
 
+### 검증 뒤 후리가나(ruby) 계산 (MVP-02 확정)
+
+통과한 문장을 저장하는 단계에서 worker가 후리가나를 계산해 `sentences.ruby_json`에 넣는다
+(`04_DB_SPEC.md`의 `ruby_json`, ADR-021). **LLM이 만드는 값이 아니다.**
+
+-   **위치:** 검증(위 13항목)이 끝난 뒤, 문장 행을 만드는 직전이다. `GENERATE_REVIEW_CONTEXT`도 같은 저장
+    경로를 지나므로 포함된다. `EXPLAIN_ITEM`은 문장·span을 바꾸지 않으므로 다시 계산하지 않는다.
+-   **입력:** 원문, 그 문장의 tappable item span, 같은 payload의 `explanation.reading`. 계산은 형태소
+    분석기(SudachiPy + SudachiDict-core)와 결정적 정렬·교정 규칙으로 하고 provider를 부르지 않는다.
+-   **검증 항목이 아니다.** 위 사유 코드 집합에 탈락 사유를 더하지 않는다. 계산이 예외로 끝나면
+    `ruby_json = NULL`로 저장하고 문장은 그대로 `validated`다. **Ready를 막지 않는다**
+    (`10_ERROR_HANDLING.md`의 `후리가나 계산 실패 (MVP-02)`). Ready invariant와 validated 승격은 ruby를 보지
+    않는다.
+-   **prompt와 structured output 스키마를 바꾸지 않는다.** 요청에 읽기를 달라고 하지 않고, 응답 스키마에
+    ruby 필드를 두지 않는다. LLM으로 읽기를 교정하지도 않는다.
+-   **`explanation.reading`은 교정 계층 1의 입력이다.** tappable item의 span에서 설명의 읽기로 한자 run
+    정렬이 성립하면 그 읽기가 분석기 읽기보다 먼저 쓰인다. 생성 문장의 `explanation.reading`은 LLM
+    출력이고 읽기의 정확성은 검증하지 않으므로, 설명과 분석기가 다른데 설명이 쓰인 경우를
+    `ruby.explanation_override`로 관측한다(`11_OBSERVABILITY.md`). 설명 데이터는 고치지 않는다.
+-   **worker 부팅 검사:** worker 진입점(`scripts/run_worker.py`)이 부팅에서 분석기를 적재하고 실패를 잡지
+    않는다. 분석기나 사전이 이미지에 없으면 worker가 뜨지 않는다(fail-closed). `LLM_PROVIDER` 검사와 같은
+    판단이다. worker가 뜨지 않는 동안 학습 세션은 Ready Pool로 계속된다.
+-   분석기 계산은 provider 호출이 아니고 문장당 짧은 CPU 작업이므로 저장 트랜잭션 안에서 해도 "provider
+    호출 중 트랜잭션 금지"(ADR-015)와 부딪히지 않는다.
+
 ### difficulty_json (MVP 확정)
 
 `sentences.difficulty_json`은 응답의 label을 그대로 담는다.

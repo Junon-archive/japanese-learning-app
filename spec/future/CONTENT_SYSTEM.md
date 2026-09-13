@@ -31,3 +31,7 @@ difficulty scorer, 정교한 topic budget, sense hierarchy,
 morphological analyzer, embedding 기반 duplicate detector는 모두
 Future다. MVP는 simple difficulty label과 simple topic tag까지만
 사용한다(`spec/mvp-01-core/00_SCOPE.md`).
+
+(주석, MVP-02) 형태소 분석기는 MVP-02에서 **콘텐츠 적재·생성 시점의 후리가나 계산 용도로만** 도입했다
+(ADR-021, `spec/mvp-02-onboarding/00_SCOPE.md`). 나머지 용도(metadata 채우기, lemma·난이도 판정 등)는 여전히
+Future다.

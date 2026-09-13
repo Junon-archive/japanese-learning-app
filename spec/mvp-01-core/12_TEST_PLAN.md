@@ -1,5 +1,9 @@
 # Test Plan
 
+MVP-02에서 더한 테스트(공개 화면 격리, 로그인 진입, 후리가나, 가나 학습, demo 확장,
+localStorage, 불변식 13\~20의 변이 검증)는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 있다. 이
+문서의 항목은 그대로 유지한다.
+
 ## Unit
 
 no-click rule, policy ratios/config, mastery signals, exposure count,
@@ -181,7 +185,8 @@ Alembic from empty DB.
     `last_activity_at`이 그대로다(`05_API_SPEC.md`의 `History`). 조회는 학습
     시간을 만들지 않는다.
 -   Demo isolation: demo API endpoint가 존재하지 않고, demo frontend
-    fixture가 backend로 네트워크 요청을 하지 않는다.
+    fixture가 backend로 네트워크 요청을 하지 않는다. MVP-02에서 격리 대상이 선택 홈과 가나
+    학습으로 넓어지고 동적 import까지 검사한다(`spec/mvp-02-onboarding/12_TEST_PLAN.md`).
 -   contextual repetition이 실제로 진행한다: 같은 item을 연속 세션에서
     실패 없이 반복 제시하면 제시 문장이 `anchor` 한 문장에 고정되지 않고
     `context_stage`가 ladder를 따라 올라간다.
@@ -345,8 +350,12 @@ Core E2E(in-process와 브라우저 둘 다)는 seed loader로 적재한 seed-or
 
 ## Demo E2E
 
--   anonymous visitor가 로그인 없이 demo를 시작할 수 있다.
--   설명 / 번역 / probe / contextual review를 체험할 수 있다.
+-   anonymous visitor가 로그인 없이 demo를 시작할 수 있다. MVP-02에서는 선택 홈의 카드로
+    들어간다.
+-   설명 / 번역 / 자기평가 / probe / 같은 문장 다시 보기를 체험할 수 있다. MVP-02의 demo는
+    새 문맥 재등장(contextual review)을 약속하지 않으므로 그것을 단정하지 않는다
+    (`03_UI_UX_SPEC.md`의 `Demo`). demo 진행 규칙, 진도 저장, 완료 화면의 테스트는
+    `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 있다.
 -   private user data가 노출되지 않는다.
 -   LLM paid call이 발생하지 않는다.
 -   demo 화면이 backend로 네트워크 요청을 하지 않는다(static fixture).

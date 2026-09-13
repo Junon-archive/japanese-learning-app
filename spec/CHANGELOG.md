@@ -1528,3 +1528,251 @@ coordinator가 넘긴 4건(H1\~H4)을 **결정 없이 공백으로만** 기록�
 전환과 fixture 추가), `infra/DEPLOY.md`의 4.4(seed 적재 확인 문구)가 함께 바뀌었다.
 `13_ACCEPTANCE_CRITERIA.md`, `14_CONFIGURATION.md`, `spec/future/`, 루트 `spec/05`·`spec/06`은
 변경하지 않았다.
+
+## MVP-02 Onboarding 명세 --- 2026-09-13
+
+MVP-02(선택 홈, 로그인 진입, 문구와 화면 전환, 후리가나, 가나 학습, demo 확장)를 명세에 반영했다.
+출처는 사용자 결정(2026-09-13)과 그 결정을 기록한 요청서 `updates/U-001`\~`U-005`, 그리고 같은 날
+Wave 1에서 정한 보완 결정이다. **요청서는 명세가 아니며** 이 절의 변경이 구현 근거다. 새 버전 번호를
+만들지 않았다(Spec Version v0.2 유지). 번호는 위 후속 보완의 [57]에 이어 붙였다.
+
+반영은 두 번에 나눠 했다. [58]\~[69]는 ADR-021(분석기 선정, ruby 데이터 모델, 한자 run 정렬, backfill)과
+ADR-022(선택 홈 route와 로그인 진입, 격리 경계 확장)가 확정되기 전의 1부이고, 그 ADR에 기대는 부분은 자리만
+두었다. [70]\~[79]는 두 ADR 확정 뒤의 2부이며 그 자리를 모두 채웠다. 1부 항목의 서술 중 2부에서 바뀐 것은 2부
+항목이 적는다.
+
+-   **[58] 문서 계층에 MVP-02 delta를 더했다** (`spec/mvp-02-onboarding/` 신설, `AGENTS.md`, 루트
+    `README.md`): `00_SCOPE.md`(지위, In/Out of Scope 추가, MVP-01 Out of Scope 유지, 불변식 13\~20과
+    canonical 조항), `12_TEST_PLAN.md`, `13_ACCEPTANCE_CRITERIA.md`를 만들었다. 기존 규칙은 제자리에서
+    고치고 delta 디렉터리에는 범위·테스트·합격 기준만 둔다. source of truth를 `spec/mvp-01-core/*` +
+    `spec/mvp-02-onboarding/*`(delta)로 바꿨다. `AGENTS.md`의 "MVP 구현 대상이 아님" 목록에서 **형태소
+    분석기만** 적재·생성 시점 후리가나 계산 용도로 해제하고 나머지 항목은 두었다. README는 Current
+    Milestone과 문서 계층·우선순위만 고쳤다(전체 재작성은 MVP-02 마무리 단계). `updates/`가 우선순위
+    목록에 들어가지 않는다는 문장을 README에 더했다.
+-   **[59] 로그인 확인 시점이 불변식 14와 충돌했다** (`01_USER_FLOW.md`의 `Private Learning`,
+    `03_UI_UX_SPEC.md`): 흐름이 `App Open → Authentication check`로 시작했다. 앱을 열면 선택 홈이 나오고
+    상단바 `로그인`을 **누를 때만** `GET /api/auth/me`를 부르도록 고쳤다. `03`에 `상단바`(모든 화면,
+    화면별 오른쪽 메뉴, 로그인 진입 결과 셋, 공개 hash route, `hashchange`, Login·Study·History는 hash
+    없음과 새로고침 → 선택 홈, 로그아웃 → 선택 홈)와 `선택 홈` 절을 새로 두었다. 머리 단락의 "화면 사이
+    이동은 각 화면 안의 링크·버튼으로"에 상단바를 더했다. `Login`에 "폼 안에 demo 진입 버튼을 두지
+    않는다"를 더했고 두 필드·버튼 하나·단일 실패 문구는 그대로다. `로그아웃`의 위치("`학습 기록` 링크
+    바로 아래")와 이동("Login 화면")을 상단바와 선택 홈으로 바꿨고 "History에는 두지 않는다"는
+    유지했다. `완료 화면`의 "다시 열거나 새로고침하면" 서술에 선택 홈을 거친다는 문장을 붙였다.
+    Study Screen 오른쪽 메뉴는 MVP-01에서 화면 안에 있던 `학습 기록`·`로그아웃`을 옮긴 것으로 읽고,
+    Login과 History의 상단바 오른쪽은 비웠다.
+-   **[60] 문구 가이드** (`03_UI_UX_SPEC.md`의 `문구 가이드`): 우선순위(보안 문구 > 고정 문구 > 서버
+    숫자 규칙 > 말투), 원칙 여섯 개, 좋은 예/나쁜 예, 화면별 `화면 문구 표`를 두었다. 동작과 함께 고정한
+    문구는 그 절이 canonical이고 표는 그 절을 가리킨다. 고정 문구 중 `세션 시작 안내` 두 줄과 `완료
+    화면` 첫 줄을 해요체로 바꿨고, 로그인 실패 문구는 표현만 바꾸고 사유를 가르지 않는 의미를 유지했다.
+    probe 질문(서버 상수)과 4지 라벨, `오늘 학습 완료 / 더 학습하기`, `아직 평가 없음`, `로그아웃`은
+    바꾸지 않았다.
+-   **[61] 화면 전환과 시트** (`03_UI_UX_SPEC.md`의 `화면 전환과 시트`): motion 토큰(120/240/360ms,
+    `cubic-bezier(.2,.9,.25,1)`과 `ease`), 화면 진입(10px 떠오름 + fade, 360ms 이내), 설명 시트,
+    번역 인라인 펼침, 토스트(정보성만 4초)와 인라인 오류, 누름 반응(scale .97\~.985, 100\~120ms, hover
+    없음), reduced-motion(이동 없애고 짧은 fade만), View Transitions API 미사용을 두었다. **번역은
+    시트가 아니라 문장 아래 인라인 펼침**이며 시트는 item 설명에만 쓴다. **`explanation_revealed`의
+    "실제로 렌더된 직후"는 설명이 DOM에 삽입된 시점**으로 읽는다고 적었다(시점 구분의 canonical은
+    그대로 `05_API_SPEC.md`). `Explanation`에 설명 머리의 읽기 표시(문장 속 표면형 + 데이터의
+    `reading`, 기본형은 따로, 기본형 읽기를 만들지 않음)를 더했다.
+-   **[62] "furigana 상시 표시 금지"를 바꿨다** (`03_UI_UX_SPEC.md`의 `Translation/Furigana`,
+    `14_CONFIGURATION.md`, `02_LEARNING_POLICY.md`, `spec/06_LLM_ENGINEERING_PRINCIPLES.md`): 기본 끔,
+    사용자가 켬, 켜면 학습 문장 속 모든 한자(학습 표현이 아닌 한자 포함), 저장된 ruby만 표시, 표시
+    범위는 학습 문장뿐, probe 중에도 표시, 설정은 localStorage 하나를 Study Screen과 Demo가 공유, 토글은
+    CSS class 전환(재렌더·handle 재생성 없음), 불변식 17, 후리가나와 item 설명 reading의 관계(출처가
+    다르고 어긋나도 자동 수정 없음)를 적었다. `14`의 `reading_default_visible` 단락이 옛 금지 조항을
+    가리키던 것을 고쳐 **이 키는 item 설명 reading의 reveal 기본 상태**이고 후리가나 설정은 이 파일의
+    키가 아니라고 구분했다. `02`의 `Auxiliary signal` 아래에 `학습 신호가 아닌 것 (MVP-02)`을 두어
+    후리가나 표시·토글, 가나 학습, demo 진행이 event·exposure·evidence를 만들지 않으며 후리가나 켬
+    상태를 신호로 해석하지 않는다고 적었다(불변식 16). `06`의 MVP 제외 목록에는 해제 사실만 주석으로
+    달았다(06은 구현 근거가 아니다).
+-   **[63] 가나 학습** (`03_UI_UX_SPEC.md`의 `가나 학습`, `01_USER_FLOW.md`의 `Kana Learning`): 격리,
+    화면 구성, 범위 7종, 로마자 규칙과 대표 예(장음 부호 없음), 한글 소리 근사 글자 표, 퀴즈 두 방식,
+    같은 범위 오답의 로마자 4지선다, 난수 주입, 라운드(최대 10문항, 틀린 문항 라운드 끝 한 번 더),
+    localStorage 진도와 초기화를 두었다.
+-   **[64] demo memory/session 문장 셋이 localStorage 저장과 충돌했다** (`01_USER_FLOW.md`,
+    `03_UI_UX_SPEC.md`의 `Demo`, `spec/04_SECURITY_AND_DATA.md`의 `Public Demo 구조`): 세 문서가 같은
+    규칙을 반복했다. 세 곳을 "demo 진도는 그 브라우저의 localStorage에만"으로 바꾸고 저장 규칙의
+    canonical을 `spec/04`의 새 절 하나에 두었다. `03`의 `Demo`에 진입과 동적 import 로딩, 체험 요소,
+    진행 규칙과 **demo 전용 상수 표**(`DEMO_REVIEW_AFTER_SENTENCES`, `DEMO_PROBE_EVERY_SENTENCES`, 학습
+    정책값 아님, `frontend/src/demo/constants.ts` 한 곳), 진도 저장, 진도 초기화, 완료 화면, fixture
+    생성 규칙(검사 3종과 제외 목록, greedy 선택 규칙, 상한 200, 덮지 못한 item 출력, 선택 순서, 재생성
+    일치, 같은 정렬 모듈의 ruby)을 두었다. demo의 "다시 보기"는 **같은 문장 재노출**이고 새 문맥
+    재등장을 약속하지 않으며, 12분 진행바·`오늘 학습 완료 / 더 학습하기`·연장을 없애고 진행 표시는
+    `본 문장 수 / 전체 문장 수`로 했다. 이에 맞춰 `12_TEST_PLAN.md`의 `Demo E2E`에서 contextual review
+    단정을 같은 문장 다시 보기로 바꿨다. demo 상수가 config가 아니라는 단락을 `14`의 "이 파일에 두지
+    않는다" 목록 끝에 더했다.
+-   **[65] localStorage 사용 범위** (`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02
+    확정)`): 세 용도와 저장 항목, 다른 브라우저 저장소를 새로 쓰지 않음, 넣지 않는 것(secret·인증 값·
+    `login_id`·서버 응답 데이터), 예외에도 메모리 동작, key 버전과 조용한 초기화, 서버 미전송, 민감도를
+    canonical로 두었다(불변식 18). `Modes`와 `Public Demo 구조`를 **공개 화면 셋**(선택 홈, Demo, 가나
+    학습)으로 넓히고 정적·동적 import 경계와 로그인 확인 시점을 적었다(불변식 13·14).
+-   **[66] 장애 범위와 관측** (`10_ERROR_HANDLING.md`, `11_OBSERVABILITY.md`): API 장애와 무관하게
+    동작하는 범위를 공개 화면 셋으로 넓히고, localStorage 불가와 fixture 불러오기 실패의 동작, 후리가나
+    계산 실패가 Ready를 막지 않는다는 절을 더했다. `11`에는 기존 닫힌 집합과 `result_ref` 구조를
+    바꾸지 않는 **추가 절**로 후리가나 계산 결과(문장 수, 한자 포함 토큰 수, 생략 토큰 수, 실패 수,
+    `explanation.reading` 불일치 목록)를 네 계산 지점의 로그·출력에 남긴다고 적었다. 생략 비율의 분모와
+    5% 진행 판정, 불일치 비교의 정규화를 함께 적었고 frontend 관측이 없음을 못박았다.
+-   **[67] "MVP-02" 이름이 겹쳤다** (`13_ACCEPTANCE_CRITERIA.md` 끝 단락): 실사용 평가 뒤 정책 조정을
+    가리키던 "MVP-02"를 "실사용 평가 후 정책 조정"으로 바꿨다. `13`의 demo 분리 기준에 MVP-02 합격 기준
+    참조를 달았다. `12_TEST_PLAN.md` 머리와 `Demo isolation`에 MVP-02 테스트 계획 참조를 달았다.
+-   **[68] ADR-020 결정 6이 README 공개 주소와 충돌했다** (`docs/decisions/ADR-020-production-topology.md`):
+    "커밋되는 모든 파일에는 실제 도메인을 쓰지 않는다"에 **README의 사이트 주소 1개만** 예외를 두는
+    개정 절을 붙였다. API 호스트·터널 이름과 서비스명·Workers 이름·포트·서버 경로·IP·계정 ID는 README를
+    포함해 계속 쓰지 않고, README 밖 파일은 사이트 주소도 자리표시자다. 예외가 API 호스트의 "저장소를
+    통한 발견" 방지 효과를 약하게 한다는 귀결과, 방어의 중심(ADR-006)은 그대로라는 점을 적었다. 실제
+    주소 값은 어느 문서에도 적지 않았다.
+-   **[69] MVP-02 목업** (`spec/reference/ui/`): 요청 참고 자료의 정적 목업을 `mvp-02-mockup.html`로
+    그대로 복사하고, `README.md`에 우선순위(명세 > MVP-02 목업 > 기존 목업), 목업 데이터는 예시라는
+    사실, 명세와 다른 곳(장음 부호, 번역 시트, 초기화 확인 시트, 후리가나 재렌더, 상단바 모양, Study
+    Screen 토글 위치, 진입 이동 거리, 홈 카드 문장 수, 설명 머리 읽기)을 적었다. `03` 머리 단락에 새
+    목업 참조를 더했다.
+
+**2부 (ADR-021, ADR-022 확정 뒤):** 1부에서 `ADR-021/022 확정 후 반영`으로 남긴 자리를 모두 채우고, 두 ADR의
+"명세 반영 대상"을 반영했다. 1부 확인 요청에 대한 Wave 1 보완 결정(2026-09-13)도 함께 반영했다. 남은 자리
+표시는 없다.
+
+-   **[70] 후리가나 저장** (`04_DB_SPEC.md`): `sentences`에 `ruby_json JSONB NULL`과 `ruby_json` 절(모양, NULL =
+    미계산·실패 / `spans: []` = 계산했고 달 읽기 없음, 좌표, provenance를 값 안에 두고 `provenance_json`에
+    넣지 않는 이유, `algorithm_version` 첫 배포 값 2, DB CHECK 없음과 계산·표시 양쪽 검증, 계산 지점 넷, NULL
+    잔량 조회)을 두었다. `Seed Data`에 적재 시 계산과 실패 처리, `Demo Data`에 fixture가 seed 파일에서
+    만들어져 추가 적재 공백을 결정하지 않는다는 참조, `Migration Rule` 뒤에 additive migration 하나와 backfill
+    절차(기본 NULL만, dry-run 기본, `--apply`와 백업 강제, UPDATE 재조건으로 동시 실행 멱등,
+    `--recompute-older-than N`의 범위, API·worker 무정지, 되돌림)를 두었다. `learning_items`의 "morphology
+    provenance는 Future"가 item 분석 메타데이터를 뜻하며 ruby 계산 기록과 다르다는 주석을 달았다.
+-   **[71] payload 계약** (`05_API_SPEC.md`): `render_segments[].ruby`(RubyPart, R1\~R7, 예시, 서버가 자름, `null`
+    없음, 저장값 무효는 200 + 빈 ruby, 토글과 무관하게 항상 실음), API를 쓰지 않는 화면을 셋으로 넓힘과
+    `GET /api/auth/me` 호출 시점, Explanation `reading`과 문장 ruby의 관계(교정 계층 1 때문에 탭 전에 읽기가 보일
+    수 있으나 event 의미 불변), `explanation_revealed`의 "렌더된 직후" = DOM 삽입 시점을 canonical 절에 넣었다.
+-   **[72] 생성 파이프라인** (`08_LLM_SPEC.md`의 `검증 뒤 후리가나(ruby) 계산 (MVP-02 확정)`): ruby는 LLM 값이
+    아님, 검증 뒤 저장 직전 계산, 탈락 사유를 더하지 않음, 실패해도 validated·Ready 불변, prompt·스키마 불변,
+    `explanation.reading`이 교정 계층 1의 입력이고 `explanation_override`로 관측, worker 부팅 검사(분석기 부재는
+    fail-closed)를 적었다.
+-   **[73] 모듈 배치** (`spec/02_ARCHITECTURE.md`, `docs/decisions/ADR-015`): 분석기는 worker 이미지와 호스트
+    CLI에만(dependency group `furigana`), MVP-02 모듈 위치 표(`app/render.py`, `app/furigana.py`, 두 스크립트,
+    frontend `main.ts`·`routes.ts`·`private.ts`·`home/`·`demo/`·`kana/`·`local-store.ts`·`ui/screen`·`sheet`·`topbar`·
+    `furigana`)를 더했다. ADR-015 계층표에 `furigana.py` 한 줄과 guard 목록에 G14 한 줄을 더했다.
+-   **[74] 화면 쪽 자리** (`03_UI_UX_SPEC.md`): 전환·시트의 구현 경계(모듈, 논리 상태는 애니메이션 이벤트를
+    기다리지 않음, `showScreen`과 `signal`, 문서 리스너 하나), 상단바 표에 Demo 행(후리가나 토글 + `로그인`),
+    로그인 진입 순서(signal abort, hash 지움, `private.ts` 동적 import와 적재 실패 안내, `fetchMe` 결과), route 표
+    (적재 방식, 모르는 hash의 URL 교체, `#/kana/<하위>`), 뒤로 가기는 공개 화면 사이만, route 모듈의 `mount(ctx)`,
+    "서버 요청 0건"의 서버 = API origin, PWA 시작 주소 `/`. 후리가나: "모든 한자"의 예외(수사와 조수사, 사전
+    읽기 없음, tappable 경계를 넘는 토큰), 교정 계층 한 줄, `nc.furigana.v1`과 `ui/furigana.ts`의 export,
+    documentElement class, 렌더러 계약(`rt`는 항상, `aria-label`에 읽기 없음). Demo: route 단위 동적 import로
+    fixture 동적 import를 충족, `nc.demo.v1`과 값 안의 fixture 식별자, fixture 스크립트·생성 파일 위치와 검사
+    모드. 가나: `nc.kana.v1`, 하위 경로는 메뉴 수준만, 명시적 import. 문구 표: 로그인 영역 적재 실패, 토글 행,
+    route별 불러오기 실패 문구.
+-   **[75] 격리와 저장** (`spec/04_SECURITY_AND_DATA.md`): 모듈 경계, 격리 검사 (a)\~(f)와 양성 대조군, 부팅
+    런타임 단정, "서버"의 뜻, `local-store.ts` 인터페이스와 메모리 기준값, key 표(`nc.furigana.v1`, `nc.kana.v1`,
+    `nc.demo.v1`)와 버전 규칙, 금지 저장소(`sessionStorage`, `indexedDB`, `document.cookie`, `caches`), 접근 범위
+    검사, 저장소가 브라우저·설치 형태마다 따로라는 한계를 채웠다.
+-   **[76] 설정·장애·관측** (`14_CONFIGURATION.md`, `10_ERROR_HANDLING.md`, `11_OBSERVABILITY.md`): `14`의 "payload에
+    reading 필드가 없다"를 **item 설명의 reading**으로 좁히고 문장 ruby·토글과의 관계 표를 더했으며, 토글 기본값과
+    교정 표·`algorithm_version`이 config 대상이 아니라고 적었다. `10`에 실패 두 종류(문장 예외는 NULL과 backfill
+    재시도, 분석기 부재는 부팅 실패), 저장값 무효 처리, 로그인 영역·route 청크 적재 실패를 더했다. `11`에 로그
+    이벤트(`ruby.computed`, `ruby.failed`, `ruby.reading_mismatch`, `ruby.explanation_override`,
+    `ruby.invalid_stored`)와 필드, CLI 요약 형식, 불일치 보고 두 종류, 로그에 텍스트를 싣지 않음을 채웠다.
+-   **[77] MVP-02 테스트와 합격 기준** (`spec/mvp-02-onboarding/12_TEST_PLAN.md`, `13_ACCEPTANCE_CRITERIA.md`):
+    12를 명령, 파일 위치, 격리 (a)\~(f), 정렬·교정 단위, R1\~R7, 계산 실패, G14와 런타임 탐침, Dockerfile 명령
+    고정, migration, backfill, fixture, 브라우저 e2e 파일별 단정, 변이 검증의 대상 테스트로 다시 썼다. 13의 확인
+    방법을 테스트 파일 이름으로 바꾸고 교정 계층·부팅 실패·저장값 무효·key 이름을 기준에 넣었다. `00_SCOPE.md`에
+    ADR 연결과 수정 문서 목록을 채웠다.
+-   **[78] 형태소 분석기 도입 범위 주석** (`spec/future/CONTENT_SYSTEM.md`, `spec/05_LEARNING_SYSTEM_VISION.md`):
+    MVP-02에서 적재·생성 시점 후리가나 계산 용도로만 도입했고 나머지 용도는 여전히 Future라는 주석만 달았다.
+-   **[79] 1부 확인 요청에 대한 보완 결정** (`03_UI_UX_SPEC.md`, `spec/reference/ui/README.md`,
+    `spec/mvp-02-onboarding/00_SCOPE.md`): 진도 초기화 확인은 시트가 아닌 인라인 확인으로 확정했다. 선택 홈 카드에
+    문장 수 숫자를 쓰지 않는다(1부의 조건부 서술 삭제). demo 신고 안내를 demo 전용 문구 "체험에서는 신고가
+    저장되지 않아요."로 두고 신고한 문장의 다시 보기 동작은 바꾸지 않았다. demo probe의 "몰랐음/애매함"도
+    자기평가처럼 다시 보기 대기열에 넣는다(문장당 한 번 유지). 가나 라운드의 재출제 응답도 진도 수에 센다.
+    1부에서 고른 해석(Login·History 상단바 오른쪽 비움, 다시 보기 간격은 본 문장 수 기준, 진도 초기화가 후리가나
+    설정을 지우지 않음, 로그아웃 토스트, 다른 브라우저 저장소 금지, 시트 닫기·포커스, tappable 표현 무축소, 단어
+    한글은 데이터에 단어별)은 전부 채택했다. `spec/01_PRODUCT_PRINCIPLES.md` 원칙 2와의 긴장은 원칙을 고치지
+    않고 `00_SCOPE.md`에 계정 사용자는 상단 `로그인` 한 번으로 학습 화면에 들어간다는 한 줄을 두었다. 후리가나
+    토글은 ADR-022에 맞춰 `role="switch"` 대신 토글 버튼(`aria-pressed`)으로 적었다.
+
+`updates/backlog.md`의 #35는 상태가 "MVP-02에서 해소(U-005)" 그대로이므로 고치지 않았다(해소 수단은
+`spec/04_SECURITY_AND_DATA.md`의 격리 검사 (c)(d)). `06_LEARNING_ENGINE.md`, `07_SRS_SPEC.md`,
+`09_BACKGROUND_JOBS.md`, 루트 `spec/00`·`spec/01`·`spec/03`, `backend/`·`frontend/`·`infra/`·`scripts/`·`config/`·
+`seed/`·`updates/`는 변경하지 않았다. `infra/DEPLOY.md`의 MVP-02 업데이트 절차와 README 기술 스택의 분석기
+라이선스 한 줄은 MVP-02 마무리 단계에서 반영한다.
+
+**3부 (Wave 1 게이트 지적 해소):** 범위·보안·학습 게이트의 지적을 Wave 1 보완 결정(2026-09-13)으로 해소했다. 위
+[70]과 [79]의 서술 중 아래 항목이 바꾼 부분은 아래가 우선한다.
+
+-   **[80] backfill 재계산 옵션 삭제와 종료 코드** (`04_DB_SPEC.md`, `10_ERROR_HANDLING.md`,
+    `spec/mvp-02-onboarding/12_TEST_PLAN.md`, `13_ACCEPTANCE_CRITERIA.md`): [70]의 `--recompute-older-than N`을
+    뺐다. 첫 배포 `algorithm_version`이 2라서 지금 대상이 없고 요청된 기능이 아니다. 교정 표·규칙·사전을 바꾸는
+    미래 변경이 재계산 수단을 함께 설계한다. 대상은 `ruby_json IS NULL`뿐이다. 종료 코드는 마지막에 정한다:
+    계산 실패가 하나라도 있으면 **쓸 행 수와 무관하게**(dry-run, 쓸 행 0 포함) exit 2, 그 밖은 exit 0. 백업
+    실패는 쓰기 없이 exit 2 그대로다.
+-   **[81] History 상단바** (`03_UI_UX_SPEC.md`, `13_ACCEPTANCE_CRITERIA.md`): [79]에서 채택한 "History 오른쪽 비움"을
+    바꿔 **`로그아웃`만** 둔다(문장이 없어 후리가나 토글이 없고 `학습 기록`은 자기 자신이다). Login 오른쪽은
+    비운다. `로그아웃` 절의 "History에는 두지 않는다" 문단은 MVP-01 화면 안 버튼에 대한 판단으로 남기고, 그
+    아래에 MVP-02 개정 문단을 붙였다. History 화면 내용에 다음 행동 버튼을 더하지 않는다는 조항은 그대로다.
+-   **[82] 격리 검사 강화** (`spec/04_SECURITY_AND_DATA.md`의 `격리 검사`, mvp-02 12·13): 판정을 fail-closed로
+    했다(풀리지 않는 상대·루트 지정자와 `?` 쿼리 지정자는 위반). (d)에 `env.ts` 밖의 `import.meta.env`, `api.ts`
+    밖의 네트워크 원시 API(`fetch`, `XMLHttpRequest`, `navigator.sendBeacon`, `WebSocket`, `EventSource`),
+    `document.createElement('script')`, 문자열 인자 타이머, `require()`, HTML 문자열 삽입 API를 더했다. (f)를
+    frontend origin 밖 요청 0건(API origin과 제3자 origin 모두)으로 넓혔다. 런타임 단정에 하위 경로 부팅과 가짜
+    타이머 진행을 더했다. `openLogin`은 사용자 이벤트 핸들러에서만 부르고, `signal`이 abort된 화면은 다음 요청도
+    시작하지 않는다. "불변식 14가 구조로 성립한다"는 "검사와 런타임 단정으로 지킨다"로 낮췄다. 변이 검증에
+    `.js` 확장자 지정자, `?worker` 지정자, 타이머의 `openLogin`, abort 뒤 요청을 더했다.
+-   **[83] HTML 삽입과 URL 값, CSP** (`spec/04_SECURITY_AND_DATA.md`의 `HTML 삽입과 URL 값 (MVP-02 확정)`,
+    `03_UI_UX_SPEC.md`의 `화면 이동`, `updates/backlog.md`): `frontend/src/` 전체에서 `innerHTML`·`outerHTML`·
+    `insertAdjacentHTML`·`document.write`를 금지하고, URL에서 온 값은 허용 목록과 비교만 하고 출력하지 않는다.
+    CSP 도입은 범위 밖으로 두고 backlog에 한 줄로 기록했다.
+-   **[84] localStorage 강화** (`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위`, mvp-02 12·13): 쓰기를
+    key마다 값 타입이 정해진 함수로 한정했다(시그니처 세부는 ADR-022). 로그인 영역이 쓰는 key는 `nc.furigana.v1`
+    뿐임을 AST로 확인한다. 접근 범위 검사가 계산된 속성 접근을 잡고, 금지 목록에 `history.state` 쓰기,
+    `window.name`, `navigator.storage`를 더했다. 읽기 타입 가드가 값 범위와 fixture 소속까지 검증하고 틀리면
+    조용히 초기화한다.
+-   **[85] ruby 표시 시점 검증** (`05_API_SPEC.md`의 R6, mvp-02 12·13): R6에 검증 조건 넷을 적었고 그중 읽기가
+    히라가나 코드포인트만으로 되어야 한다는 조건을 명시했다. 테스트 사례에 가타카나·한자·ASCII 읽기를 넣었다.
+-   **[86] 설명 시트 재열기와 시점 문구** (`05_API_SPEC.md`의 `explanation_revealed를 언제 보내는가`,
+    `03_UI_UX_SPEC.md`의 `설명 시트`·`Explanation`, mvp-02 12·13): 시트를 닫고 같은 표현을 다시 탭해도
+    `item_clicked`와 `explanation_revealed`는 presentation + item당 1회이고 `/click`을 다시 부르지 않는다. 시점
+    정의를 "설명 **내용**이 DOM에 삽입된 시점"으로 통일했다.
+-   **[87] `explanation.reading`의 뜻** (`04_DB_SPEC.md`의 `sentence_item_explanations`, `05_API_SPEC.md`): 문장 속
+    표면형의 읽기로 확정했다(기존 `explain_item_v1` prompt 정의와 같다). 다른 생성 경로가 기본형 읽기를 내면
+    교정 계층 1 정렬이 실패해 분석기 읽기로 넘어가고 `ruby.reading_mismatch`로 보고된다는 한계를 적었다.
+    prompt는 바꾸지 않았다. `05`의 Explanation 예시 `reading`을 표면형 읽기로, 기본 payload 예시에 `ruby`를
+    더했다.
+-   **[88] 공개 정보 기준** (`13_ACCEPTANCE_CRITERIA.md`(mvp-02) 48번, `docs/decisions/ADR-020` 결정 6 개정 절):
+    금지 대상을 "운영 환경의 실제 호스트·포트·경로·IP·계정"으로 한정하고, loopback 기본값과 로컬 포트, 문서 예시
+    자리표시자, 제3자 참고 URL은 대상이 아니라고 적었다.
+-   **[89] 그 밖** (`11_OBSERVABILITY.md`, `01_USER_FLOW.md`, mvp-02 12): CLI가 LLM에서 온 문자열을 출력할 때
+    제어문자를 이스케이프한다. 가나 흐름의 "최대 10문항"을 `03` 참조로 바꿨다. worker·API 런타임 탐침에
+    `sudachidict_core`를 더하고, 분석기 패키지가 `[project.dependencies]`에 없음을 테스트 계획에 넣었다.
+
+-   **[90] ADR-022 확정 표기 반영** (`spec/04_SECURITY_AND_DATA.md`, `03_UI_UX_SPEC.md`, mvp-02 12·13): [84]의
+    "key별 타입 쓰기 함수"를 `localSlot<T>(key, isValid)`가 key별 `{read, write, remove}`를 돌려주는 형태로 적었다
+    (key는 문자열 리터럴, key당 slot 하나, 소유 위치 `ui/furigana.ts`·`src/kana/` 한 모듈·`src/demo/` 한 모듈,
+    `isValid` 통과 값만 write). [82]의 `openLogin` 호출 위치를 `ui/topbar.ts` 로그인 버튼 click 리스너 한 곳으로
+    좁히고 `renderTopBar`의 `onLogin?` 옵션을 적었다. 계산된 속성 접근 금지를 전역 객체 `[...]` 접근과 문자열
+    리터럴 조각으로, history 저장 금지를 "state 인자는 `null`만"으로 맞췄다.
+-   **[91] MVP-02 목업 재복사** (`spec/reference/ui/`): 후리가나를 `rt` 상시 생성 + documentElement class 전환으로
+    고친 목업을 다시 복사하고, `README.md`의 "명세와 다른 곳"에서 해소된 후리가나 재렌더 항목을 지우고 로그아웃 뒤
+    이동 차이를 더했다.
+-   **[92] 로그인 영역 적재 실패 안내** (`03_UI_UX_SPEC.md`, `10_ERROR_HANDLING.md`, mvp-02 12·13): 로그인 영역 코드의
+    동적 import가 실패하면 [다시 시도하기] 버튼 없이 "로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러
+    주세요."만 둔다. `openLogin` 호출 위치를 상단바 `로그인` 버튼 한 곳으로 유지하기 위해서다. `fetchMe` 연결
+    실패의 [다시 시도하기]는 그대로다.
+-   **[93] 게이트 재검토 마지막 수정** (`03_UI_UX_SPEC.md`, `00_SCOPE.md`, `spec/04_SECURITY_AND_DATA.md`,
+    `04_DB_SPEC.md`, `05_API_SPEC.md`, mvp-02 12·13): Wave 1에서 메인이 정한 세부(History 상단바 등)의 출처 표기를
+    "사용자 결정"에서 "Wave 1 보완 결정"으로 바로잡았다. 격리 검사 (d)를 ADR-022 목록에 맞췄다(bare 지정자
+    fail-closed, `createElement` 비리터럴·`'script'`, `document.writeln`, 함수가 아닌 타이머 인자,
+    `createContextualFragment`·`parseFromString`·`srcdoc`, `setAttribute`의 `on*`·`srcdoc`·`href`·`src` 동적 값, 동적
+    값의 페이지 이동)와 한계 한 줄(실수 방지용, 의도적 우회는 런타임 단정·e2e (f)가 받침). `explanation.reading`
+    한계를 현재 주 생성 경로(문장 생성·review context prompt에 정의 없음, `target_items`에 기본형 읽기)로
+    바로잡았다. backfill 멱등 문장과 dry-run·쓸 행 0의 exit 0에 "계산 실패가 없을 때" 조건을 붙였다. R6에
+    `spans` 모양 검증을 더했다. signal 규칙을 새 화면 진입 요청으로 한정하고 진행 중 학습 event 전송은 기존
+    규칙을 따른다고 적었다.
+-   **[94] 떠난 화면의 설명 표시** (`05_API_SPEC.md`, `03_UI_UX_SPEC.md`, `spec/04_SECURITY_AND_DATA.md`, mvp-02 12·13):
+    Wave 1 보완 결정으로 기존 규칙 "응답 도착 전에 화면을 떠나면 `item_clicked`만 남는다"를 따른다.
+    `explanation_revealed` 시점을 "떠나지 않은 학습 화면의 DOM에 설명 내용이 삽입된 시점"으로 좁히고, `signal`이
+    abort됐으면 설명을 그리지 않고 보내지 않는다고 적었다. `spec/04`의 "기존 규칙" 참조가 이 조항을 가리키게 했고,
+    떠난 뒤 도착한 `/click` 응답에서 revealed 0건 단정을 테스트 계획에 더했다. `03`의 "떠난 화면" 규칙도 `spec/04`와
+    같게 새 화면 진입 요청으로 좁히고 05 참조를 붙였다(mvp-02 13의 5번도 같다). `05`의 재열기 1회는 한 화면 mount
+    안의 보장이며 새로고침·학습 기록 왕복 뒤에는 다시 남을 수 있다고 적었다.
+
+3부에서 `updates/backlog.md`에 CSP 항목 한 줄을 더했다. 같은 결정으로 ADR-021·022는 architect가,
+`updates/U-001-ui-ux-overhaul/refs/`는 frontend-implementer가 함께 고쳤다(이 명세 반영의 범위 밖).

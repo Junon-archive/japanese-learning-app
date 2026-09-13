@@ -8,8 +8,8 @@ tools: Read, Grep, Glob, Bash
 
 ## 담당 명세
 
-`spec/04_SECURITY_AND_DATA.md` + `13_ACCEPTANCE_CRITERIA.md`의
-Data/Security 항목
+`spec/04_SECURITY_AND_DATA.md` + `spec/mvp-01-core/13_ACCEPTANCE_CRITERIA.md`와
+`spec/mvp-02-onboarding/13_ACCEPTANCE_CRITERIA.md`의 Data/Security 항목
 
 ## 체크리스트
 
@@ -31,9 +31,12 @@ Data/Security 항목
 - PWA bundle·프론트 코드·Git에 secret이 없는가.
 - log에 secret/password/raw auth token이 남지 않는가.
 
-**Demo 격리**
+**공개 화면 격리 (홈·demo·가나 학습)**
 - demo endpoint가 **존재하지 않는가.**
-- demo 코드가 API client나 provider client를 import하지 않는가.
+- 홈·demo·가나 코드가 API client나 provider client를 정적·동적 import로 닿지 않는가.
+- 로그인 상태 확인이 로그인 진입점을 누를 때만 일어나는가.
+- localStorage에 secret·서버 데이터·login_id가 들어가지 않는가.
+- 공개 저장소의 커밋 파일에 실제 도메인이 README 사이트 주소 1개 외에 없는가(ADR-020 결정 6).
 - 익명 요청을 받는 학습 API가 없는가.
 
 **Network**

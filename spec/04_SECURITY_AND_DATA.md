@@ -3,7 +3,8 @@
 ## Modes
 
 -   Anonymous: Public Demo only, private mastery/history 접근 금지, paid
-    LLM call 금지.
+    LLM call 금지. MVP-02에서 anonymous가 쓰는 화면은 **공개 화면 셋(선택 홈, Public Demo,
+    가나 학습)**이며 셋 모두 아래 `Public Demo 구조`를 따른다.
 -   Authenticated: 실제 학습 시스템.
 
 ## Public Demo 구조 (MVP 확정)
@@ -19,7 +20,9 @@ provider client 없음
 private user data 접근 가능 경로 없음
 ```
 
-Demo interaction state는 browser memory/session 수준에서만 유지한다.
+demo 진도는 **그 브라우저의 localStorage에만** 저장하고 서버로 보내지 않는다(아래
+`localStorage 사용 범위 (MVP-02 확정)`). MVP-01의 "Demo interaction state는 browser
+memory/session 수준에서만 유지한다"를 MVP-02에서 이 규칙으로 바꿨다. 서버 쪽 결론은 같다.
 따라서 `sessions.mode = demo`, demo user, demo DB state 같은 설계는
 사용하지 않는다.
 
@@ -29,6 +32,196 @@ Demo interaction state는 browser memory/session 수준에서만 유지한다.
 Paid LLM call      = structurally impossible
 Private DB access  = structurally impossible
 ```
+
+### 공개 화면 셋으로 확장 (MVP-02 확정)
+
+위 구조를 **선택 홈, Public Demo, 가나 학습**에 똑같이 적용한다.
+
+-   세 화면은 **서버 요청 0건**이다(불변식 13).
+-   세 화면의 코드는 API 모듈(`frontend/src/api.ts`, `endpoints.ts`, `env.ts`)을
+    **정적 import로도 동적 import로도** transitively 가져오지 않는다. demo fixture를 동적 import로
+    불러오게 되었으므로 검사는 동적 import가 닿는 모듈까지 따라간다.
+-   **로그인 상태 확인은 사용자가 상단바 `로그인`을 누를 때만 한다**(불변식 14). 공개 화면을 열
+    때 `GET /api/auth/me`를 부르지 않는다. 로그인 진입이 불러오는 코드는 공개 화면의 import
+    그래프 밖에 있다(`mvp-01-core/03_UI_UX_SPEC.md`의 `상단바`).
+-   가나 학습은 서버 쪽 대응물이 없다. 가나 데이터는 frontend 정적 데이터이고 DB·API에 없다.
+-   demo fixture는 `seed/`에서 스크립트로만 만든 **공개 정적 데이터**다. private user data가 들어갈
+    경로가 없다(`mvp-01-core/03_UI_UX_SPEC.md`의 `Demo`).
+-   **"서버 요청 0건"의 서버는 API origin이다.** 공개 route에 들어갈 때 frontend origin에서 청크·아이콘·
+    manifest를 받는 것은 정적 자산이며 여기에 들지 않는다.
+-   요청 0건은 브라우저 e2e로, import 경계는 unit 검사로 확인한다
+    (`spec/mvp-02-onboarding/12_TEST_PLAN.md`).
+
+#### 모듈 경계
+
+``` text
+frontend/src/main.ts                 부팅. fetchMe가 없다. 로그인 영역 동적 import가 여기 한 곳에만 있다
+frontend/src/private.ts              로그인 영역. fetchMe와 api.ts·endpoints.ts·env.ts는 여기서부터만 닿는다
+frontend/src/home/ demo/ kana/       공개 화면. API 모듈과 private.ts에 닿지 않는다
+```
+
+-   **불변식 14는 아래 격리 검사와 런타임 단정으로 지킨다.** `fetchMe`를 부를 수 있는 모듈은 `private.ts` 그래프
+    안에만 있고, 그 그래프로 들어가는 간선은 `main.ts`의 동적 import 하나다. 공개 화면 모듈은 로그인 진입 동작
+    (`openLogin`)을 `main.ts`에서 주입받는다.
+-   **`openLogin` 호출은 `ui/topbar.ts`의 로그인 버튼 `click` 리스너 콜백 안 한 곳뿐이다**(AST 검사). 공개 화면
+    모듈과 `main.ts`는 그 함수를 `renderTopBar({ onHome, onLogin, actions })`의 `onLogin`으로 넘기기만 하고 부르지
+    않는다. 부팅, route 적용, 타이머, 저장값 복원 같은 경로에서 불리지 않는다. 정적 그래프 검사는 "언제
+    불리는가"를 보지 못하므로 이 호출 위치 검사와 부팅 런타임 단정이 그 부분을 맡는다.
+-   **떠난 화면은 새 화면 진입 요청을 시작하지 않는다.** 화면의 `signal`이 abort되었으면 화면 전환뿐 아니라 새
+    화면에 들어가는 요청(로그인 영역 진입의 `fetchMe`, study session 시작)도 시작하지 않는다. 이미 나간 요청은
+    취소하지 않고 결과만 그리지 않는다.
+-   이 규칙은 화면 진입 요청에만 적용한다. 이미 진행 중인 학습의 event 전송과 그 재시도는 기존 규칙을 따른다.
+    그중 설명 표시는 `mvp-01-core/05_API_SPEC.md`의 `explanation_revealed를 언제 보내는가`(응답 전에 떠나면
+    `item_clicked`만 남고 `explanation_revealed`를 보내지 않는다)가 canonical이다.
+
+#### 격리 검사 (MVP-02 확정)
+
+TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 import 그래프로 vitest 안에서 검사한다.
+새 의존성이 없다. 정적 간선은 import·export-from의 문자열 지정자(`import type` 포함), 동적 간선은 인자가
+문자열 리터럴 정확히 1개인 `import()`다. 상대 경로는 `base`, `base.ts`, `base/index.ts` 순으로 풀고 스타일 등
+비-TS 파일은 그래프에서 뺀다.
+
+-   **판정은 fail-closed다.** 풀리지 않는 상대·루트(`/`로 시작) 지정자(예: `./api.js`처럼 확장자를 바꾼 지정자),
+    bare(패키지 이름) 지정자, `?` 쿼리가 붙은 지정자(`?worker`, `?raw`, `?url` 등)는 따라가지 않고 **위반**이다.
+
+``` text
+(a) main.ts          정적 그래프에 api.ts·endpoints.ts·env.ts·private.ts가 없다
+(b) home/ demo/ kana/ 아래 모든 모듈
+                     정적 + 리터럴 동적 그래프에 api.ts·endpoints.ts·env.ts·private.ts가 없다
+                     (디렉터리 기준. 진입 모듈 이름을 테스트에 적지 않는다)
+(c) src/ 전체        private.ts 정적 그래프 밖에서, API 모듈에 닿는 동적 import는 정확히 1개이고
+                     main.ts에 있으며 대상이 private.ts다.
+                     main.ts 정적 그래프 안의 리터럴 동적 import는 private.ts이거나 home·demo·kana 아래 모듈이다
+(d) src/ 전체        다음이 하나라도 있으면 실패
+                     - 인자가 문자열 리터럴 1개가 아닌 import() (연결, 변수, 템플릿 치환, 인자 2개)
+                     - 풀리지 않는 상대·루트 지정자, bare(패키지) 지정자, ? 쿼리 지정자 (fail-closed)
+                     - import.meta.glob
+                     - import.meta.env (env.ts 밖)
+                     - 네트워크 원시 API fetch, XMLHttpRequest, navigator.sendBeacon, WebSocket, EventSource (api.ts 밖)
+                     - new Worker / new SharedWorker
+                     - eval, Function 생성자, 첫 인자가 함수가 아닌 setTimeout / setInterval, require()
+                     - document.createElement의 인자가 문자열 리터럴이 아님, 또는 'script' 리터럴
+                     - HTML 삽입: innerHTML, outerHTML, insertAdjacentHTML, document.write, document.writeln,
+                       Range.createContextualFragment, DOMParser.parseFromString, iframe srcdoc 대입
+                     - setAttribute로 on* 속성·srcdoc에 값을 넣음 (리터럴이어도 위반)
+                     - setAttribute로 href·src에 문자열 리터럴이 아닌 값을 넣음
+                     - 이동: location.href 대입, location.assign, location.replace, window.open,
+                       a 요소 href 대입에 고정 route 상수가 아닌 값을 넣음
+(e) 빌드 산출물      현재 소스로 빌드한 entry 청크에 API base URL 문자열이 없다. 어떤 청크에는 있다(양성 대조군)
+(f) 브라우저 e2e     API origin에 아무도 listen하지 않는 구성에서 '', '#/demo', '#/kana'를 열고 조작해도
+                     frontend origin 밖으로 나가는 요청 0건 (API origin과 제3자 origin 모두).
+                     상단바 로그인을 누르면 GET /api/auth/me가 1건 나간다
+양성 대조군          private.ts 그래프에 endpoints.ts가 있다. (d)의 판정 함수가 합성 소스의 조합 import,
+                     import.meta.glob, ?worker 지정자, 풀리지 않는 .js 지정자, api.ts 밖의 fetch,
+                     innerHTML 대입을 각각 위반으로 낸다
+```
+
+-   **(d)의 한계:** AST 검사는 **실수를 막기 위한 것**이며 의도적인 우회(검사가 모르는 새 API, 여러 단계 간접
+    참조)까지 막지는 못한다. 그 부분은 부팅 런타임 단정과 브라우저 e2e (f)가 결과(요청 0건)로 받친다.
+-   **(d)는 조합 import를 원천 차단한다.** 조합을 해석해서 따라가는 대신 쓰지 못하게 한다. 그래서 정규식
+    검사가 동적 import를 놓치던 공백이 닫힌다.
+-   **(e)는 번들러 설정**(청크 합치기 옵션 등)이 API 코드를 entry 청크로 합치는 경우를 본다. 소스 그래프가
+    보지 못하는 부분이다.
+-   정적 검사와 함께 **런타임 단정**을 둔다. `main.ts`를 `''`, `'#/'`, `'#/demo'`, `'#/kana'`, `'#/kana/<하위>'`,
+    모르는 hash로 부팅하고 **가짜 타이머를 충분히 진행한 뒤에도** 던지는 `fetch` 스텁이 불리지 않는다. 상단바
+    `로그인`을 누르면 정확히 1회 불린다. `fetchMe` 대기 중 화면을 떠나면 늦게 온 응답 뒤에 다음 요청이 나가지
+    않는다.
+
+#### HTML 삽입과 URL 값 (MVP-02 확정)
+
+-   **`frontend/src/` 전체에서 HTML 문자열 삽입을 쓰지 않는다**(`innerHTML`, `outerHTML`, `insertAdjacentHTML`,
+    `document.write`, `document.writeln`, `Range.createContextualFragment`, `DOMParser.parseFromString`,
+    `iframe.srcdoc`). `setAttribute`로 `on*`·`srcdoc`에는 어떤 값도 넣지 않고 `href`·`src`에는 동적 값을 넣지 않으며, 페이지 이동
+    (`location.href =`, `location.assign`, `location.replace`, `window.open`, `a.href =`)에는 고정 route 상수만 쓴다.
+    DOM은 `textContent`와 요소 생성으로만 만든다. 위 (d)가 AST로 검사한다. 학습 콘텐츠·fixture·서버 응답은 모두
+    텍스트로만 들어간다.
+-   **URL에서 온 값(hash, `#/kana` 하위 경로 등)은 고정 허용 목록과 비교만 하고 화면에 그대로 출력하지 않는다.**
+    모르는 값은 기본 화면으로 보낸다.
+-   **CSP(Content-Security-Policy) 도입은 MVP-02 범위 밖이다.** API origin을 코드에 하드코딩하지 않고 정적 헤더에
+    주입하는 설계가 먼저 필요하다. `updates/backlog.md`에 기록했다. 그때까지 위 AST 검사가 스크립트 주입 경로를
+    코드 수준에서 막는다.
+-   결정 배경과 버린 대안은 ADR-022다.
+
+## localStorage 사용 범위 (MVP-02 확정)
+
+브라우저 저장소 사용의 canonical 정의다(불변식 18). frontend가 브라우저에 남기는 것은 아래 세
+용도뿐이다.
+
+``` text
+key              용도           저장하는 것                                       값 형식을 정하는 곳
+nc.furigana.v1   후리가나 설정  {"on": boolean}                                   frontend/src/ui/furigana.ts
+nc.kana.v1       가나 진도      글자·단어별 맞음/틀림 수, 전체 마지막 학습 시각     frontend/src/kana/
+nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 자기평가,         frontend/src/demo/
+                                다시 보기 대기열, 본 문장 수
+```
+
+화면 규칙은 `mvp-01-core/03_UI_UX_SPEC.md`의 `Translation/Furigana`, `가나 학습`, `Demo`에 있다.
+
+-   **localStorage 접근은 `frontend/src/local-store.ts` 한 모듈에만 있다.** 그 모듈이 위 세 key만 다룬다.
+
+    ``` ts
+    export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.v1'] as const
+    export type LocalSlot<T> = {
+      read: () => T | undefined   // 없거나 읽을 수 없거나 JSON이 아니거나 isValid가 거르면 undefined. 던지지 않는다
+      write: (value: T) => void   // isValid를 통과한 값만 메모리에 쓰고 저장을 시도한다. 던지지 않는다
+      remove: () => void          // 진도 초기화. 메모리와 저장소 둘 다에서 지운다. 던지지 않는다
+    }
+    // key 인자는 문자열 리터럴이어야 한다. 같은 key로 두 번 만들면 던진다
+    export function localSlot<T>(key: LocalStoreKey, isValid: (value: unknown) => value is T): LocalSlot<T>
+    ```
+
+    ``` text
+    slot 소유   nc.furigana.v1 -> frontend/src/ui/furigana.ts
+                nc.kana.v1     -> frontend/src/kana/ 한 모듈
+                nc.demo.v1     -> frontend/src/demo/ 한 모듈
+    ```
+
+    임의 key·임의 값을 쓰는 함수는 없다. **`localSlot` 호출은 key마다 정확히 한 번이고 위 소유 위치에만 있다.**
+    페이지가 살아 있는 동안은 메모리 Map이 기준값이다. 저장이 안 되는 브라우저에서도 그 페이지 안에서는 진도가
+    이어지고, 새로고침하면 사라진다.
+-   **`isValid`는 형식뿐 아니라 값 범위와 소속까지 본다.** 형식이 맞아도 값이 틀리면 read가 undefined이고 조용히
+    처음부터 시작한다.
+
+    ``` text
+    furigana   {"on": boolean} 이고 다른 키가 없다
+    kana       글자·단어 key가 정적 가나 데이터에 있는 것뿐이다. 맞음/틀림 수는 0 이상의 안전한 정수다.
+               마지막 학습 시각은 유한한 수다
+    demo       fixture 식별자가 지금 fixture와 같다. 현재 위치는 0 이상 문장 수 이하의 정수다.
+               자기평가·다시 보기 대기열·본 문장 수가 가리키는 문장·표현은 지금 fixture에 있고 값은 허용값 안이다
+    ```
+
+-   **로그인 영역(`private.ts` 그래프) 안의 `localSlot` 호출은 `nc.furigana.v1` 하나뿐이다.** AST로 확인한다.
+-   **key 이름은 네임스페이스 `nc.`와 끝의 형식 버전이다.** 형식을 호환되지 않게 바꾸면 버전을 올리고
+    (`nc.demo.v2`) 옛 key는 옮기지 않는다. fixture가 바뀐 경우는 key 버전이 아니라 값 안의 fixture
+    식별자로 판정한다.
+-   **세 용도 밖에서 브라우저 저장소를 쓰지 않는다.** `sessionStorage`, `indexedDB`, `document.cookie`, `caches`,
+    `window.name`, `navigator.storage`는 `frontend/src/` 어디에도 없다. `history.pushState`/`replaceState`의 state
+    인자는 `null`만 허용한다. 인증 cookie는 지금처럼 서버가 설정하는 `HttpOnly`
+    cookie뿐이다(`Session Cookie (MVP 확정)`).
+-   **넣지 않는 것:** secret, 인증 token·cookie 값, 로그인 여부, `login_id`, password, 서버 응답에서 온 데이터
+    (학습 문장, 설명, history, session·presentation·item id, mastery). demo 진도가 가리키는 문장과
+    표현은 공개 정적 fixture의 값이며 서버 데이터가 아니다.
+-   **저장이 없어도 정상 동작한다.** 모든 읽기·쓰기는 예외가 날 수 있다고 보고 감싼다(저장소 차단,
+    용량 초과, 사생활 보호 모드). 실패하면 그 페이지 안에서 메모리만으로 동작하고 오류를 띄우지
+    않는다.
+-   읽은 값이 형식에 맞지 않으면(파싱 실패, 형식 불일치, fixture 식별자 불일치) 조용히 기본값으로
+    시작한다.
+-   **서버로 보내지 않는다.** 계정 진도와 합치지 않는다. 계정 동기화는 MVP-02 범위 밖이다
+    (`spec/mvp-02-onboarding/00_SCOPE.md`).
+-   민감도: 세 값은 공개 정적 데이터 위의 표시 설정과 진도뿐이다. 같은 origin의 스크립트가 읽어도
+    private data나 인증 수단이 드러나지 않는다. 그래서 위 "넣지 않는 것"이 이 결론의 전제다.
+-   **접근 범위 검사(AST):** `localStorage` 식별자가 `frontend/src/local-store.ts`에만 나온다. 위 금지 저장소가
+    `frontend/src/`에 없고 history state 인자가 `null`뿐이다. **계산된 속성 접근을 막는다:** `globalThis`,
+    `window`, `self`, `document`, `navigator`, `history`, `location`에 대한 `[...]` 접근은 금지이고, 문자열 리터럴
+    안의 `Storage`, `cookie`, `indexedDB` 조각도 `local-store.ts` 밖에서는 위반이다(`globalThis['local' + 'Storage']`
+    같은 우회). `localSlot` 호출이 key마다 한 번, 소유 위치에만, key 인자가 문자열 리터럴이다. private 그래프 안의
+    `localSlot` 호출이 `nc.furigana.v1` 하나뿐이다. `LOCAL_STORE_KEYS`가 위 세 key와 같다.
+-   **런타임 검사:** 던지는 `localStorage` 스텁에서 read가 undefined, write가 던지지 않고, 같은 페이지의 다음 read가
+    쓴 값을 돌려준다. 범위 밖 값(음수 횟수, 없는 글자 key, 다른 fixture 식별자, 문장 수를 넘는 위치)을 넣어 두면
+    read가 undefined다(`spec/mvp-02-onboarding/12_TEST_PLAN.md`).
+-   **한계:** localStorage는 브라우저·설치 형태마다 따로다. iOS에서 Safari와 홈 화면에 설치한 앱은 저장소를
+    공유하지 않고, WebKit은 설치하지 않은 사이트의 스크립트 저장소를 일정 기간 상호작용이 없으면 지울 수
+    있다. 방문자가 하루쯤 쓴다는 전제에서 받아들인다(ADR-022).
 
 ## Security
 

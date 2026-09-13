@@ -66,6 +66,81 @@ job 수를 함께 싣는다.**
 MVP 의무가 아니다(`spec/06_LLM_ENGINEERING_PRINCIPLES.md`). 필요해지면
 `result_ref 구조`를 먼저 고친다.
 
+## MVP-02 추가: 후리가나 계산 결과
+
+위 `MVP 필수 범위`의 닫힌 집합과 `04_DB_SPEC.md`의 `result_ref 구조`는 **바꾸지 않는다.** 이
+절은 그 집합에 항목을 더하는 것이 아니라 별도 절이다. metrics 전용 테이블을 만들지 않는다는
+규칙도 그대로다.
+
+후리가나(ruby)를 계산하는 네 곳이 각자의 **로그와 출력**에 계산 결과를 남긴다.
+
+``` text
+seed 적재               적재 명령의 stdout 요약
+worker 생성 파이프라인   구조화 로그 이벤트 (아래)
+기존 문장 backfill       스크립트 stdout 요약 (dry-run 포함)
+demo fixture 생성        스크립트 stdout 요약
+API 표시 시점            저장값 무효 로그 (아래)
+```
+
+로그 이벤트:
+
+``` text
+worker  ruby.computed              info     sentence_id, algorithm_version, spans, omitted_tappable_boundary,
+                                            omitted_numeric, omitted_no_reading,
+                                            corrected_explanation_tokens, corrected_table_rules
+        ruby.failed                warning  sentence_id, error
+        ruby.reading_mismatch      info     sentence_id, sentence_item_id
+        ruby.explanation_override  info     sentence_id, sentence_item_id
+API     ruby.invalid_stored        warning  sentence_id   (저장값이 검증을 통과하지 못함)
+```
+
+-   **문장 텍스트와 읽기 문자열은 로그에 남기지 않는다**(생성 콘텐츠 원문을 로그에 싣지 않는 기존 규칙).
+-   분석기·사전 버전은 로그가 아니라 `sentences.ruby_json` 안에 남는다(`04_DB_SPEC.md`의 `ruby_json`).
+    로그에는 `algorithm_version`만 싣는다.
+
+CLI stdout 요약(seed·backfill·fixture 생성 공통):
+
+``` text
+ruby: algorithm_version=2 sentences=N computed=N failed=N omitted_tappable_boundary=N
+      omitted_numeric=N omitted_no_reading=N corrected_explanation_tokens=N
+      corrected_table_rules=N reading_mismatches=N explanation_overrides=N
+rule 私->わたし hits=N          (교정 표 규칙 순서대로 한 줄씩, 0이어도 출력)
+mismatch kind=<reading_mismatch|explanation_override> sentence=<seed_id 또는 id>
+         item=<sentence_item_id> surface=<표면형> explanation=<설명 읽기> analyzer=<분석기 읽기>
+```
+
+CLI 출력은 운영자 터미널 출력이고 로그 파일이 아니므로 표면형과 읽기를 싣는다. **설명 읽기처럼 LLM에서 온
+문자열은 제어문자(개행, ESC 등)를 이스케이프해 출력한다.** 터미널 제어 시퀀스가 실행되거나 한 항목이 여러
+줄로 갈라져 목록을 위조하지 않게 하기 위해서다. 생략 비율 판정의 분모인
+"한자를 포함한 토큰 수"도 요약에 함께 낸다.
+
+미계산 잔량: `SELECT count(*) FROM sentences WHERE ruby_json IS NULL`. 새 테이블이 없다.
+
+-   **생략 비율**은 "경계 때문에 생략한 토큰 수 / 한자를 포함한 토큰 수"다. 판정 샘플은 seed
+    전체 문장이다. 이 비율이 5%를 넘으면 한자 run 정렬로 tappable span 경계를 지킬 수 없는 경우가
+    흔하다는 뜻이므로 구현을 멈추고 보고한다. 이 5%는 MVP-02 진행 판정 기준이며 학습 정책값이
+    아니다.
+-   **`explanation.reading` 불일치**는 한자를 포함한 tappable item만 비교한다. 설명 읽기는 NFKC 뒤 모든
+    공백을 없애고 가타카나를 히라가나로 바꾼다. 분석기 읽기는 교정 계층 1(설명 읽기 우선)을 뺀 계산(교정
+    표는 포함)으로 그 item의 span에 대해 낸 읽기다. 보고는 두 종류다.
+
+    ``` text
+    reading_mismatch      설명 읽기로 정렬이 성립하지 않았고 두 읽기가 다르다 -> 저장된 ruby는 분석기 읽기
+    explanation_override  설명 읽기로 정렬이 성립했고 두 읽기가 다르다     -> 저장된 ruby는 설명 읽기
+    ```
+
+    `explanation_override`를 따로 보는 이유는 생성 문장의 설명 읽기가 LLM 출력이고 읽기의 정확성은 검증하지
+    않기 때문이다. 결과는 **stdout과 로그로만** 낸다. DB에 저장하지 않고 설명 데이터를 자동으로 고치지
+    않는다(`03_UI_UX_SPEC.md`의 `후리가나와 item 설명 reading의 관계`).
+-   계산 실패는 문장 채택을 막지 않는다(`10_ERROR_HANDLING.md`의 `후리가나 계산 실패 (MVP-02)`).
+    그래서 실패는 이 관측으로만 드러난다.
+-   **frontend 관측은 없다.** 후리가나 토글, 가나 학습, demo 진행은 수집하지 않는다. 공개 화면은
+    서버 요청이 0건이고(불변식 13), 이 동작들은 학습 신호가 아니다(`02_LEARNING_POLICY.md`의
+    `학습 신호가 아닌 것 (MVP-02)`).
+
+-   `ruby.*` 이벤트는 기존 worker 로그 이벤트에 더하는 **별도 이름공간**이다. 기존 이벤트의 이름과 필드를
+    바꾸지 않는다. 정의의 canonical은 ADR-021이다.
+
 ## Future
 
 위의 Cost efficiency 지표 중 `cost/learned item`, `tokens/learning

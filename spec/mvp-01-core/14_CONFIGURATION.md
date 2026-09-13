@@ -95,19 +95,43 @@ llm:
 
 초기 승인값이지 영구적인 학습 법칙이 아니다.
 
-`reading_default_visible`은 항상 `false`를 유지한다. furigana 상시 표시
-금지는 UI 규칙이며(`03_UI_UX_SPEC.md`) 이 키는 reading reveal 기본
-상태를 뜻한다.
+`reading_default_visible`은 항상 `false`를 유지한다. 이 키는 **item 설명의
+reading** reveal 기본 상태를 뜻한다(`03_UI_UX_SPEC.md`의 `Explanation`).
+
+**MVP-02의 후리가나와는 다른 것이다.** 후리가나(학습 문장 속 한자의 읽기)의 켬/끔은 사용자가
+브라우저에서 고르는 표시 설정이고, 기본은 끔이며, 브라우저 localStorage에만 있다
+(`03_UI_UX_SPEC.md`의 `Translation/Furigana`, `spec/04_SECURITY_AND_DATA.md`의
+`localStorage 사용 범위 (MVP-02 확정)`). 이 파일의 키가 아니고 서버가 읽지도 않는다. 이 키로
+후리가나 기본값을 바꾸지 않으며, 후리가나 설정 키를 이 파일에 새로 두지 않는다. MVP-01 명세의
+"furigana 상시 표시 금지"는 MVP-02에서 "기본 끔, 사용자가 켤 수 있음"으로 바뀌었고 이 키의 뜻은
+그대로다.
 
 `content.translation_default_visible`과 `content.reading_default_visible`을
 **frontend가 읽는 경로는 없다.** 두 값이 기술하는 것은 API 구조가 이미 강제하고
-있다 --- presentation payload에는 `korean_translation` 필드도 reading 필드도
+있다 --- presentation payload에는 `korean_translation` 필드도 **item 설명의 reading** 필드도
 존재하지 않으므로(`05_API_SPEC.md`의 `Sentence Presentation Payload`,
-`Interaction`) 번역과 reading은 각각 `/translation/reveal`과 `/click`을 거쳐야만
+`Interaction`) 번역과 item 설명의 reading은 각각 `/translation/reveal`과 `/click`을 거쳐야만
 나온다. 따라서 **이 두 키를 `true`로 뒤집어도 화면은 달라지지 않는다.** 값을 넘길
 endpoint를 만들면 숨김 규칙의 source of truth가 둘이 되고, 그중 하나가 뒤집히는
 사고가 가능해진다. 두 키는 "기본 노출 상태는 hidden이다"라는 정책 기록으로만
 남기고 소비처를 만들지 않는다.
+
+MVP-02에서 presentation payload에는 **문장 ruby**(`render_segments[].ruby`)가 실린다
+(`05_API_SPEC.md`의 `render_segments[].ruby`). 이것은 위 문단이 말하는 item 설명의 reading이 아니다.
+
+``` text
+item 설명의 reading   sentence_item_explanations.reading. /click 응답에만 있다. 변경 없음
+                      reading_default_visible: false 는 이 설명 패널 reading의 기본 상태다
+문장 ruby             sentences.ruby_json에서 온 render_segments[].ruby. 문장 전체 한자의 표시 보조.
+                      토글과 무관하게 항상 payload에 있다. event를 만들지 않는다
+후리가나 토글          브라우저 localStorage. 기본 끔. 서버·config에 없다
+```
+
+-   ruby는 학습 신호가 아니다. 후리가나를 켜면 tappable 표현의 읽기가 탭 전에 보일 수 있지만 어떤 정책도
+    "읽기를 보았는가"를 입력으로 쓰지 않으므로 `item_clicked`·`explanation_revealed`의 의미는 그대로다
+    (`02_LEARNING_POLICY.md`의 `학습 신호가 아닌 것 (MVP-02)`).
+-   **후리가나 토글 기본값을 config 키로 두지 않는다.** 서버가 소비하지 않는 값이고, 두면 기본값의 source
+    of truth가 둘(config와 frontend)이 된다.
 
 비율 키(`review_ratio`, `new_ratio`, `exploration_ratio`)의 합은 1.0이어야
 하며 config 로드 시 검증한다.
@@ -197,6 +221,15 @@ password 최소 길이도 **이 파일에 두지 않는다.** 환경변수도 �
 백업 주기와 보관 개수도 **이 파일에 두지 않는다.** 학습 정책이 아니라 운영값이고
 API·worker가 쓰지 않는다. canonical 정의는 `spec/04_SECURITY_AND_DATA.md`의
 `주기와 보관 개수 (MVP 확정)`이다.
+
+MVP-02의 demo 전용 상수(`DEMO_REVIEW_AFTER_SENTENCES`, `DEMO_PROBE_EVERY_SENTENCES`)와 가나
+학습의 라운드 규칙도 **이 파일에 두지 않는다.** 학습 정책값이 아니라 static fixture 체험 흐름의
+간격이고 서버가 쓰지 않는다. canonical 정의는 `03_UI_UX_SPEC.md`의 `Demo`와 `가나 학습`이다.
+
+MVP-02 후리가나 계산의 **교정 표(`CORRECTION_RULES`)와 `algorithm_version`도 이 파일에 두지 않는다.**
+실사용 후 튜닝하는 학습 정책값이 아니라 읽기의 사실 교정이며, demo fixture 일치 테스트에 묶인 알고리즘의
+일부라서 `backend/app/furigana.py`의 코드 상수로 같은 커밋에서 바뀐다. 이 파일에 두면 production의 전체
+사본과 어긋날 수 있고 운영자가 표를 바꿔도 버전이 오르지 않는다. canonical 정의는 ADR-021이다.
 
 ## production override (MVP 확정)
 

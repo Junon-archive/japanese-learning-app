@@ -44,6 +44,10 @@
 -   13번 중 embedding semantic similarity
 -   14번 중 형태소 분석기 도입 (MVP는 생성 결과의 span을 code point
     index로 결정론적 검증하는 수준까지만 한다)
+    -   MVP-02에서 해제: 콘텐츠를 **적재·생성하는 시점에 후리가나(ruby)를 계산하는 용도에
+        한해** 형태소 분석기를 쓴다. API 요청 경로와 브라우저에서는 쓰지 않는다. 이 문서는
+        구현 근거가 아니며 범위는 `mvp-02-onboarding/00_SCOPE.md`, 결정은 ADR-021이다. span
+        검증 방식은 위 괄호 그대로다.
 
 MVP observability 필수 항목은 `mvp-01-core/11_OBSERVABILITY.md`를
 따른다.

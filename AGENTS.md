@@ -20,9 +20,14 @@
 반영한 뒤에만 구현한다.
 
 **Global/Future 문서에 숫자나 아이디어가 존재한다는 이유만으로 구현하지
-않는다.** MVP 구현 source of truth는 `spec/mvp-01-core/*`다.
+않는다.** MVP 구현 source of truth는 `spec/mvp-01-core/*` +
+`spec/mvp-02-onboarding/*`(MVP-02 delta)다.
 
 특히 다음은 MVP 구현 대상이 아니다: audio/TTS, `ANALYZE_SENTENCE`,
 comprehensible-input 난이도 밴드, source mix 비율, Busy/Deadline 모드,
 register/sense/multidimensional difficulty, 형태소 분석기, embedding
 duplicate detector, golden eval harness, admin UI, export.
+
+단 **형태소 분석기는 MVP-02에서 해제되었다.** 콘텐츠를 적재·생성하는 시점에 후리가나를 계산하는
+용도에 한해 허용하며, API 요청 경로와 브라우저에서는 쓰지 않는다
+(`spec/mvp-02-onboarding/00_SCOPE.md`). 나머지 항목은 그대로 구현 대상이 아니다.

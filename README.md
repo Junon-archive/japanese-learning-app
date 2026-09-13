@@ -1,7 +1,7 @@
 # Nihongo Context --- Specification Repository
 
 **Spec Version: v0.2**\
-**Current Milestone: MVP-01 Core Learning**
+**Current Milestone: MVP-02 Onboarding** (MVP-01 Core Learning 위에 더하는 delta)
 
 개인용 일본어 학습 앱 Nihongo Context의 제품·학습·기술 명세다. 목표는
 JLPT가 아니라 일본어 YouTube 이해와 일상 회화 능력이다.
@@ -9,15 +9,17 @@ JLPT가 아니라 일본어 YouTube 이해와 일상 회화 능력이다.
 ## 문서 계층
 
 -   `spec/00~06`: 장기적으로 유지할 제품/학습/기술 원칙
--   `spec/mvp-01-core/`: 현재 구현 범위
+-   `spec/mvp-01-core/`: 현재 구현 범위 (MVP-02 규칙도 제자리에서 반영)
+-   `spec/mvp-02-onboarding/`: MVP-02 범위 delta, 테스트 계획, 합격 기준
 -   `spec/future/`: 지금 구현하지 않지만 보존할 장기 설계
 -   `spec/reference/ui/`: 시각·인터랙션 reference
+-   `updates/`: 변경 요청과 진행 상태. **명세가 아니다.** spec에 반영된 뒤에만 구현한다
 
 ## 우선순위
 
 ``` text
 MVP 구현 source of truth:
-    spec/mvp-01-core/*
+    spec/mvp-01-core/* + spec/mvp-02-onboarding/* (delta)
 
 Global 문서 (spec/00~06):
     제품/기술 제약을 제공하지만 MVP Scope를 확대하지 않는다.
@@ -28,10 +30,12 @@ Future (spec/future/*):
 
 충돌 시 다음 순서를 따른다.
 
-1.  `spec/mvp-01-core/*`의 승인된 기능/상태 규칙
+1.  `spec/mvp-01-core/*` + `spec/mvp-02-onboarding/*`(delta)의 승인된 기능/상태 규칙
 2.  Global principles (`spec/00~06`)
 3.  UI reference (`spec/reference/ui/`)
 4.  구현 편의
+
+`updates/`의 요청서는 이 순서에 들어가지 않는다(요청이지 명세가 아니다).
 
 Future 문서는 MVP 범위를 넓히는 구현 지시가 아니다. Global/Future 문서에
 숫자나 아이디어가 존재한다는 이유만으로 구현하지 않는다.

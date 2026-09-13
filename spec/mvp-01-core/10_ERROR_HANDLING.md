@@ -6,7 +6,7 @@
     replenishment. 무한 spinner 금지.
 -   DB 저장 실패를 성공처럼 표시하지 않는다.
 -   Demo는 **static frontend fixture이므로** backend/LLM 장애와 구조적으로
-    독립이다.
+    독립이다. MVP-02에서 선택 홈과 가나 학습도 같다(아래 `Public Demo`).
 
 ## 사용자 경험 원칙
 
@@ -78,3 +78,47 @@ Admin UI는 Future지만 **quarantine 동작 자체는 MVP 필수**다
 
 Demo는 static fixture이므로 backend/DB/LLM 장애와 무관하게 동작한다
 (`04_SECURITY_AND_DATA.md`).
+
+MVP-02에서 이 범위가 **공개 화면 셋(선택 홈, Demo, 가나 학습)**으로 넓어졌다. 세 화면은 서버
+요청을 하지 않으므로(불변식 13) API 서버가 꺼져 있어도 정상 동작한다.
+
+-   **로그인 상태를 자동으로 확인하지 않으므로** 공개 화면을 여는 것만으로는 API 장애가 드러나지
+    않는다. 장애를 보는 것은 상단바 `로그인`을 누른 경우뿐이며, 그때도 그 자리에 인라인 안내와
+    `다시 시도하기`만 띄우고 공개 화면은 계속 쓸 수 있다(`03_UI_UX_SPEC.md`의 `상단바`).
+-   **localStorage를 쓸 수 없어도**(차단, 용량 초과, 읽기·쓰기 예외) 세 화면과 후리가나 토글은
+    메모리만으로 정상 동작한다. 저장된 값의 형식이 맞지 않으면 오류를 띄우지 않고 조용히
+    처음부터 시작한다(`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)`).
+-   demo fixture를 불러오지 못하면(동적 import 실패) demo 화면에 인라인 안내를 띄운다. 선택 홈과
+    가나 학습은 영향을 받지 않는다(`03_UI_UX_SPEC.md`의 `Demo`). 가나 학습 route도 같다.
+-   상단바 `로그인`을 눌렀을 때 로그인 영역 코드를 불러오지 못하면(청크 적재 실패, 오프라인, 배포로 옛 청크가
+    사라짐) 선택 홈 자리에 인라인 안내 "로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요."만
+    띄운다. 재시도 버튼은 두지 않는다(`openLogin` 호출 위치는 상단바 `로그인` 버튼 한 곳). 새로고침하면 새 청크를 받는다
+    (`03_UI_UX_SPEC.md`의 `로그인 진입`).
+
+## 후리가나 계산 실패 (MVP-02)
+
+후리가나(ruby) 계산은 표시 보조다. **계산이 실패해도 문장 채택(Ready)을 막지 않는다.** 위
+`Invalid Generated Content`의 validation 실패와 다르다. 실패한 문장은 ruby 없이 표시되고
+(`03_UI_UX_SPEC.md`의 `Translation/Furigana`), 실패는 관측한다(`11_OBSERVABILITY.md`의
+`MVP-02 추가: 후리가나 계산 결과`).
+
+실패는 두 종류이고 처리가 다르다.
+
+``` text
+문장 하나의 계산 예외   sentences.ruby_json = NULL로 두고 문장은 정상 저장·validated
+                        (예상 밖 입력, 계산 결과가 검증을 통과하지 못함 등)
+                        로그 ruby.failed. backfill의 기본 대상(ruby_json IS NULL)이라 다음 실행이 다시 시도한다
+                        seed 적재는 계속하고, backfill은 성공분을 쓴 뒤 쓸 행 수와 무관하게 exit 2로 끝난다
+분석기 부재             분석기 import나 사전 적재가 실패한다
+                        worker 진입점이 부팅에서 분석기를 적재하고 실패를 잡지 않는다 -> worker가 뜨지 않는다
+                        seed 명령과 backfill 명령도 시작에서 실패한다
+```
+
+-   **둘을 가르는 이유:** "계산 실패는 Ready를 막지 않는다"는 문장 단위 표시 보조의 실패를 말한다. 분석기가
+    이미지에 없는 것은 **배포 결함**이고, 그것을 문장마다 NULL로 흡수하면 worker가 오랫동안 후리가나 없는
+    문장만 쌓아도 드러나지 않는다. worker가 뜨지 않는 동안 학습 세션은 Ready Pool로 계속된다
+    (`08_LLM_SPEC.md`의 `검증 뒤 후리가나(ruby) 계산 (MVP-02 확정)`).
+-   **저장값이 표시 시점 검증을 통과하지 못하면** API는 그 문장의 모든 segment에 빈 ruby를 싣고 로그
+    `ruby.invalid_stored`를 남긴다. 500을 내지 않는다(`05_API_SPEC.md`의 `render_segments[].ruby` R6).
+-   되돌림은 `UPDATE sentences SET ruby_json = NULL`이다(`04_DB_SPEC.md`의
+    `MVP-02: additive migration과 후리가나 backfill`).

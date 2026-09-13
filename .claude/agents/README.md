@@ -1,12 +1,12 @@
 # Agents
 
-Nihongo Context MVP-01 구현용 subagent 정의.
+Nihongo Context MVP-01·MVP-02 구현용 subagent 정의.
 
 ## 상시 (구현)
 
 | agent | 역할 | 주 담당 명세 |
 |---|---|---|
-| `planner` | 작업 분할 + implementation plan | `mvp-01-core/*` 전체 |
+| `planner` | 작업 분할 + implementation plan | `mvp-01-core/*` + `mvp-02-onboarding/*` |
 | `architect` | 모듈 경계·인터페이스·ADR | `02_ARCHITECTURE`, `docs/decisions/` |
 | `backend-implementer` | FastAPI / worker / 엔진 구현 | `05,06,07,08,09,10` |
 | `frontend-implementer` | PWA / 학습 UI / demo fixture | `01,03,05` |

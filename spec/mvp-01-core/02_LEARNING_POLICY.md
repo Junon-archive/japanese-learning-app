@@ -77,6 +77,31 @@ passive exposure
 이로써 `clicked = unknown`과 `not clicked = known` 둘 다 성립하지 않게
 한다.
 
+#### 학습 신호가 아닌 것 (MVP-02)
+
+다음은 위 목록 같은 보조 신호도 아니다. **LearningEvent를 만들지 않고, `item_exposures`와
+explicit evidence를 만들지 않으며, 서버로 보내지 않는다**(불변식 16).
+
+``` text
+후리가나 표시와 토글     03_UI_UX_SPEC.md의 Translation/Furigana
+가나 학습의 모든 동작    03_UI_UX_SPEC.md의 가나 학습 (퀴즈 응답, 진도, 초기화)
+demo 진행의 모든 동작    03_UI_UX_SPEC.md의 Demo (탭, 번역, 자기평가, probe, 다시 보기, 신고, 진도)
+```
+
+-   후리가나를 켠 채 읽은 문장도 **no-click·무신호 판정과 mastery에 아무 영향이 없다.** 후리가나를
+    켰다는 사실을 "읽기를 몰랐다"로, 껐다는 사실을 "읽을 수 있다"로 해석하지 않는다. 그 사실은
+    서버에 없으므로 해석할 수도 없다.
+-   후리가나를 켜면 tappable 표현의 읽기가 탭하기 전에 보일 수 있다(대개 설명의 `reading`과 같은 값,
+    `05_API_SPEC.md`의 `Explanation의 reading과 문장 ruby의 관계`). 어떤 정책도 "읽기를 보았는가"를 입력으로
+    쓰지 않는다. mastery는 이해 신호만 보고, `item_clicked`는 여전히 설명을 요청했다는 뜻이다.
+-   후리가나를 켠 상태의 `item_clicked`, `explanation_revealed`, `translation_revealed`,
+    self-report, probe 응답은 끈 상태와 **같은 event이고 같은 처리**를 받는다. 설정 값을 event에
+    싣지 않는다.
+-   가나 학습의 맞음/틀림과 demo의 자기평가·probe 응답은 브라우저 안의 진도일 뿐이며 사용자의
+    `user_mastery`, `review_states`, `user_item_learning_state`와 합치지 않는다.
+-   `learning_events`의 event type 목록(`04_DB_SPEC.md`의 `MVP event_type 목록`)은 MVP-02에서
+    늘지 않는다.
+
 `evidence_count`는 **mastery update에 실제 사용된 explicit evidence
 개수**이며 meaningful exposure count와 혼동하지 않는다.
 

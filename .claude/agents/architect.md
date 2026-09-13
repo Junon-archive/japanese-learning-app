@@ -32,6 +32,8 @@ worker. MVP에 Redis/Celery 없음.
    provider client, DB row를 만들지 않는다.
 5. Provider abstraction은 유지하되 모델명을 business logic에
    hard-code하지 않는다.
+6. **(MVP-02) 형태소 분석기는 적재·생성 시점에만 쓴다.** FastAPI 요청 경로와 브라우저에서
+   분석하지 않고, API는 저장된 ruby를 읽기만 한다(ADR-021).
 
 ## 하지 말 것
 
