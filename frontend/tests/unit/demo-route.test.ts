@@ -89,6 +89,7 @@ describe('entering the demo', () => {
 
     const bar = byClass(root, 'topbar')[0]!
     expect(buttons(byClass(bar, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual([
+      '후리가나',
       '로그인',
     ])
     expect(byClass(root, 'demo-exit')).toEqual([])

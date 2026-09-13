@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mount as mountDemo } from '../../src/demo/demo'
 import { DEMO_SENTENCES } from '../../src/demo/fixture'
+import { resetDemoProgress } from '../../src/demo/progress'
 import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
 import { byClass, createFakeElement, fakeDocument, flatText, textWithoutRt } from './fake-dom'
@@ -92,6 +93,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
   vi.stubGlobal('localStorage', throwingStorage('localStorage'))
   vi.stubGlobal('sessionStorage', throwingStorage('sessionStorage'))
+  // (D6 임시) 진도는 페이지 메모리에도 남는다. 테스트마다 처음부터 시작한다. D7에서 이 파일을 다시 쓴다.
+  resetDemoProgress()
   mount()
 })
 
@@ -182,8 +185,8 @@ describe('demo run', () => {
   it('restarts instead of ending on an empty screen', () => {
     for (let i = 0; i < DEMO_SENTENCES.length; i += 1) click('next')
 
-    click('notice-action')
-    expect(text()).toContain('처음부터 다시')
+    click('demo-restart')
+    expect(text()).toContain(`1 / ${DEMO_SENTENCES.length}`)
     expect(text()).toContain(DEMO_SENTENCES[0]!.presentation.render_segments[0]!.text)
     expect(fetchMock).not.toHaveBeenCalled()
   })
