@@ -59,6 +59,8 @@ RUBY_COMPUTED = "ruby.computed"
 RUBY_FAILED = "ruby.failed"
 RUBY_READING_MISMATCH = "ruby.reading_mismatch"
 RUBY_EXPLANATION_OVERRIDE = "ruby.explanation_override"
+# ruby 로그 단계 자체가 실패했다. 저장은 계속된다(jobs/persistence.py).
+RUBY_LOG_FAILED = "ruby.log_failed"
 
 
 def describe_error(error: BaseException) -> str:
@@ -209,3 +211,8 @@ def log_ruby_failed(*, sentence_id: int, error: BaseException) -> None:
 def log_ruby_mismatch(*, event: str, sentence_id: int, sentence_item_id: int) -> None:
     """`event`는 `RUBY_READING_MISMATCH` 또는 `RUBY_EXPLANATION_OVERRIDE`다."""
     logger.info(event, extra={"sentence_id": sentence_id, "sentence_item_id": sentence_item_id})
+
+
+def log_ruby_log_failed(*, sentence_id: int, error_type: str) -> None:
+    """`ruby.*` 로그를 남기다 예외가 났다. `error_type`은 예외 **타입 이름**이다(메시지를 싣지 않는다)."""
+    logger.warning(RUBY_LOG_FAILED, extra={"sentence_id": sentence_id, "error_type": error_type})

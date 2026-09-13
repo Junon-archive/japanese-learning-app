@@ -835,7 +835,7 @@ def test_a_failing_ruby_log_does_not_block_storing_or_promotion(
     assert sentence.ruby_json is not None
     job = db.execute(sa.select(GenerationJob)).scalar_one()
     assert job.status is GenerationJobStatus.COMPLETED
-    (record,) = [r for r in caplog.records if r.getMessage() == "ruby log failed"]
+    (record,) = [r for r in caplog.records if r.getMessage() == observability.RUBY_LOG_FAILED]
     assert record.levelno == logging.WARNING
     assert (record.__dict__["sentence_id"], record.__dict__["error_type"]) == (
         sentence.id,
