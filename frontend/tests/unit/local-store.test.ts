@@ -109,6 +109,19 @@ describe('localSlot', () => {
     expect(slot.read()).toEqual({ on: true })
   })
 
+  it('does not throw or write when isValid itself throws', async () => {
+    const storage = memoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const { localSlot } = await freshModule()
+    const slot = localSlot('nc.furigana.v1', (value: unknown): value is Flag => {
+      throw new Error(`broken validator for ${String(value)}`)
+    })
+
+    expect(() => slot.write({ on: true })).not.toThrow()
+    expect(storage.setItem).not.toHaveBeenCalled()
+    expect(slot.read()).toBeUndefined()
+  })
+
   it('never throws with a throwing localStorage and keeps the value in memory', async () => {
     const storage = throwingStorage()
     vi.stubGlobal('localStorage', storage)

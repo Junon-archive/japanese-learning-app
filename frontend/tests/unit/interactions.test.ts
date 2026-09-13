@@ -206,6 +206,38 @@ describe('translation reveal', () => {
     expect(byClass(element, 'reveal-translation')).toHaveLength(1)
   })
 
+  it('neither reports nor draws a failure that arrives after the signal was aborted', async () => {
+    let fail: (error: unknown) => void = () => {}
+    const reported: unknown[] = []
+    const controller = new AbortController()
+    const screen = createFakeElement('main')
+    const handle = createInteractions(
+      PRESENTATION,
+      {
+        ...quietOps(),
+        revealTranslation: () =>
+          new Promise<string>((_resolve, reject) => {
+            fail = reject
+          }),
+        reportFailure: (error) => {
+          reported.push(error)
+          return { kind: 'message', text: '실패' }
+        },
+      },
+      { signal: controller.signal, sheetContainer: screen as unknown as HTMLElement },
+    )
+    const box = handle.element as unknown as FakeElement
+
+    byClass(box, 'reveal-translation')[0]!.click()
+    controller.abort()
+    fail(new Error('409'))
+    await flush()
+
+    // 호출부의 복구(로그인 이동, session 재획득)를 부르지 않고 실패 문구도 그리지 않는다.
+    expect(reported).toEqual([])
+    expect(flatText(box)).not.toContain('문장 뜻을 불러오지 못했어요')
+  })
+
   it('does not reveal twice', async () => {
     const { element, calls } = setup()
 
