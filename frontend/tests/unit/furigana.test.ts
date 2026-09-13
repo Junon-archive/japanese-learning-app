@@ -318,6 +318,132 @@ describe('toggling does not re-render', () => {
   })
 })
 
+/**
+ * 실제 학습 화면(`mountStudy`)에서. 토글은 상단바에 있고, 켜고 꺼도 화면이 문장을 다시 그리거나 요청을
+ * 보내지 않는다. 저장값이 켬이면 학습 화면에 들어올 때 켜져 있다(Demo와 같은 설정 하나).
+ */
+describe('toggle on the study screen', () => {
+  const SESSION = {
+    session_id: 7,
+    started_at: '2026-09-13T09:00:00Z',
+    last_activity_at: '2026-09-13T09:00:00Z',
+    ended_at: null,
+    active_seconds: 0,
+    target_minutes: 12,
+    extended_minutes: 0,
+  }
+  const STUDY_PRESENTATION: Presentation = {
+    presentation_id: 11,
+    sentence_id: 3,
+    japanese: '仕事の気が乗らない。',
+    render_segments: [
+      { text: '仕事の', sentence_item_id: null, ruby: [{ text: '仕事', reading: 'しごと' }, { text: 'の', reading: null }] },
+      {
+        text: '気が乗らない',
+        sentence_item_id: 21,
+        ruby: [
+          { text: '気', reading: 'き' },
+          { text: 'が', reading: null },
+          { text: '乗', reading: 'の' },
+          { text: 'らない', reading: null },
+        ],
+      },
+      { text: '。', sentence_item_id: null, ruby: [] },
+    ],
+    presentation_role: 'new',
+    review_reason: null,
+    context_stage: 'anchor',
+    translation_revealed: false,
+    tappable_items: [{ sentence_item_id: 21, learning_item_id: 5 }],
+    probe: null,
+  }
+
+  function key(url: unknown, init?: RequestInit): string {
+    return `${init?.method ?? 'GET'} ${String(url).replace(/^https?:\/\/[^/]+/, '')}`
+  }
+
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    }
+  }
+
+  async function mountStudyScreen(): Promise<FakeElement> {
+    const table: Record<string, () => Response> = {
+      'POST /api/study/session': () =>
+        new Response(JSON.stringify({ session: SESSION, resumed: false, timed_out_session_id: null }), { status: 200 }),
+      'POST /api/study/session/7/next': () =>
+        new Response(JSON.stringify({ presentation: STUDY_PRESENTATION }), { status: 200 }),
+    }
+    fetchMock.mockImplementation(((url: unknown, init?: RequestInit) => {
+      const answer = table[key(url, init)]
+      return answer === undefined ? new Promise<Response>(() => {}) : Promise.resolve(answer())
+    }) as never)
+    const { mountStudy } = await import('../../src/ui/study')
+    const root = createFakeElement('div')
+    const noop = (): void => {}
+    mountStudy(root as unknown as HTMLElement, new AbortController().signal, {
+      onHome: noop,
+      onUnauthenticated: noop,
+      onOpenHistory: noop,
+      onLoggedOut: noop,
+    })
+    await settle()
+    expect(byClass(root, 'token')).toHaveLength(1)
+    return root
+  }
+
+  function toggleIn(root: FakeElement): FakeElement {
+    const toggles = byClass(byClass(root, 'topbar-actions')[0]!, 'furigana-toggle')
+    expect(toggles).toHaveLength(1)
+    return toggles[0]!
+  }
+
+  it('toggles without redrawing the sentence or the interaction area and without a request', async () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    await freshFurigana()
+    const root = await mountStudyScreen()
+    const toggle = toggleIn(root)
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+
+    const sentence = byClass(root, 'sentence')[0]!
+    const token = byClass(sentence, 'token')[0]!
+    const slot = byClass(root, 'interaction-slot')[0]!
+    const area = slot.children[0]!
+    const rt = descendants(sentence).filter((node) => node.tagName === 'RT')
+    expect(rt.map((node) => node.textContent)).toEqual(['しごと', 'き', 'の'])
+    const requests = fetchMock.mock.calls.length
+    const created = vi.spyOn(doc, 'createElement')
+
+    toggle.click()
+    expect(isOnClass()).toBe(true)
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    toggle.click()
+    expect(isOnClass()).toBe(false)
+    toggle.click()
+    expect(isOnClass()).toBe(true)
+
+    expect(created).not.toHaveBeenCalled()
+    expect(byClass(root, 'sentence')).toEqual([sentence])
+    expect(byClass(root, 'token')).toEqual([token])
+    expect(slot.children).toEqual([area])
+    expect(slot.children[0]).toBe(area)
+    expect(descendants(sentence).filter((node) => node.tagName === 'RT')).toEqual(rt)
+    expect(fetchMock.mock.calls.length).toBe(requests)
+  })
+
+  it('comes up on when the shared setting is on', async () => {
+    vi.stubGlobal('localStorage', memoryStorage({ [KEY]: '{"on":true}' }))
+    await freshFurigana()
+    const root = await mountStudyScreen()
+
+    expect(toggleIn(root).getAttribute('aria-pressed')).toBe('true')
+    expect(isOnClass()).toBe(true)
+  })
+})
+
 describe('furigana.css', () => {
   const css = readFileSync(fileURLToPath(new URL('../../src/ui/furigana.css', import.meta.url)), 'utf8')
   const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({

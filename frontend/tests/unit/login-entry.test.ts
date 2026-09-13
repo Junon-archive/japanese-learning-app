@@ -212,7 +212,7 @@ describe('login entry result', () => {
     const title = root.children[0]!.querySelector('h1')!
     expect(title.textContent).toBe('오늘의 학습')
     expect(title.className).toBe('visually-hidden')
-    expect(topBarRight()).toEqual(['학습 기록', '로그아웃'])
+    expect(topBarRight()).toEqual(['학습 기록', '로그아웃', '후리가나'])
     const body = (document as unknown as FakeDocument).body
     expect(byClass(body, 'toast').map((toast) => toast.textContent)).toEqual([MESSAGES.sessionResumed])
     // 안내는 오류가 아니다. 화면 안에 인라인 안내로 남기지 않는다.
