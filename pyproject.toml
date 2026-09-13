@@ -32,6 +32,18 @@ dev = [
     # `make test-e2e`가 실패한다(skip이 아니다).
     "playwright>=1.62.0",
 ]
+# 후리가나 형태소 분석기와 사전 (ADR-021 결정 6). worker 이미지와 호스트 CLI에만 있다.
+# API 이미지는 `--no-default-groups`로 sync해 이 group을 받지 않는다. main dependencies로
+# 옮기면 Dockerfile 명령과 무관하게 API 이미지에 들어간다(test_infra_compose.py가 막는다).
+furigana = [
+    "sudachipy==0.6.11",
+    "sudachidict-core==20260723",
+]
+
+[tool.uv]
+# 호스트 `uv sync` / `uv run`은 dev + furigana 전부. `--no-dev`로는 furigana가 빠지지 않으므로
+# 두 Dockerfile은 `--no-default-groups`를 쓴다.
+default-groups = ["dev", "furigana"]
 
 [tool.ruff]
 target-version = "py312"
