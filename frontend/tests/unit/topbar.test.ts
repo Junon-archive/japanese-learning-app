@@ -157,9 +157,9 @@ describe('top bar on each screen', () => {
     expect(right()).toEqual(['로그인'])
   })
 
-  it('demo: 로그인', () => {
+  it('demo: 후리가나, 로그인', () => {
     mountDemo(publicContext())
-    expect(right()).toEqual(['로그인'])
+    expect(right()).toEqual(['후리가나', '로그인'])
   })
 
   it('login: nothing', () => {

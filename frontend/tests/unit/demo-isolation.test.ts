@@ -9,7 +9,8 @@
  * (c) API 모듈에 닿는 동적 import는 main.ts -> private.ts 하나. main.ts 정적 그래프 안의 동적 import 대상은
  *     private.ts이거나 home·demo·kana 아래
  * (d) src/ 전체 금지 목록 (fail-closed 지정자, 코드 생성, 네트워크 원시 API, HTML 삽입, 동적 URL·이동)
- * (e) 현재 소스로 빌드한 entry 청크에 env.ts의 기본 origin 없음. 어떤 청크에는 있음
+ * (e) 현재 소스로 빌드한 entry 청크에 env.ts의 기본 origin 없음. 어떤 청크에는 있음.
+ *     demo fixture 식별자도 같다(fixture는 demo route의 동적 import로만 온다)
  * ```
  *
  * 규칙마다 **합성 소스 양성 대조군**이 있다. 판정 함수가 아무것도 내지 않는 식으로 초록이 되면 안 된다.
@@ -26,6 +27,7 @@ import { join } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
+import { DEMO_FIXTURE_ID } from '../../src/demo/fixture'
 import { buildOutput, walk } from './build-output'
 import type { Finding, Project } from './import-graph'
 import { createProject, fullGraph, lineOf, SRC, staticGraph } from './import-graph'
@@ -335,14 +337,17 @@ describe('forbidden uses (d)', () => {
 })
 
 describe('demo source', () => {
-  const files = ['demo/demo.ts', 'demo/fixture.ts'].map((name) => ({
-    name,
-    source: readFileSync(join(SRC, name), 'utf8'),
-  }))
+  const project = createProject()
+  // 디렉터리 기준이다. 새 demo 모듈이 생겨도 테스트를 고치지 않고 대상이 된다.
+  const files = project.files
+    .filter((name) => name.startsWith('demo/'))
+    .map((name) => ({ name, source: readFileSync(join(SRC, name), 'utf8') }))
 
-  it('keeps demo state out of every persistent store', () => {
-    // demo 상태는 browser memory/session 수준에서만 유지한다(04_SECURITY_AND_DATA.md).
-    // 주석에서 이름을 언급하는 것은 막지 않는다 --- 접근 형태만 찾는다.
+  it('reaches browser storage only through local-store.ts', () => {
+    // demo 진도는 localStorage의 nc.demo.v1에만 남고, 그 접근은 local-store.ts의 localSlot 경유뿐이다
+    // (04_SECURITY_AND_DATA.md의 `localStorage 사용 범위`). 주석에서 이름을 언급하는 것은 막지 않는다 ---
+    // 접근 형태만 찾는다. 계산된 속성 접근은 local-storage-scope.test.ts가 본다.
+    expect(files.map((file) => file.name)).toEqual(expect.arrayContaining(['demo/demo.ts', 'demo/progress.ts']))
     const patterns = [
       /localStorage\s*[.[]/,
       /sessionStorage\s*[.[]/,
@@ -353,21 +358,22 @@ describe('demo source', () => {
     for (const pattern of patterns) {
       expect(files.filter((file) => pattern.test(file.source)).map((f) => f.name)).toEqual([])
     }
+    expect(fullGraph(project, 'demo/demo.ts')).toContain('local-store.ts')
   })
 
   it('reaches the renderers it reuses', () => {
     // 격리가 "demo가 자기 화면을 따로 만들었다"로 달성되면 안 된다. 실제 학습 화면과
-    // 같은 코드여야 한다(03_UI_UX_SPEC.md의 `Demo`).
-    const graph = fullGraph(createProject(), 'demo/demo.ts')
-    for (const module of [
-      'ui/interactions.ts',
-      'ui/segments.ts',
-      'ui/progress.ts',
-      'ui/session-end.ts',
-      'demo/fixture.ts',
-    ]) {
+    // 같은 코드여야 한다(03_UI_UX_SPEC.md의 `Demo`). 후리가나 토글도 Study Screen과 같은 모듈이다.
+    const graph = fullGraph(project, 'demo/demo.ts')
+    for (const module of ['ui/interactions.ts', 'ui/segments.ts', 'ui/furigana.ts', 'demo/fixture.ts']) {
       expect(graph).toContain(module)
     }
+  })
+
+  it('does not reach the session progress bar or the session end', () => {
+    // 12분 진행바, `오늘 학습 완료 / 더 학습하기`, 연장이 없다. 진행 표시는 본 문장 수 / 전체 문장 수다.
+    const graph = fullGraph(project, 'demo/demo.ts')
+    expect(['ui/progress.ts', 'ui/session-end.ts'].filter((module) => graph.has(module))).toEqual([])
   })
 })
 
@@ -421,6 +427,21 @@ describe('build output (e)', () => {
       const chunks = walk(join(dir, 'assets')).filter((path) => path.endsWith('.js'))
       expect(files).toEqual(expect.arrayContaining(chunks))
       expect(chunks.some((chunk) => readFileSync(chunk, 'utf8').includes(origin))).toBe(true)
+    },
+    BUILD_TIMEOUT_MS,
+  )
+
+  it(
+    'keeps the demo fixture out of the entry chunk and ships it in some chunk',
+    () => {
+      // fixture는 demo route의 동적 import로만 불러온다. 선택 홈 번들에 들어가지 않는다(합격 기준 38).
+      const { dir } = buildOutput()
+
+      const entry = entryChunks(dir)
+      expect(entry.filter((chunk) => readFileSync(chunk, 'utf8').includes(DEMO_FIXTURE_ID))).toEqual([])
+
+      const chunks = walk(join(dir, 'assets')).filter((path) => path.endsWith('.js'))
+      expect(chunks.filter((chunk) => readFileSync(chunk, 'utf8').includes(DEMO_FIXTURE_ID))).not.toEqual([])
     },
     BUILD_TIMEOUT_MS,
   )

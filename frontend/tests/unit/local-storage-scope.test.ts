@@ -35,11 +35,9 @@ const SLOT_OWNER: Record<StoreKey, (path: string) => boolean> = {
 }
 
 /**
- * Wave 2 시점 규칙(메인 결정 G1): 모든 key는 `localSlot` 호출이 1회 이하이고, 이 목록의 key는 정확히
- * 1회다. 명세의 최종 규칙은 "세 key 모두 정확히 1회"다. Wave 3 레인이 자기 slot을 만들면서 자기 key를
- * 이 목록에 넣어 정확히 1회로 올린다(furigana-fe -> 'nc.furigana.v1', demo -> 'nc.demo.v1').
+ * 최종 규칙: 세 key 모두 `localSlot` 호출이 정확히 1회다(04 `slot 소유`). 이 목록은 세 key 전부다.
  */
-const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1', 'nc.furigana.v1']
+const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1', 'nc.furigana.v1', 'nc.demo.v1']
 
 /** local-store.ts가 export해도 되는 이름 전부. 임의 key·임의 값을 쓰는 함수는 없다. */
 const STORE_EXPORTS = ['LOCAL_STORE_KEYS', 'LocalSlot', 'LocalStoreKey', 'localSlot']
@@ -349,7 +347,7 @@ function slotCallViolations(sources: readonly Source[]): string[] {
   return collectSlotCalls(sources).violations
 }
 
-/** Wave 2 시점: key마다 1회 이하, `REQUIRED_SLOT_KEYS`는 정확히 1회. */
+/** key마다 1회 이하, `required`는 정확히 1회. */
 function slotCallCounts(sources: readonly Source[], required: readonly StoreKey[]): string[] {
   const { calls } = collectSlotCalls(sources)
   const violations: string[] = []
@@ -408,7 +406,7 @@ describe('browser storage scope in frontend/src', () => {
     expect(slotCallViolations(sources)).toEqual([])
   })
 
-  it('calls localSlot at most once per key and exactly once for the keys required in this wave', () => {
+  it('calls localSlot exactly once for each of the three keys', () => {
     expect(slotCallCounts(sources, REQUIRED_SLOT_KEYS)).toEqual([])
     expect(collectSlotCalls(sources).calls).toContainEqual({ key: 'nc.kana.v1', path: 'kana/progress.ts' })
   })
@@ -586,6 +584,7 @@ describe('positive controls', () => {
     const sources = synthetic({ 'ui/furigana.ts': `localSlot('nc.furigana.v1', isFlag)` })
     expect(slotCallCounts(sources, REQUIRED_SLOT_KEYS)).toEqual([
       `localSlot('nc.kana.v1') must be called exactly once, found 0`,
+      `localSlot('nc.demo.v1') must be called exactly once, found 0`,
     ])
   })
 })

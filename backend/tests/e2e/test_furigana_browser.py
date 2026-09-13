@@ -1,6 +1,6 @@
 """후리가나 표시와 토글 (mvp-02-onboarding/12_TEST_PLAN.md의 `Browser E2E`, 13_ACCEPTANCE_CRITERIA.md 16·17·19~21).
 
-휴대폰 viewport로 돈다. 이 파일은 **Study Screen** 부분이다. Demo 부분은 demo 레인이 더한다.
+휴대폰 viewport로 돈다. Study Screen과 Demo가 같은 설정(`nc.furigana.v1`)을 공유한다.
 
 -   기본은 끔이다. `rt`는 렌더되어 있지만 보이지 않는다.
 -   켜면 학습 문장의 `rt`가 보이고, 그 읽기와 밑글자가 DB `sentences.ruby_json`에 저장된 값 그대로다(브라우저가
@@ -10,7 +10,11 @@
 -   켠 상태와 끈 상태에서 같은 흐름(탭·설명·번역·다음 문장)을 밟으면 API 요청 목록과 `learning_events` 종류·건수가
     같다. 후리가나는 학습 신호가 아니다(불변식 16).
 
+Demo 부분은 backend 없이(`frontend` fixture만) 돈다. 읽기의 기준값은 커밋된 demo fixture의 ruby다. Demo에서 켠
+설정이 로그인 뒤 Study Screen에서도 켜져 있는지는 backend가 필요하다.
+
 "서버 요청"은 API origin으로 나간 요청이다(정적 자산 제외). 정책값을 단언하지 않으므로 config를 주입하지 않는다.
+DB를 쓰는 테스트에만 `integration`을 단다(`test_marker_hygiene.py`).
 """
 
 from __future__ import annotations
@@ -29,9 +33,10 @@ from app.models.enums import EventType
 from app.services.auth import hash_password
 from tests import factories
 from tests.e2e import study_flow as flow
-from tests.e2e.conftest import E2EStack
+from tests.e2e.conftest import E2EStack, Frontend
+from tests.e2e.demo_fixture import DEMO_KEY, read_fixture, ruby_pairs
 
-pytestmark = [pytest.mark.e2e, pytest.mark.integration]
+pytestmark = pytest.mark.e2e
 
 PHONE = "iPhone 13"
 
@@ -135,6 +140,7 @@ def _add_learner(stack: E2EStack) -> flow.Learner:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_furigana_is_off_by_default_and_shows_the_stored_reading_when_on(
     e2e_stack: E2EStack, phone_page: Callable[[], Page]
 ) -> None:
@@ -188,6 +194,7 @@ def test_furigana_is_off_by_default_and_shows_the_stored_reading_when_on(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_setting_survives_reload_and_login(
     e2e_stack: E2EStack, phone_page: Callable[[], Page]
 ) -> None:
@@ -264,6 +271,7 @@ def _wait_for_flow_events(stack: E2EStack, learner: flow.Learner) -> None:
     )
 
 
+@pytest.mark.integration
 def test_the_same_flow_sends_the_same_requests_and_events_with_furigana_on_or_off(
     e2e_stack: E2EStack, phone_page: Callable[[], Page]
 ) -> None:
@@ -283,3 +291,120 @@ def test_the_same_flow_sends_the_same_requests_and_events_with_furigana_on_or_of
     on_events = _event_counts(stack, on_learner)
     assert on_events == off_events, {"off": off_events, "on": on_events}
     assert _exposure_count(stack, on_learner) == _exposure_count(stack, off_learner)
+
+
+# --------------------------------------------------------------------------
+# Demo: 기본 끔, 켜면 fixture의 읽기, 새로고침 유지, 토글 요청 0 (backend 없음)
+# --------------------------------------------------------------------------
+
+DEMO_URL_HASH = "#/demo"
+DEMO_CARD_TITLE = "표현 학습 체험해 보기"
+
+
+def _demo_toggle(page: Page) -> Locator:
+    return page.locator(".screen.demo .topbar .topbar-actions .furigana-toggle")
+
+
+def test_demo_furigana_is_off_by_default_and_shows_the_fixture_reading_when_on(
+    frontend: Frontend, phone_page: Callable[[], Page]
+) -> None:
+    """Demo도 Study Screen과 같은 규칙이다. 읽기는 fixture에 저장된 ruby 그대로이고 브라우저가 계산하지 않는다."""
+    _, sentences = read_fixture()
+    first = sentences[0]["presentation"]
+    stored = ruby_pairs(sentences[0])
+    assert stored, "첫 demo 문장에 읽기가 없다(전제)"
+
+    page = phone_page()
+    traffic = flow.watch_traffic(
+        page, frontend_url=frontend.url, api_url=frontend.api_url, block=True
+    )
+    page.goto(f"{frontend.url}/{DEMO_URL_HASH}")
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+
+    # 기본 끔.
+    toggle = _demo_toggle(page)
+    expect(toggle).to_have_attribute("aria-pressed", "false")
+    assert FURIGANA_KEY not in _local_storage(page)
+    _expect_all(_rts(page), visible=False)
+
+    # 켬. 문서 class 전환이지 문장 재렌더가 아니다.
+    page.evaluate("() => { window.__ncSentence = document.querySelector('.sentence'); }")
+    toggle.click()
+    expect(toggle).to_have_attribute("aria-pressed", "true")
+    _expect_all(_rts(page), visible=True)
+    assert [tuple(pair) for pair in page.evaluate(_RUBY_PAIRS)] == stored
+    assert page.evaluate(_SENTENCE_WITHOUT_RT) == first["japanese"]
+    expect(page.locator(".sentence")).to_have_attribute("aria-label", first["japanese"])
+    assert page.evaluate("() => window.__ncSentence === document.querySelector('.sentence')")
+    assert json.loads(_local_storage(page)[FURIGANA_KEY]) == {"on": True}
+
+    # 새로고침해도 켜져 있다.
+    page.reload()
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(_demo_toggle(page)).to_have_attribute("aria-pressed", "true")
+    _expect_all(_rts(page), visible=True)
+
+    # 끔도 유지된다.
+    _demo_toggle(page).click()
+    expect(_demo_toggle(page)).to_have_attribute("aria-pressed", "false")
+    page.reload()
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(_demo_toggle(page)).to_have_attribute("aria-pressed", "false")
+    _expect_all(_rts(page), visible=False)
+
+    # 토글은 진도가 아니다. demo 진도 key가 생기지 않았다.
+    assert DEMO_KEY not in _local_storage(page)
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    traffic.assert_none_outside()
+    assert traffic.api_calls == []
+
+
+# --------------------------------------------------------------------------
+# Demo에서 켠 설정 -> 로그인 -> Study, Study에서 끈 설정 -> Demo
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_the_setting_is_shared_between_the_demo_and_study(
+    e2e_stack: E2EStack, phone_page: Callable[[], Page]
+) -> None:
+    stack = e2e_stack
+    learner = flow.seed_and_create_user(stack)
+    page = phone_page()
+    traffic = flow.watch_traffic(
+        page, frontend_url=stack.frontend_url, api_url=stack.api_url, block=False
+    )
+
+    page.goto(f"{stack.frontend_url}/{DEMO_URL_HASH}")
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    _demo_toggle(page).click()
+    expect(_demo_toggle(page)).to_have_attribute("aria-pressed", "true")
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    assert traffic.api_calls == [], f"Demo 토글이 API를 불렀다: {traffic.api_calls}"
+
+    # Demo 상단바의 `로그인`으로 들어간다.
+    flow.press_topbar_login(page)
+    page.locator(".login-form").wait_for(
+        state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000
+    )
+    page.locator("#login-id").fill(learner.login_id)
+    page.locator("#password").fill(flow.PASSWORD)
+    page.locator(".login-form button[type=submit]").click()
+    flow.wait_for_sentence(page)
+    assert page.locator(".screen.demo").count() == 0
+
+    expect(_toggle(page)).to_have_attribute("aria-pressed", "true")
+    _expect_all(_rts(page), visible=True)
+
+    # Study에서 끄면 Demo에서도 꺼져 있다.
+    _toggle(page).click()
+    expect(_toggle(page)).to_have_attribute("aria-pressed", "false")
+    page.locator(".topbar .topbar-brand").click()
+    page.locator(".screen.home").wait_for(state="visible")
+    page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(_demo_toggle(page)).to_have_attribute("aria-pressed", "false")
+    _expect_all(_rts(page), visible=False)
+
+    stored = _local_storage(page)
+    assert json.loads(stored[FURIGANA_KEY]) == {"on": False}

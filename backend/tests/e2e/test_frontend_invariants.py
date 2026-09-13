@@ -808,12 +808,52 @@ _THROWING_STORAGE = """(() => {
 })();"""
 
 
+_DEMO_PROGRESS = re.compile(r"^(\d+) / (\d+)$")
+
+
+def _demo_seen(page: Page) -> int:
+    """Demo 진행 표시 `{본 문장 수} / {전체 문장 수}`의 앞 숫자."""
+    text = page.locator(".screen.demo .demo-progress").inner_text()
+    match = _DEMO_PROGRESS.match(text)
+    assert match is not None, text
+    return int(match.group(1))
+
+
+def _operate_demo_without_storage(page: Page) -> None:
+    """저장이 막힌 페이지의 Demo: 후리가나 토글, 자기평가, 다음 문장, 진도 초기화 확인이 메모리로 동작한다."""
+    screen = page.locator(".screen.demo")
+    screen.locator(".sentence").wait_for(state="visible")
+
+    toggle = screen.locator(".topbar .furigana-toggle")
+    expect(toggle).to_have_attribute("aria-pressed", "false")
+    toggle.click()
+    expect(toggle).to_have_attribute("aria-pressed", "true")
+    expect(screen.locator(".sentence rt").first).to_be_visible()
+
+    before = _demo_seen(page)
+    flow.tap(page, 0)
+    sheet = flow.open_sheet(page)
+    sheet.locator(".self-report", has_text=flow.UNKNOWN).click()
+    sheet.locator(".feedback-done").wait_for(state="visible")
+    flow.close_sheet(page)
+    screen.locator("button.next").click()
+    expect(screen.locator(".demo-progress")).to_have_text(re.compile(f"^{before + 1} / "))
+
+    screen.locator(".demo-banner button", has_text="진도 초기화").click()
+    screen.locator(".demo-banner button", has_text="초기화하기").click()
+    expect(screen.locator(".demo-progress")).to_have_text(re.compile("^1 / "))
+    page.locator(".toast", has_text="진도를 초기화했어요.").wait_for(state="visible")
+    # 후리가나 설정은 demo 진도가 아니다. 초기화 뒤에도 켜져 있다.
+    expect(toggle).to_have_attribute("aria-pressed", "true")
+
+
 def test_public_screens_work_when_local_storage_throws(
     frontend: Frontend, browser: Browser
 ) -> None:
     """localStorage 접근이 던지는 페이지에서 선택 홈과 Demo가 정상 동작하고 잡히지 않은 오류가 없다.
 
-    가나 학습과 후리가나 토글은 Wave 3 레인이 그 화면을 더할 때 여기에 조작을 더한다.
+    Demo는 후리가나 토글·자기평가·다음 문장·진도 초기화까지 메모리로 동작한다. 가나 학습은 그 화면을 더하는
+    레인이 여기에 조작을 더한다.
     """
     context = browser.new_context()
     try:
@@ -835,6 +875,7 @@ def test_public_screens_work_when_local_storage_throws(
         _finish_kana_round(page)
         page.goto(f"{frontend.url}/#/demo")
         _operate_demo(page)
+        _operate_demo_without_storage(page)
 
         assert errors == [], f"잡히지 않은 오류: {errors}"
         traffic.assert_none_outside()
