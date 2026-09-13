@@ -14,7 +14,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mountDemo } from '../../src/demo/demo'
+import { mount as mountDemo } from '../../src/demo/demo'
 import { DEMO_SENTENCES, DEMO_SESSION } from '../../src/demo/fixture'
 import type { FakeElement } from './fake-dom'
 import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
@@ -44,13 +44,21 @@ function flush(): Promise<void> {
 }
 
 let root: FakeElement
-let exited: number
+let navigations: string[]
+let logins: number
 
 function mount(): void {
   root = createFakeElement('div')
-  exited = 0
-  mountDemo(root as unknown as HTMLElement, () => {
-    exited += 1
+  navigations = []
+  logins = 0
+  mountDemo({
+    root: root as unknown as HTMLElement,
+    signal: new AbortController().signal,
+    subpath: '',
+    navigate: (hash) => navigations.push(hash),
+    openLogin: () => {
+      logins += 1
+    },
   })
 }
 
@@ -236,10 +244,16 @@ describe('demo run', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('offers a way back to the login screen', () => {
-    click('demo-exit')
+  it('leaves through the top bar only', () => {
+    expect(byClass(root, 'demo-exit')).toEqual([])
 
-    expect(exited).toBe(1)
+    click('topbar-brand')
+    expect(navigations).toEqual(['#/'])
+    expect(logins).toBe(0)
+
+    // 로그인 진입은 넘겨받은 값을 상단바가 누를 때 부른다. demo가 직접 부르지 않는다.
+    click('topbar-login')
+    expect(logins).toBe(1)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

@@ -1,22 +1,26 @@
 /**
  * Demo **진입과 종료 경로**. 요청 0건이 여기서 고정된다.
  *
- * 이 파일은 `src/main.ts`를 실제로 부팅시킨다 --- 라우팅 결정이 그 파일에만 있고, 한때
- * 종료 경로가 `GET /api/auth/me`를 불러 **demo가 backend를 호출했다.** vitest 137건이 전부
- * 초록인 상태에서 브라우저 e2e만 그것을 잡았다. 그 방어선이 하나뿐이면 같은 회귀가 다시
- * 난다. 그래서 여기서 단정한다:
+ * 이 파일은 `src/main.ts`를 실제로 부팅시킨다. 한때 demo 종료 경로가 `GET /api/auth/me`를 불러
+ * **demo가 backend를 호출했다.** vitest가 전부 초록인 상태에서 브라우저 e2e만 그것을 잡았다. 그래서
+ * 여기서 단정한다:
  *
- * -   `#/demo`로 들어오면 **부팅이 `fetchMe()`보다 먼저 갈린다** --- 요청 0건.
- * -   demo에서 나올 때 **새 요청을 만들지 않는다.** 들어오기 직전 화면으로 돌아갈 뿐이다.
+ * -   `#/demo`로 들어오든 선택 홈 카드로 들어오든 요청 0건이다.
+ * -   나가는 길은 상단바(앱 이름 -> 선택 홈)와 뒤로 가기이고, 어느 쪽도 요청을 만들지 않는다.
+ * -   demo 화면 안에 로그인 화면으로 가는 버튼이 없다. 상단바 오른쪽은 `로그인`이다.
  *
- * `fetch`는 던지는 스텁이다. 어느 경로가 부르든 그 자리에서 드러난다.
+ * `fetch`는 던지는 스텁이고 모든 테스트 끝에 호출 0회를 단정한다.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FakeElement } from './fake-dom'
-import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
+import { buttons, byClass, createFakeElement, fakeBrowser, fakeDocument } from './fake-dom'
 
-const fetchMock = vi.fn<typeof fetch>()
+const fetchMock = vi.fn<typeof fetch>(() => {
+  throw new Error('the demo must not make requests')
+})
+
+let root: FakeElement
 
 function flush(): Promise<void> {
   return new Promise((resolve) => {
@@ -24,79 +28,93 @@ function flush(): Promise<void> {
   })
 }
 
-let root: FakeElement
-
-/** `main.ts`가 `#app`을 찾는다. 그 자리에 스텁 루트를 준다. */
-function stubDocument(): void {
-  root = createFakeElement('div')
-  vi.stubGlobal('document', { ...fakeDocument(), querySelector: () => root })
-}
-
-/** 부팅 시점의 hash를 정해 `main.ts`를 새로 실행한다. */
-async function boot(hash: string): Promise<void> {
-  vi.stubGlobal('location', { hash })
-  vi.resetModules()
-  await import('../../src/main')
+async function settle(): Promise<void> {
+  await flush()
+  await vi.dynamicImportSettled()
   await flush()
 }
 
+async function boot(hash: string): Promise<void> {
+  const browser = fakeBrowser(hash)
+  vi.stubGlobal('location', browser.location)
+  vi.stubGlobal('history', browser.history)
+  vi.stubGlobal('window', browser.window)
+  vi.resetModules()
+  await import('../../src/main')
+  await settle()
+}
+
+function screenClass(): string {
+  return root.children[0]?.className ?? ''
+}
+
+function press(text: string): void {
+  const button = buttons(root).find((candidate) => candidate.textContent === text)
+  expect(button, `no button ${text}`).toBeDefined()
+  button!.click()
+}
+
 beforeEach(() => {
-  fetchMock.mockReset()
+  fetchMock.mockClear()
+  root = createFakeElement('div')
+  vi.stubGlobal('document', { ...fakeDocument(), querySelector: () => root })
   vi.stubGlobal('fetch', fetchMock)
-  stubDocument()
 })
 
 afterEach(() => {
+  expect(fetchMock).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
   vi.resetModules()
 })
 
-describe('entering the demo by url', () => {
-  it('makes no request on the way in', async () => {
+describe('entering the demo', () => {
+  it('opens by url without a request', async () => {
     await boot('#/demo')
 
-    expect(flatText(root)).toContain('데모 모드입니다')
-    // `#/demo`가 `fetchMe()`보다 먼저 갈린다. 백엔드가 죽어 있어도 demo는 열린다.
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screenClass()).toContain('demo')
   })
 
-  it('makes no request on the way out either', async () => {
+  it('opens from the home card without a request', async () => {
+    await boot('')
+
+    byClass(root, 'home-card')[0]!.click()
+    await settle()
+
+    expect(location.hash).toBe('#/demo')
+    expect(screenClass()).toContain('demo')
+  })
+
+  it('has the login entry in the top bar and no exit button in the screen', async () => {
     await boot('#/demo')
 
-    byClass(root, 'demo-exit')[0]!.click()
-    await flush()
-
-    // ★ 이 단정이 그 회귀를 막는다. 종료가 `fetchMe()`를 부르면 여기서 빨개진다.
-    expect(fetchMock).not.toHaveBeenCalled()
-    // 앞선 화면이 없었으므로 로그인 화면이다. 인증 여부를 확인하지 않는다.
-    expect(flatText(root)).toContain('Nihongo Context')
-    expect(byClass(root, 'demo-enter')).toHaveLength(1)
-    expect(location.hash).toBe('')
+    const bar = byClass(root, 'topbar')[0]!
+    expect(buttons(byClass(bar, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual([
+      '로그인',
+    ])
+    expect(byClass(root, 'demo-exit')).toEqual([])
   })
 })
 
-describe('entering the demo from the login screen', () => {
-  it('returns to the login screen without a single extra request', async () => {
-    // 부팅에서 `/me`가 401 --- 로그인 화면이 뜬다. 이 요청 하나만 정당하다.
-    fetchMock.mockResolvedValue(new Response(null, { status: 401 }))
+describe('leaving the demo', () => {
+  it('goes home from the app name without a request', async () => {
+    await boot('#/demo')
+
+    press('Nihongo Context')
+    await settle()
+
+    expect(location.hash).toBe('#/')
+    expect(screenClass()).toContain('home')
+  })
+
+  it('goes home with the back button without a request', async () => {
     await boot('')
+    byClass(root, 'home-card')[0]!.click()
+    await settle()
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(byClass(root, 'demo-enter')).toHaveLength(1)
+    history.back()
+    await settle()
 
-    byClass(root, 'demo-enter')[0]!.click()
-    await flush()
-    expect(flatText(root)).toContain('데모 모드입니다')
-    expect(location.hash).toBe('#/demo')
-    // 진입에 요청이 없다.
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-
-    byClass(root, 'demo-exit')[0]!.click()
-    await flush()
-
-    // 종료에도 요청이 없다. 들어오기 직전 화면(로그인)으로 그냥 돌아간다.
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(flatText(root)).toContain('Nihongo Context')
     expect(location.hash).toBe('')
+    expect(screenClass()).toContain('home')
   })
 })

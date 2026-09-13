@@ -37,8 +37,14 @@ export const MESSAGES = {
   saveFailed: '저장하지 못했습니다. 다시 시도해 주세요.',
   /** 로그인 실패는 사유와 무관하게 **하나의 문구**다(05_API_SPEC.md). */
   loginFailed: '아이디 또는 비밀번호를 확인해 주세요.',
-  retry: '다시 시도',
+  retry: '다시 시도하기',
   startNewSession: '새 세션 시작',
+  /** 상단바 `로그인`의 `fetchMe`가 403 밖의 이유로 실패했다. 재시도는 `fetchMe`만 다시 부른다. */
+  loginCheckFailed: '지금은 로그인 상태를 확인할 수 없어요. 체험과 글자 배우기는 그대로 쓸 수 있어요.',
+  /** 로그인 영역 코드의 동적 import 실패. 버튼을 두지 않는다 --- 다시 시도는 상단바 `로그인`이다. */
+  loginAreaLoadFailed: '로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요.',
+  /** demo route의 동적 import 실패. */
+  demoLoadFailed: '체험용 문장을 불러오지 못했어요. 새로고침해 주세요.',
 } as const
 
 export type NoticeTone = 'info' | 'error'

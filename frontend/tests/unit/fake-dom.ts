@@ -28,6 +28,7 @@ export type FakeEvent = {
 export type FakeClassList = {
   add: (...names: string[]) => void
   remove: (...names: string[]) => void
+  toggle: (name: string, force?: boolean) => boolean
   contains: (name: string) => boolean
 }
 
@@ -55,6 +56,8 @@ export type FakeElement = {
   remove: () => void
   /** 태그 이름 선택자(`'h1'`)만 받는다. 자신은 빼고 후손에서 찾는다. */
   querySelector: (selector: string) => FakeElement | null
+  /** `querySelector`와 같은 규칙으로 전부. */
+  querySelectorAll: (selector: string) => FakeElement[]
   addEventListener: (type: string, listener: (event: FakeEvent) => void) => void
   click: () => FakeEvent
   /** `click` 밖의 event(예: `input`, `keydown`, `transitionend`)를 흘린다. */
@@ -100,6 +103,12 @@ export function createFakeElement(tagName: string): FakeElement {
           .filter((name) => !removed.includes(name))
           .join(' ')
       },
+      toggle(name, force) {
+        const on = force ?? !names().includes(name)
+        if (on) element.classList.add(name)
+        else element.classList.remove(name)
+        return on
+      },
       contains(name) {
         return names().includes(name)
       },
@@ -137,8 +146,11 @@ export function createFakeElement(tagName: string): FakeElement {
       detach(element)
     },
     querySelector(selector) {
+      return element.querySelectorAll(selector)[0] ?? null
+    },
+    querySelectorAll(selector) {
       const wanted = selector.toUpperCase()
-      return descendants(element).find((node) => node !== element && node.tagName === wanted) ?? null
+      return descendants(element).filter((node) => node !== element && node.tagName === wanted)
     },
     addEventListener(type, listener) {
       ;(listeners[type] ??= []).push(listener)
@@ -212,4 +224,88 @@ export function flatText(root: FakeElement): string {
   return descendants(root)
     .map((node) => node.textContent)
     .join(' ')
+}
+
+/**
+ * `location` / `history` / `window`의 hash 이동 부분만. `vi.stubGlobal`로 셋을 함께 건다.
+ *
+ * 실제 브라우저와 맞춘 것:
+ *
+ * -   `location.hash = h`는 값이 바뀔 때만 기록을 하나 쌓고 `hashchange`를 **나중에**(microtask) 보낸다.
+ * -   `history.replaceState`는 hash를 바꾸지만 `hashchange`를 보내지 않는다.
+ * -   `history.back()`은 hash가 달라질 때만 `hashchange`를 보낸다.
+ */
+export type FakeBrowser = {
+  location: { hash: string; pathname: string; search: string }
+  history: {
+    replaceState: (state: unknown, unused: string, url: string) => void
+    back: () => void
+  }
+  window: { addEventListener: (type: string, listener: () => void) => void }
+  /** `replaceState`에 넘어온 인자 전부. */
+  replaceStateCalls: unknown[][]
+  /** 등록된 리스너의 event 종류. */
+  listenerTypes: () => string[]
+  /** 지금 기록 줄. 마지막이 현재. */
+  entries: () => string[]
+}
+
+function normalizeHash(value: string): string {
+  const hash = value.startsWith('#') ? value : `#${value}`
+  return hash === '#' ? '' : hash
+}
+
+export function fakeBrowser(initialHash: string): FakeBrowser {
+  const entries = [normalizeHash(initialHash)]
+  const listeners: { type: string; listener: () => void }[] = []
+  const replaceStateCalls: unknown[][] = []
+
+  function current(): string {
+    return entries[entries.length - 1]!
+  }
+
+  function fireHashChange(): void {
+    void Promise.resolve().then(() => {
+      for (const entry of listeners) if (entry.type === 'hashchange') entry.listener()
+    })
+  }
+
+  const location = {
+    get hash(): string {
+      return current()
+    },
+    set hash(value: string) {
+      const next = normalizeHash(value)
+      if (next === current()) return
+      entries.push(next)
+      fireHashChange()
+    },
+    pathname: '/',
+    search: '',
+  }
+
+  return {
+    location,
+    history: {
+      replaceState(...args: unknown[]) {
+        replaceStateCalls.push(args)
+        const url = String(args[2])
+        const at = url.indexOf('#')
+        entries[entries.length - 1] = at === -1 ? '' : normalizeHash(url.slice(at))
+      },
+      back() {
+        if (entries.length < 2) return
+        const before = entries.pop()!
+        if (before !== current()) fireHashChange()
+      },
+    },
+    window: {
+      addEventListener(type, listener) {
+        listeners.push({ type, listener })
+      },
+    },
+    replaceStateCalls,
+    listenerTypes: () => listeners.map((entry) => entry.type),
+    entries: () => [...entries],
+  }
 }
