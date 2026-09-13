@@ -29,7 +29,10 @@ import { ApiError } from '../api'
 import { fetchItemHistory, fetchSessionHistory } from '../endpoints'
 import type { HistoryItem, HistoryItemsResponse, HistorySession, HistorySessionsResponse } from '../types'
 import { errorMessage } from './api-failure'
+import { renderLogoutButton } from './logout'
 import { MESSAGES, renderNotice } from './notice'
+import { showScreen } from './screen'
+import { renderTopBar } from './topbar'
 
 const HISTORY_MESSAGES = {
   title: '학습 기록',
@@ -190,16 +193,36 @@ export function renderItemHistory(data: HistoryItemsResponse, format: DateFormat
 }
 
 export type HistoryActions = {
-  /** `GET /api/auth/me`의 `timezone`. 부팅에서 이미 받은 값이다(새 요청을 만들지 않는다). */
+  /** `GET /api/auth/me`의 `timezone`. 로그인 진입에서 이미 받은 값이다(새 요청을 만들지 않는다). */
   timezone: string
+  onHome: () => void
   onBack: () => void
   onUnauthenticated: () => void
+  /** auth session이 폐기됐다(또는 이미 없었다). 호출부가 선택 홈으로 보낸다. */
+  onLoggedOut: () => void
 }
 
-/** 읽기 전용 화면이므로 여기에 상태 변경도 자동 재시도도 없다. */
-export function mountHistory(root: HTMLElement, actions: HistoryActions): void {
+/**
+ * 읽기 전용 화면이므로 여기에 상태 변경도 자동 재시도도 없다.
+ *
+ * 상단바 오른쪽은 `로그아웃` 하나다. 로그인 영역 공통 틀의 메뉴이지 화면 내용이 아니다 --- 화면 내용은
+ * 여전히 두 목록과 `학습으로 돌아가기`로 끝난다(03_UI_UX_SPEC.md의 `로그아웃`). 문장이 없어 후리가나
+ * 토글이 없고, `학습 기록`은 자기 자신이라 없다.
+ */
+export function mountHistory(root: HTMLElement, signal: AbortSignal, actions: HistoryActions): void {
   const screen = document.createElement('main')
   screen.className = 'screen history'
+
+  const noticeSlot = document.createElement('div')
+  noticeSlot.className = 'notice-slot'
+
+  const logoutButton = renderLogoutButton({
+    onLoggedOut: actions.onLoggedOut,
+    onFailure: (message) => {
+      noticeSlot.replaceChildren(renderNotice(message, 'error'))
+    },
+  })
+  const topBar = renderTopBar({ onHome: actions.onHome, actions: [logoutButton] })
 
   const head = document.createElement('header')
   head.className = 'history-head'
@@ -218,8 +241,8 @@ export function mountHistory(root: HTMLElement, actions: HistoryActions): void {
   const body = document.createElement('div')
   body.className = 'history-body'
 
-  screen.append(head, body)
-  root.replaceChildren(screen)
+  screen.append(topBar, head, noticeSlot, body)
+  showScreen(root, screen, signal)
 
   const dates = dateFormat(actions.timezone)
 

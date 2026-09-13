@@ -433,32 +433,7 @@ button.flag-cancel {
   min-width: 60%;
 }
 
-button.demo-exit {
-  min-height: 36px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--panel);
-  color: var(--text);
-  padding: 0 12px;
-  font-size: 13px;
-}
-
-button.demo-enter {
-  min-height: var(--tap-target);
-}
-
 /* --- 학습 기록 --------------------------------------------------------- */
-
-button.history-link,
-button.logout {
-  justify-self: start;
-  min-height: 36px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  text-decoration: underline;
-}
 
 .history-head {
   display: flex;
@@ -624,6 +599,16 @@ button.primary:active:not(:disabled) {
 .topbar-login:disabled {
   color: var(--muted);
   opacity: 1;
+}
+
+/* 보이지 않는 제목. 스크린 리더와 showScreen의 포커스 이동에만 쓴다. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* --- 선택 홈 ---------------------------------------------------------- */

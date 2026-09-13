@@ -18,10 +18,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { dateFormat, renderItemHistory, renderSessionHistory } from '../../src/ui/history'
+import { dateFormat, mountHistory, renderItemHistory, renderSessionHistory } from '../../src/ui/history'
 import type { HistoryItem, HistorySession } from '../../src/types'
 import type { FakeElement } from './fake-dom'
-import { byClass, fakeDocument, flatText } from './fake-dom'
+import { buttons, byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
 
 const TRUNCATION_NOTE = '오래된 기록은'
 
@@ -228,5 +228,81 @@ describe('renderItemHistory', () => {
     expect(byClass(items([ITEM]), 'history-row').flatMap((row) => row.children)).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ tagName: 'BUTTON' })]),
     )
+  })
+})
+
+describe('mountHistory', () => {
+  const fetchMock = vi.fn<typeof fetch>()
+  let root: FakeElement
+  let events: string[]
+
+  function flush(): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  }
+
+  function mount(): void {
+    mountHistory(root as unknown as HTMLElement, new AbortController().signal, {
+      timezone: 'UTC',
+      onHome: () => events.push('home'),
+      onBack: () => events.push('back'),
+      onUnauthenticated: () => events.push('unauthenticated'),
+      onLoggedOut: () => events.push('loggedOut'),
+    })
+  }
+
+  beforeEach(() => {
+    root = createFakeElement('div')
+    events = []
+    fetchMock.mockReset()
+    fetchMock.mockImplementation((url) => {
+      const path = String(url)
+      if (path.endsWith('/api/history/sessions')) {
+        return Promise.resolve(new Response(JSON.stringify({ sessions: [SESSION], truncated: false })))
+      }
+      if (path.endsWith('/api/history/items')) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [ITEM], truncated: false })))
+      }
+      return Promise.resolve(new Response(null, { status: 403 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  it('has only 로그아웃 on the right of the top bar', async () => {
+    mount()
+    await flush()
+
+    const bar = byClass(root, 'topbar')[0]!
+    expect(buttons(byClass(bar, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual([
+      '로그아웃',
+    ])
+    buttons(bar)[0]!.click()
+    expect(events).toEqual(['home'])
+  })
+
+  it('still ends with the two lists and the way back to studying', async () => {
+    mount()
+    await flush()
+
+    const screen = root.children[0]!
+    const content = screen.children.filter((child) => child.className !== 'topbar')
+    const contentButtons = content.flatMap(buttons).map((button) => button.textContent)
+    // 상단바 메뉴를 근거로 화면 내용에 컨트롤을 붙이지 않는다.
+    expect(contentButtons).toEqual(['학습으로 돌아가기'])
+    expect(byClass(root, 'history-section')).toHaveLength(2)
+    expect(screen.querySelector('h1')!.textContent).toBe('학습 기록')
+  })
+
+  it('keeps the screen and says so when logging out fails', async () => {
+    mount()
+    await flush()
+
+    buttons(byClass(root, 'topbar-actions')[0]!)[0]!.click()
+    await flush()
+
+    expect(events).toEqual([])
+    expect(byClass(root, 'history-section')).toHaveLength(2)
+    expect(byClass(byClass(root, 'notice-slot')[0]!, 'notice')).toHaveLength(1)
   })
 })

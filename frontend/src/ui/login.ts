@@ -18,8 +18,17 @@ import { login } from '../endpoints'
 import type { User } from '../types'
 import { errorMessage } from './api-failure'
 import { MESSAGES, renderNotice } from './notice'
+import { showScreen } from './screen'
+import { renderTopBar } from './topbar'
 
-export function mountLogin(root: HTMLElement, onAuthenticated: (user: User) => void): void {
+export type LoginActions = {
+  /** 상단바 앱 이름. */
+  onHome: () => void
+  onAuthenticated: (user: User) => void
+}
+
+/** 상단바 오른쪽은 비운다(03_UI_UX_SPEC.md의 `상단바`). 선택 홈으로 가는 길은 앱 이름이다. */
+export function mountLogin(root: HTMLElement, signal: AbortSignal, actions: LoginActions): void {
   const screen = document.createElement('main')
   screen.className = 'screen login'
 
@@ -44,9 +53,8 @@ export function mountLogin(root: HTMLElement, onAuthenticated: (user: User) => v
 
   form.append(loginIdField.wrap, passwordField.wrap, submit, noticeSlot)
 
-  screen.append(title, form)
-  root.replaceChildren(screen)
-  loginIdField.input.focus()
+  screen.append(renderTopBar({ onHome: actions.onHome, actions: [] }), title, form)
+  showScreen(root, screen, signal)
 
   let submitting = false
 
@@ -59,7 +67,7 @@ export function mountLogin(root: HTMLElement, onAuthenticated: (user: User) => v
 
     login({ login_id: loginIdField.input.value, password: passwordField.input.value })
       .then((user) => {
-        onAuthenticated(user)
+        actions.onAuthenticated(user)
       })
       .catch((error: unknown) => {
         // 401은 자격 증명 문제다. 여기서 `Unauthenticated`를 로그인 화면으로 보내는

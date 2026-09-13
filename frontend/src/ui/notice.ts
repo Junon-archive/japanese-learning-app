@@ -43,6 +43,8 @@ export const MESSAGES = {
   loginCheckFailed: '지금은 로그인 상태를 확인할 수 없어요. 체험과 글자 배우기는 그대로 쓸 수 있어요.',
   /** 로그인 영역 코드의 동적 import 실패. 버튼을 두지 않는다 --- 다시 시도는 상단바 `로그인`이다. */
   loginAreaLoadFailed: '로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요.',
+  /** 로그아웃 뒤 선택 홈에서 띄우는 토스트. */
+  loggedOut: '로그아웃했어요.',
   /** demo route의 동적 import 실패. */
   demoLoadFailed: '체험용 문장을 불러오지 못했어요. 새로고침해 주세요.',
 } as const

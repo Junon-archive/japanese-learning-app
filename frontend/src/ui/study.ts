@@ -45,19 +45,27 @@ import type { InteractionFailure, InteractionOps, InteractionsHandle } from './i
 import { createInteractions } from './interactions'
 import { errorMessage } from './api-failure'
 import { renderLogoutButton } from './logout'
-import { MESSAGES, renderNotice } from './notice'
+import { MESSAGES, renderNotice, showToast } from './notice'
 import { renderProgress, sessionProgress } from './progress'
+import { showScreen } from './screen'
 import { renderSentence } from './segments'
 import { renderSessionEndChoice, renderSessionFinished } from './session-end'
+import { renderTopBar } from './topbar'
 
 export type StudyActions = {
+  /** 상단바 앱 이름. study session을 닫지 않는다(03_UI_UX_SPEC.md의 `상단바`). */
+  onHome: () => void
   onUnauthenticated: () => void
   onOpenHistory: () => void
-  /** auth session이 폐기됐다(또는 이미 없었다). 호출부가 Login 화면으로 보낸다. */
+  /** auth session이 폐기됐다(또는 이미 없었다). 호출부가 선택 홈으로 보낸다. */
   onLoggedOut: () => void
 }
 
-export function mountStudy(root: HTMLElement, actions: StudyActions): void {
+/**
+ * `signal`은 로그인 영역의 것이다. 떠났으면(abort) 화면을 그리지 않고 `POST /api/study/session`도
+ * 보내지 않는다 --- 로그인 확인이나 로그인 성공이 늦게 도착해도 study session을 만들거나 resume하지 않는다.
+ */
+export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: StudyActions): void {
   const onUnauthenticated = actions.onUnauthenticated
 
   const screen = document.createElement('main')
@@ -66,22 +74,28 @@ export function mountStudy(root: HTMLElement, actions: StudyActions): void {
   const progressSlot = document.createElement('header')
   progressSlot.className = 'progress-slot'
 
-  // 학습 기록 진입. 화면 위쪽의 작은 링크 하나다 --- 학습 흐름의 주 동작(`다음 문장`)은
-  // 아래쪽 그대로 두고, 여기에 통계나 다음 행동을 붙이지 않는다.
-  const historyLink = document.createElement('button')
-  historyLink.type = 'button'
-  historyLink.className = 'history-link'
-  historyLink.textContent = '학습 기록'
-  historyLink.addEventListener('click', actions.onOpenHistory)
+  // 상단바 메뉴. MVP-01에서 화면 안에 있던 `학습 기록`과 `로그아웃`을 옮긴 것이다(03_UI_UX_SPEC.md의
+  // `상단바`). 메뉴를 늘리지 않는다. 후리가나 토글은 이 배열에 더해진다.
+  const historyButton = document.createElement('button')
+  historyButton.type = 'button'
+  historyButton.className = 'topbar-button history-link'
+  historyButton.textContent = '학습 기록'
+  historyButton.addEventListener('click', actions.onOpenHistory)
 
-  // 03_UI_UX_SPEC.md의 `로그아웃`: `학습 기록` **아래**의 버튼 하나다. 확인 대화상자도
-  // 계정 관리 화면도 없고, 실패하면 화면을 바꾸지 않고 문구만 띄운다.
+  // 확인 대화상자도 계정 관리 화면도 없고, 실패하면 화면을 바꾸지 않고 문구만 띄운다.
   const logoutButton = renderLogoutButton({
     onLoggedOut: actions.onLoggedOut,
     onFailure: (message) => {
       setNotice(renderNotice(message, 'error'))
     },
   })
+
+  const topBar = renderTopBar({ onHome: actions.onHome, actions: [historyButton, logoutButton] })
+
+  // 화면 제목. 보이는 제목을 두지 않고 스크린 리더와 포커스 이동에만 쓴다.
+  const title = document.createElement('h1')
+  title.className = 'visually-hidden'
+  title.textContent = '오늘의 학습'
 
   const noticeSlot = document.createElement('div')
   noticeSlot.className = 'notice-slot'
@@ -109,16 +123,16 @@ export function mountStudy(root: HTMLElement, actions: StudyActions): void {
   foot.append(nextButton)
 
   screen.append(
+    topBar,
+    title,
     progressSlot,
-    historyLink,
-    logoutButton,
     noticeSlot,
     sentenceSlot,
     interactionSlot,
     endSlot,
     foot,
   )
-  root.replaceChildren(screen)
+  showScreen(root, screen, signal)
 
   let session: StudySession | null = null
   let presentation: Presentation | null = null
@@ -239,7 +253,10 @@ export function mountStudy(root: HTMLElement, actions: StudyActions): void {
 
   function setBusy(value: boolean): void {
     screen.classList.toggle('busy', value)
+    // 상단바는 잠그지 않는다. 요청을 기다리는 동안에도 앱 이름·학습 기록·로그아웃으로 나갈 수 있다.
+    const topBarButtons = new Set(topBar.querySelectorAll('button'))
     for (const button of screen.querySelectorAll('button')) {
+      if (topBarButtons.has(button)) continue
       button.disabled = value
     }
     if (!value) {
@@ -270,18 +287,18 @@ export function mountStudy(root: HTMLElement, actions: StudyActions): void {
   }
 
   async function begin(): Promise<void> {
+    // 떠난 화면은 새 화면 진입 요청을 시작하지 않는다(04_SECURITY_AND_DATA.md의 `모듈 경계`).
+    if (signal.aborted) return
     const started = await startSession()
     applySession(started.session)
+    setNotice(null)
+    // 한 번 사라지는 안내(토스트). 학습 진행을 막지 않는다(03_UI_UX_SPEC.md의 `세션 시작 안내`).
     if (started.timed_out_session_id !== null) {
       // id 값 자체는 화면에 내지 않는다. 사용자에게 뜻이 없는 내부 id다.
-      setNotice(renderNotice(MESSAGES.previousSessionTimedOut, 'info'))
+      showToast(MESSAGES.previousSessionTimedOut)
     } else if (started.resumed) {
-      setNotice(renderNotice(MESSAGES.sessionResumed, 'info'))
-    } else {
-      setNotice(null)
+      showToast(MESSAGES.sessionResumed)
     }
-    // loadNext는 안내를 지우지 않는다 --- 위 안내는 사용자가 다음 문장으로 넘어갈 때
-    // 사라진다(03_UI_UX_SPEC.md의 "한 번 사라지는 안내").
     await loadNext()
   }
 
@@ -357,7 +374,7 @@ export function mountStudy(root: HTMLElement, actions: StudyActions): void {
       session = finished
       presentation = null
       // 학습이 끝났으므로 문장도 Next도 남기지 않는다.
-      screen.replaceChildren(renderSessionFinished(finished))
+      screen.replaceChildren(topBar, renderSessionFinished(finished))
     }, MESSAGES.saveFailed)
   }
 

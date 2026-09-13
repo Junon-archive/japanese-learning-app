@@ -30,7 +30,10 @@ function flush(): Promise<void> {
 
 function render(): void {
   authenticated = []
-  mountLogin(root as unknown as HTMLElement, (user) => authenticated.push(user))
+  mountLogin(root as unknown as HTMLElement, new AbortController().signal, {
+    onHome: () => {},
+    onAuthenticated: (user) => authenticated.push(user),
+  })
 }
 
 function inputs(): FakeElement[] {

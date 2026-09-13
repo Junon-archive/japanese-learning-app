@@ -15,12 +15,22 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { User } from '../../src/types'
+import type { StudySession, User } from '../../src/types'
 import { MESSAGES } from '../../src/ui/notice'
-import type { FakeBrowser, FakeElement } from './fake-dom'
+import type { FakeBrowser, FakeDocument, FakeElement } from './fake-dom'
 import { buttons, byClass, createFakeElement, descendants, fakeBrowser, fakeDocument, flatText } from './fake-dom'
 
 const USER: User = { user_id: 1, login_id: 'owner', timezone: 'Asia/Seoul', starting_level: 'beginner' }
+
+const SESSION: StudySession = {
+  session_id: 7,
+  started_at: '2026-09-13T09:00:00Z',
+  last_activity_at: '2026-09-13T09:00:00Z',
+  ended_at: null,
+  active_seconds: 0,
+  target_minutes: 12,
+  extended_minutes: 0,
+}
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -87,6 +97,22 @@ function answerMe(respond: () => Promise<Response>): void {
   )
 }
 
+/** `METHOD /path`별 응답. 표에 없는 요청은 끝나지 않게 둔다. */
+function answer(table: Record<string, () => Promise<Response>>): void {
+  fetchMock.mockImplementation((url, init) => {
+    const key = `${init?.method ?? 'GET'} ${String(url).replace(/^https?:\/\/[^/]+/, '')}`
+    return table[key]?.() ?? new Promise<Response>(() => {})
+  })
+}
+
+function deferred(): { promise: Promise<Response>; resolve: (response: Response) => void } {
+  let resolve: (response: Response) => void = () => {}
+  const promise = new Promise<Response>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
+
 beforeEach(() => {
   fetchMock.mockReset()
   fetchMock.mockImplementation(() => {
@@ -148,6 +174,43 @@ describe('login entry result', () => {
     await settle()
 
     expect(screenClass()).toContain('study')
+    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session'])
+  })
+
+  it('titles the study screen for screen readers and says a resumed session in a toast', async () => {
+    await boot('')
+    answer({
+      'GET /api/auth/me': async () => json(200, USER),
+      'POST /api/study/session': async () =>
+        json(200, { session: SESSION, resumed: true, timed_out_session_id: null }),
+    })
+
+    loginButton().click()
+    await settle()
+
+    const title = root.children[0]!.querySelector('h1')!
+    expect(title.textContent).toBe('오늘의 학습')
+    expect(title.className).toBe('visually-hidden')
+    expect(topBarRight()).toEqual(['학습 기록', '로그아웃'])
+    const body = (document as unknown as FakeDocument).body
+    expect(byClass(body, 'toast').map((toast) => toast.textContent)).toEqual([MESSAGES.sessionResumed])
+    // 안내는 오류가 아니다. 화면 안에 인라인 안내로 남기지 않는다.
+    expect(flatText(byClass(root, 'notice-slot')[0]!)).not.toContain(MESSAGES.sessionResumed)
+    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session', 'POST /api/study/session/7/next'])
+  })
+
+  it('keeps the app name usable while the study screen waits, and closes no session on the way home', async () => {
+    await boot('')
+    answer({ 'GET /api/auth/me': async () => json(200, USER) })
+    loginButton().click()
+    await settle()
+
+    const brand = buttons(byClass(root, 'topbar')[0]!)[0]!
+    expect(brand.disabled).toBe(false)
+    brand.click()
+    await settle()
+
+    expect(screenClass()).toContain('home')
     expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session'])
   })
 
@@ -307,6 +370,52 @@ describe('leaving during the login entry', () => {
       expect(calls()).toEqual(['GET /api/auth/me'])
     })
   }
+})
+
+describe('leaving after logging in', () => {
+  it('starts no session when the login succeeds after the user left', async () => {
+    await boot('')
+    const login = deferred()
+    answer({
+      'GET /api/auth/me': async () => json(401, { detail: 'Not authenticated' }),
+      'POST /api/auth/login': () => login.promise,
+    })
+    loginButton().click()
+    await settle()
+
+    const [id, secret] = descendants(root).filter((node) => node.tagName === 'INPUT')
+    id!.value = 'owner'
+    secret!.value = 'secret'
+    byClass(root, 'login-form')[0]!.fire('submit')
+    await settle()
+    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/auth/login'])
+
+    location.hash = '#/demo'
+    await settle()
+    const demo = root.children[0]
+
+    login.resolve(json(200, USER))
+    await settle()
+
+    expect(root.children[0]).toBe(demo)
+    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/auth/login'])
+  })
+
+  it('starts the session when the user stayed', async () => {
+    await boot('')
+    answer({
+      'GET /api/auth/me': async () => json(401, { detail: 'Not authenticated' }),
+      'POST /api/auth/login': async () => json(200, USER),
+    })
+    loginButton().click()
+    await settle()
+
+    byClass(root, 'login-form')[0]!.fire('submit')
+    await settle()
+
+    expect(screenClass()).toContain('study')
+    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/auth/login', 'POST /api/study/session'])
+  })
 })
 
 describe('url values', () => {

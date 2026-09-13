@@ -22,7 +22,7 @@ import { ApiError } from './api'
 import { fetchMe } from './endpoints'
 import { mountHistory } from './ui/history'
 import { mountLogin } from './ui/login'
-import { MESSAGES, renderNotice } from './ui/notice'
+import { MESSAGES, renderNotice, showToast } from './ui/notice'
 import { showScreen } from './ui/screen'
 import { mountStudy } from './ui/study'
 import { renderTopBar } from './ui/topbar'
@@ -38,31 +38,46 @@ export type PrivateContext = {
 export function enterPrivate(ctx: PrivateContext): void {
   const { root, signal, goHome, openLogin } = ctx
 
+  /**
+   * auth session만 폐기됐다. study session은 서버에 열린 채 남고, 다시 로그인하면 resume된다
+   * (03_UI_UX_SPEC.md의 `로그아웃`). 선택 홈으로 가고 한 번 사라지는 안내를 띄운다.
+   */
+  function loggedOut(): void {
+    goHome()
+    showToast(MESSAGES.loggedOut)
+  }
+
   function showStudy(timezone: string): void {
-    mountStudy(root, {
+    mountStudy(root, signal, {
+      onHome: goHome,
       onUnauthenticated: showLogin,
       onOpenHistory: () => {
         showHistory(timezone)
       },
-      // auth session만 폐기됐다. study session은 서버에 열린 채 남는다(03_UI_UX_SPEC.md의 `로그아웃`).
-      onLoggedOut: goHome,
+      onLoggedOut: loggedOut,
     })
   }
 
   function showHistory(timezone: string): void {
-    mountHistory(root, {
+    mountHistory(root, signal, {
       timezone,
+      onHome: goHome,
       onBack: () => {
         showStudy(timezone)
       },
       onUnauthenticated: showLogin,
+      onLoggedOut: loggedOut,
     })
   }
 
   function showLogin(): void {
-    mountLogin(root, (user) => {
-      // 로그인 응답이 `timezone`을 들고 온다. `GET /me`를 다시 부르지 않는다.
-      showStudy(user.timezone)
+    mountLogin(root, signal, {
+      onHome: goHome,
+      onAuthenticated: (user) => {
+        // 로그인 응답이 `timezone`을 들고 온다. `GET /me`를 다시 부르지 않는다. 그사이 떠났으면
+        // mountStudy가 그리지도 study session을 시작하지도 않는다.
+        showStudy(user.timezone)
+      },
     })
   }
 
