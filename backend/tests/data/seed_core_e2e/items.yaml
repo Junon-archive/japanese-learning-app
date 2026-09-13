@@ -1,0 +1,82 @@
+# Core E2E Scenario 전용 fixture (12_TEST_PLAN.md). learning items.
+#
+# repo 루트 `seed/`의 초기 7-item 판을 그대로 옮긴 것이다. Core E2E(in-process와
+# 브라우저)는 이 파일을 적재한다 --- 시나리오 2단계가 `任せる`를 지목하고, 몇 문장
+# 안에 그 표현이 나오는지는 적재된 seed의 exploration 순서가 정한다. 실 `seed/`에
+# 기대면 seed를 늘리거나 순서를 바꿀 때마다 시나리오가 깨진다.
+#
+# 이 fixture가 시나리오에 주는 전제:
+#   - 첫 exploration 문장(sn_0001)에 `任せる`가 target이 아닌 tappable로 들어 있다.
+#   - `任せる`를 담은 문장이 둘뿐이라 ladder가 올라가면 문맥을 공급해야 한다.
+#
+# 배열 순서가 곧 적재 순서다. loader가 이 순서대로 metadata_json.seed_order를
+# 1부터 매긴다(06_LEARNING_ENGINE.md). 행을 중간에 끼워 넣으면 뒤쪽 item의
+# seed_order가 전부 밀린다. 새 item은 끝에 추가하는 것을 원칙으로 한다.
+#
+# frequency_rank는 "작을수록 고빈도"인 언어 빈도 정보다. 지금 값은 일상
+# 회화에서의 대략적 체감 순위이며 코퍼스 기반이 아니다(코퍼스 frequency는
+# MVP 범위 밖). seed_order로 대체하지 않는다.
+
+- seed_id: it_shigoto
+  type: word
+  lemma: 仕事
+  reading: しごと
+  default_meaning: 일, 업무
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 40
+
+- seed_id: it_chotto
+  type: word
+  lemma: ちょっと
+  reading: ちょっと
+  default_meaning: 조금, 좀
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 60
+
+- seed_id: it_temoii
+  type: grammar
+  lemma: 〜てもいい
+  reading: てもいい
+  default_meaning: ~해도 된다 (허가)
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 80
+
+- seed_id: it_makaseru
+  type: word
+  lemma: 任せる
+  reading: まかせる
+  default_meaning: 맡기다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 120
+
+- seed_id: it_tetsudau
+  type: word
+  lemma: 手伝う
+  reading: てつだう
+  default_meaning: 돕다, 거들다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 210
+
+- seed_id: it_otsukaresama
+  type: expression
+  lemma: お疲れ様でした
+  reading: おつかれさまでした
+  default_meaning: 수고하셨습니다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 300
+
+# frequency_rank가 없는 item. loader는 seed_order만 채우고 그것을
+# frequency_rank로 승격시키지 않는다.
+- seed_id: it_kiganoru
+  type: expression
+  lemma: 気が乗る
+  reading: きがのる
+  default_meaning: 마음이 내키다
+  difficulty_label: intermediate
+  topic_tags: [daily, emotion]

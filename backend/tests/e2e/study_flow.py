@@ -25,6 +25,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import sqlalchemy as sa
 from playwright.sync_api import Locator, Page
@@ -48,10 +49,13 @@ from app.models.enums import EventType, PresentationRole
 from app.services.auth import hash_password
 from app.services.seed_loader import load_seed
 from tests import factories
-from tests.conftest import REPO_ROOT
 from tests.e2e.conftest import E2EStack
 
-SEED_DIR = REPO_ROOT / "seed"
+# repo 루트 `seed/`가 아니라 Core E2E 전용 fixture다. `advance_to_item`이 몇 문장
+# 안에 `任せる`를 만난다는 것은 적재된 seed의 exploration 순서가 정하므로, 실 seed가
+# 커지거나 순서가 바뀌어도 이 하네스가 깨지지 않게 분리한다. 전제는 그 디렉터리의
+# items.yaml 머리말에 있다 (`tests/test_core_e2e.py`와 같은 fixture).
+SEED_DIR = Path(__file__).resolve().parents[1] / "data" / "seed_core_e2e"
 
 # 12_TEST_PLAN.md의 Core E2E 2단계가 지목한 표현.
 FOCUS_LEMMA = "任せる"
@@ -263,8 +267,8 @@ def supply_sentences(stack: E2EStack, *, item_id: int, count: int) -> list[int]:
 
     **Wave 3의 대역이다.** 문맥 ladder가 `varied` 이상으로 올라가면 아직 보지 않은
     문장이 필요한데 그것을 **생성**하는 것은 worker의 일이다
-    (06_LEARNING_ENGINE.md의 `Wave 3이 추가하는 것`). seed에는 표현당 문장이 두 개뿐이라
-    Wave 3 없이는 두 라운드 만에 pool이 마른다. candidate는 여전히 엔진이 만든다 ---
+    (06_LEARNING_ENGINE.md의 `Wave 3이 추가하는 것`). 이 fixture에는 표현당 문장이
+    두 개뿐이라 Wave 3 없이는 두 라운드 만에 pool이 마른다. candidate는 여전히 엔진이 만든다 ---
     여기서 공급하는 것은 콘텐츠(문장 + span + 설명)뿐이다.
     """
     with read_db(stack) as db:

@@ -1,7 +1,7 @@
 """Core E2E Scenario (`12_TEST_PLAN.md`의 13단계).
 
-seed 적재 -> 첫 세션 -> `任せる` 노출 -> click -> precomputed 설명 -> `몰랐음` ->
-event / mastery / review state / exposure -> due 시점으로 시계 이동 -> 복습 ->
+seed 적재(시나리오 전용 fixture) -> 첫 세션 -> `任せる` 노출 -> click ->
+precomputed 설명 -> `몰랐음` -> event / mastery / review state / exposure -> due 시점으로 시계 이동 -> 복습 ->
 anchor에서 새 문맥으로 -> 최소 노출을 넘긴 뒤에도 due면 계속 복습.
 
 **HTTP로 밟는다.** service를 직접 부르면 같은 정책을 확인하면서도 API 계약
@@ -62,8 +62,12 @@ from tests.conftest import (
 
 pytestmark = pytest.mark.integration
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SEED_DIR = REPO_ROOT / "seed"
+# repo 루트 `seed/`가 아니라 시나리오 전용 fixture를 적재한다. 2단계가 `任せる`를
+# 지목하는데, 그 표현이 몇 문장 안에 나오는지는 적재된 seed의 exploration 순서가
+# 정한다 --- 실 seed가 커지거나 순서가 바뀌면 시나리오의 의미와 무관하게 깨진다.
+# 이 fixture가 주는 전제는 그 디렉터리의 items.yaml 머리말에 있다. 실 `seed/`의
+# cold start는 test_restart_persistence / test_db_backup_restore가 계속 밟는다.
+SEED_DIR = Path(__file__).resolve().parent / "data" / "seed_core_e2e"
 
 # 이 시나리오가 따라가는 표현 (12_TEST_PLAN.md의 2단계).
 FOCUS_LEMMA = "任せる"
@@ -412,7 +416,7 @@ def test_core_e2e_from_seed_cold_start_to_repeated_contextual_review(
     exposures_now = count_valid_exposures(db_session, user_id=user_id, learning_item_id=focus.id)
     assert exposures_now >= minimum_exposures
 
-    # seed에는 이 표현을 담은 문장이 둘뿐이라 `new_context`가 쓸 문장이 남지
+    # 이 fixture에는 이 표현을 담은 문장이 둘뿐이라 `new_context`가 쓸 문장이 남지
     # 않았다. 그 문맥을 **생성**하는 것은 Wave 3의 일이므로(06_LEARNING_ENGINE.md의
     # `Wave 3이 추가하는 것`) 여기서는 문장 하나를 공급해 그 상황을 흉내 낸다.
     # candidate는 여전히 materialization이 만든다.

@@ -410,17 +410,18 @@ make create-user ARGS="--login-id <LOGIN_ID>"
 
 확인: `created user 1 (<LOGIN_ID>)`.
 
-### 4.4 seed (7개 기술 검증용)
+### 4.4 seed
 
 ``` sh
 printf '%s\n' "$DATABASE_URL"
 make seed
 ```
 
-확인: `loaded seed from <REPO>/seed: 7 items, ... sentences, ... spans, ... explanations`.
+확인: `loaded seed from <REPO>/seed: <N> items, ... sentences, ... spans, ... explanations`.
+`<N>`은 `seed/items.yaml`의 item 수와 같다.
 
-**이 시점의 seed는 기술 검증용 7개다.** 확장한 seed가 준비되면 12절 절차로 DB를
-**한 번 초기화하고 다시 적재한다.** 그때 이 계정과 검증 기간의 학습 기록은 모두 사라진다.
+**seed는 추가 적재가 되지 않는다.** 이미 seed를 적재한 DB에 다른 seed를 넣으려면 12절 절차로 DB를
+**한 번 초기화하고 다시 적재한다.** 그때 계정과 학습 기록은 모두 사라진다.
 
 ### 4.5 prompt 등록 --- worker보다 반드시 먼저
 

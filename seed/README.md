@@ -1,9 +1,10 @@
 # starter seed
 
 초급 사용자의 첫 세션을 가능하게 하는 **작은 version-controlled starter
-set**이다(`spec/mvp-01-core/04_DB_SPEC.md`의 Seed Data). 지금 들어 있는
-분량은 포맷을 보여주고 첫 세션이 도는지 확인하기 위한 최소량이며, 본격적인
-일본어 starter set 작성은 이후 작업이다.
+set**이다(`spec/mvp-01-core/04_DB_SPEC.md`의 Seed Data). 현재 파일에는
+learning item 200개와 문장 765개가 들어 있고, 각 item은 문장 4개에 target으로
+나온다. 한 문장의 target은 1~2개다. 이 숫자는 명세가 아니라 지금 파일의
+사실이다.
 
 적재:
 
@@ -55,7 +56,12 @@ seed를 고쳤으면 `make db-reset ARGS=--yes && make seed`로 다시 만든다
 
 ## 테스트 fixture와의 관계
 
-테스트는 이 디렉터리가 아니라 `backend/tests/data/`의 최소 fixture를
+내용에 기대는 테스트는 이 디렉터리가 아니라 `backend/tests/data/`의 fixture를
 쓴다. 여기 실 데이터를 통째로 교체해도 테스트가 깨지지 않게 하기
-위해서다. 다만 `test_seed_loader.py`는 이 디렉터리도 한 번 적재해 보므로
-포맷 오류는 테스트에서 잡힌다.
+위해서다. Core E2E(`test_core_e2e.py`와 브라우저 E2E)도 전용 fixture
+`backend/tests/data/seed_core_e2e/`를 쓴다.
+
+이 디렉터리를 적재하는 테스트는 건수나 순서를 단정하지 않는다.
+`test_seed_loader.py`는 포맷 오류를 잡고, `test_db_migrate.py`,
+`test_restart_persistence.py`, `test_db_backup_restore.py`는 이 seed로 DB를
+채우거나 첫 세션을 연다.

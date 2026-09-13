@@ -199,8 +199,8 @@ def test_core_e2e_13_steps_in_a_real_browser(e2e_stack: E2EStack, page: Page) ->
     flow.press_next(page, stack, learner)
     assert _valid_exposures(stack, learner, focus.id) == before + 1
 
-    # seed에는 이 표현을 담은 문장이 둘뿐이다. ladder가 `varied` 이상으로 올라가면 아직
-    # 보지 않은 문장이 필요하고 그것을 **생성**하는 것은 Wave 3 worker의 일이므로
+    # 이 fixture(`study_flow.SEED_DIR`)에는 이 표현을 담은 문장이 둘뿐이다. ladder가
+    # `varied` 이상으로 올라가면 아직 보지 않은 문장이 필요하고 그것을 **생성**하는 것은 Wave 3 worker의 일이므로
     # (06_LEARNING_ENGINE.md) 여기서 콘텐츠를 공급해 그 상황을 흉내 낸다. candidate는
     # 여전히 엔진이 만든다.
     flow.supply_sentences(stack, item_id=focus.id, count=SUPPLIED_CONTEXTS)

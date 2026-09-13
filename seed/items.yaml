@@ -1,12 +1,9 @@
-# starter seed learning items (04_DB_SPEC.md Seed Data).
+# starter seed learning items.
 #
-# 배열 순서가 곧 적재 순서다. loader가 이 순서대로 metadata_json.seed_order를
-# 1부터 매긴다(06_LEARNING_ENGINE.md). 행을 중간에 끼워 넣으면 뒤쪽 item의
-# seed_order가 전부 밀린다. 새 item은 끝에 추가하는 것을 원칙으로 한다.
+# 배열 순서가 곧 적재 순서다. loader가 metadata_json.seed_order를 1부터 매긴다.
+# 새 item은 끝에 추가한다(중간에 끼우면 seed_order가 밀린다).
 #
-# frequency_rank는 "작을수록 고빈도"인 언어 빈도 정보다. 지금 값은 일상
-# 회화에서의 대략적 체감 순위이며 코퍼스 기반이 아니다(코퍼스 frequency는
-# MVP 범위 밖). seed_order로 대체하지 않는다.
+# frequency_rank는 "작을수록 고빈도"인 일상 회화 체감 순위이며 코퍼스 기반이 아니다.
 
 - seed_id: it_shigoto
   type: word
@@ -62,7 +59,7 @@
   topic_tags: [daily, work]
   frequency_rank: 300
 
-# frequency_rank가 없는 item. loader는 seed_order만 채우고 그것을
+# frequency_rank가 없는 item(seed/ 원본). loader는 seed_order만 채우고 그것을
 # frequency_rank로 승격시키지 않는다.
 - seed_id: it_kiganoru
   type: expression
@@ -71,3 +68,1740 @@
   default_meaning: 마음이 내키다
   difficulty_label: intermediate
   topic_tags: [daily, emotion]
+
+- seed_id: it_daijoubu
+  type: word
+  lemma: 大丈夫
+  reading: だいじょうぶ
+  default_meaning: 괜찮다, 문제없다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 30
+
+- seed_id: it_sumimasen
+  type: expression
+  lemma: すみません
+  reading: すみません
+  default_meaning: 죄송합니다; 저기요; 고맙습니다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 35
+
+- seed_id: it_isogashii
+  type: word
+  lemma: 忙しい
+  reading: いそがしい
+  default_meaning: 바쁘다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 90
+
+- seed_id: it_yappari
+  type: word
+  lemma: やっぱり
+  reading: やっぱり
+  default_meaning: 역시; 아무래도
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 100
+
+- seed_id: it_wasureru
+  type: word
+  lemma: 忘れる
+  reading: わすれる
+  default_meaning: 잊다; (물건을) 두고 오다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 110
+
+- seed_id: it_okureru
+  type: word
+  lemma: 遅れる
+  reading: おくれる
+  default_meaning: 늦다, 지연되다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 130
+
+- seed_id: it_kimeru
+  type: word
+  lemma: 決める
+  reading: きめる
+  default_meaning: 정하다, 결정하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 140
+
+- seed_id: it_sorosoro
+  type: word
+  lemma: そろそろ
+  reading: そろそろ
+  default_meaning: 슬슬, 이제 곧
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 150
+
+- seed_id: it_yoroshiku
+  type: expression
+  lemma: よろしくお願いします
+  reading: よろしくおねがいします
+  default_meaning: 잘 부탁드립니다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 160
+
+- seed_id: it_teshimau
+  type: grammar
+  lemma: 〜てしまう
+  reading: てしまう
+  default_meaning: ~해 버리다 (완료, 아쉬움)
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 170
+
+- seed_id: it_nakya
+  type: grammar
+  lemma: 〜なきゃ
+  reading: なきゃ
+  default_meaning: ~해야 해 (〜なければ의 구어)
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 180
+
+- seed_id: it_tsumori
+  type: grammar
+  lemma: 〜つもり
+  reading: つもり
+  default_meaning: ~할 생각이다, ~할 작정이다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 190
+
+- seed_id: it_maniau
+  type: word
+  lemma: 間に合う
+  reading: まにあう
+  default_meaning: (시간·마감에) 늦지 않다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 220
+
+- seed_id: it_katazukeru
+  type: word
+  lemma: 片付ける
+  reading: かたづける
+  default_meaning: 정리하다, 치우다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 240
+
+- seed_id: it_kiwotsukeru
+  type: expression
+  lemma: 気をつける
+  reading: きをつける
+  default_meaning: 조심하다, 주의하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 250
+
+- seed_id: it_nareru
+  type: word
+  lemma: 慣れる
+  reading: なれる
+  default_meaning: 익숙해지다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 260
+
+- seed_id: it_naruhodo
+  type: expression
+  lemma: なるほど
+  reading: なるほど
+  default_meaning: 그렇구나, 과연
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 270
+
+- seed_id: it_mendoukusai
+  type: word
+  lemma: 面倒くさい
+  reading: めんどうくさい
+  default_meaning: 귀찮다
+  difficulty_label: beginner
+  topic_tags: [daily, emotion]
+  frequency_rank: 320
+
+- seed_id: it_sekkaku
+  type: word
+  lemma: せっかく
+  reading: せっかく
+  default_meaning: 모처럼; 애써
+  difficulty_label: intermediate
+  topic_tags: [daily, emotion]
+  frequency_rank: 340
+
+- seed_id: it_natsukashii
+  type: word
+  lemma: 懐かしい
+  reading: なつかしい
+  default_meaning: 그립다, 옛 생각이 나서 반갑다
+  difficulty_label: beginner
+  topic_tags: [daily, emotion]
+  frequency_rank: 360
+
+- seed_id: it_wakaru
+  type: word
+  lemma: 分かる
+  reading: わかる
+  default_meaning: 알다, 이해하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 5
+
+- seed_id: it_ii
+  type: word
+  lemma: いい
+  reading: いい
+  default_meaning: 좋다; 됐다(사양)
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 10
+
+- seed_id: it_tsukareru
+  type: word
+  lemma: 疲れる
+  reading: つかれる
+  default_meaning: 지치다, 피곤하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 20
+
+- seed_id: it_muri
+  type: word
+  lemma: 無理
+  reading: むり
+  default_meaning: 무리, 안 됨
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 25
+
+- seed_id: it_teiru
+  type: grammar
+  lemma: 〜ている
+  reading: ている
+  default_meaning: ~하고 있다; ~한 상태다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 45
+
+- seed_id: it_mou
+  type: word
+  lemma: もう
+  reading: もう
+  default_meaning: 벌써; 이제; 더
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 55
+
+- seed_id: it_zenzen
+  type: word
+  lemma: 全然
+  reading: ぜんぜん
+  default_meaning: 전혀
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 65
+
+- seed_id: it_komaru
+  type: word
+  lemma: 困る
+  reading: こまる
+  default_meaning: 곤란하다, 난처하다
+  difficulty_label: beginner
+  topic_tags: [daily, emotion]
+  frequency_rank: 70
+
+- seed_id: it_temiru
+  type: grammar
+  lemma: 〜てみる
+  reading: てみる
+  default_meaning: ~해 보다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 85
+
+- seed_id: it_kekkou
+  type: word
+  lemma: 結構
+  reading: けっこう
+  default_meaning: 꽤; 괜찮습니다(사양)
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 95
+
+- seed_id: it_tanoshimi
+  type: word
+  lemma: 楽しみ
+  reading: たのしみ
+  default_meaning: 기대됨, 낙
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 105
+
+- seed_id: it_tekureru
+  type: grammar
+  lemma: 〜てくれる
+  reading: てくれる
+  default_meaning: (남이 나에게) ~해 주다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 125
+
+- seed_id: it_temorau
+  type: grammar
+  lemma: 〜てもらう
+  reading: てもらう
+  default_meaning: (남에게) ~해 받다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 135
+
+- seed_id: it_tasukaru
+  type: word
+  lemma: 助かる
+  reading: たすかる
+  default_meaning: 도움이 되다, 살았다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 145
+
+- seed_id: it_yotei
+  type: word
+  lemma: 予定
+  reading: よてい
+  default_meaning: 일정, 계획
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 165
+
+- seed_id: it_shiru
+  type: word
+  lemma: 知る
+  reading: しる
+  default_meaning: 알다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 175
+
+- seed_id: it_chigau
+  type: word
+  lemma: 違う
+  reading: ちがう
+  default_meaning: 다르다; 틀리다; 아니다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 185
+
+- seed_id: it_chanto
+  type: word
+  lemma: ちゃんと
+  reading: ちゃんと
+  default_meaning: 제대로, 똑바로
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 195
+
+- seed_id: it_yokatta
+  type: expression
+  lemma: よかった
+  reading: よかった
+  default_meaning: 다행이다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 205
+
+- seed_id: it_shikatanai
+  type: expression
+  lemma: 仕方ない
+  reading: しかたない
+  default_meaning: 어쩔 수 없다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 215
+
+- seed_id: it_ndesu
+  type: grammar
+  lemma: 〜んです
+  reading: んです
+  default_meaning: (사정 설명) ~거든요
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 225
+
+- seed_id: it_soudesune
+  type: expression
+  lemma: そうですね
+  reading: そうですね
+  default_meaning: 그렇네요; 글쎄요
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 235
+
+- seed_id: it_taihen
+  type: word
+  lemma: 大変
+  reading: たいへん
+  default_meaning: 힘들다; 큰일이다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 245
+
+- seed_id: it_toriaezu
+  type: word
+  lemma: とりあえず
+  reading: とりあえず
+  default_meaning: 일단, 우선
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 255
+
+- seed_id: it_hougaii
+  type: grammar
+  lemma: 〜ほうがいい
+  reading: ほうがいい
+  default_meaning: ~하는 게 낫다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 275
+
+- seed_id: it_betsuni
+  type: word
+  lemma: 別に
+  reading: べつに
+  default_meaning: 별로, 딱히
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 280
+
+- seed_id: it_suki
+  type: word
+  lemma: 好き
+  reading: すき
+  default_meaning: 좋아하다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 285
+
+- seed_id: it_matsu
+  type: word
+  lemma: 待つ
+  reading: まつ
+  default_meaning: 기다리다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 295
+
+- seed_id: it_hima
+  type: word
+  lemma: 暇
+  reading: ひま
+  default_meaning: 한가함, 짬
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 305
+
+- seed_id: it_tai
+  type: grammar
+  lemma: 〜たい
+  reading: たい
+  default_meaning: ~하고 싶다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 310
+
+- seed_id: it_ganbaru
+  type: word
+  lemma: 頑張る
+  reading: がんばる
+  default_meaning: 힘내다, 애쓰다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 325
+
+- seed_id: it_hisashiburi
+  type: expression
+  lemma: 久しぶり
+  reading: ひさしぶり
+  default_meaning: 오랜만
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 330
+
+- seed_id: it_enryo
+  type: word
+  lemma: 遠慮する
+  reading: えんりょする
+  default_meaning: 사양하다, 삼가다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 335
+
+- seed_id: it_mazui
+  type: word
+  lemma: まずい
+  reading: まずい
+  default_meaning: 맛없다; 곤란하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 350
+
+- seed_id: it_noni
+  type: grammar
+  lemma: 〜のに
+  reading: のに
+  default_meaning: ~인데도
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 355
+
+- seed_id: it_omou
+  type: word
+  lemma: 思う
+  reading: おもう
+  default_meaning: 생각하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 400
+
+- seed_id: it_tsugou
+  type: word
+  lemma: 都合
+  reading: つごう
+  default_meaning: 형편, 사정
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 410
+
+- seed_id: it_kinisuru
+  type: expression
+  lemma: 気にする
+  reading: きにする
+  default_meaning: 신경 쓰다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 420
+
+- seed_id: it_kininaru
+  type: expression
+  lemma: 気になる
+  reading: きになる
+  default_meaning: 신경 쓰이다; 궁금하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 430
+
+- seed_id: it_sasuga
+  type: word
+  lemma: さすが
+  reading: さすが
+  default_meaning: 역시(칭찬)
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 440
+
+- seed_id: it_nakanaka
+  type: word
+  lemma: なかなか
+  reading: なかなか
+  default_meaning: 꽤; 좀처럼
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 450
+
+- seed_id: it_ichiou
+  type: word
+  lemma: 一応
+  reading: いちおう
+  default_meaning: 일단, 혹시 몰라서
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 460
+
+- seed_id: it_tekitou
+  type: word
+  lemma: 適当
+  reading: てきとう
+  default_meaning: 대충; 적당함
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 470
+
+- seed_id: it_futsuu
+  type: word
+  lemma: 普通
+  reading: ふつう
+  default_meaning: 보통; 그럭저럭
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 480
+
+- seed_id: it_yukkuri
+  type: word
+  lemma: ゆっくり
+  reading: ゆっくり
+  default_meaning: 천천히; 푹
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 490
+
+- seed_id: it_teoku
+  type: grammar
+  lemma: 〜ておく
+  reading: ておく
+  default_meaning: ~해 두다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 500
+
+- seed_id: it_tara
+  type: grammar
+  lemma: 〜たら
+  reading: たら
+  default_meaning: ~하면; ~했더니
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 510
+
+- seed_id: it_kedo
+  type: grammar
+  lemma: 〜けど
+  reading: けど
+  default_meaning: ~지만; ~인데
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 520
+
+- seed_id: it_tte
+  type: grammar
+  lemma: 〜って
+  reading: って
+  default_meaning: ~래, ~라고
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 530
+
+- seed_id: it_kamoshirenai
+  type: grammar
+  lemma: 〜かもしれない
+  reading: かもしれない
+  default_meaning: ~일지도 모른다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 540
+
+- seed_id: it_masenka
+  type: grammar
+  lemma: 〜ませんか
+  reading: ませんか
+  default_meaning: ~하지 않을래요?
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 550
+
+- seed_id: it_yone
+  type: grammar
+  lemma: 〜よね
+  reading: よね
+  default_meaning: ~지?, ~잖아
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 560
+
+- seed_id: it_kana
+  type: grammar
+  lemma: 〜かな
+  reading: かな
+  default_meaning: ~일까
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 570
+
+- seed_id: it_sugiru
+  type: grammar
+  lemma: 〜すぎる
+  reading: すぎる
+  default_meaning: 너무 ~하다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 580
+
+- seed_id: it_sou
+  type: grammar
+  lemma: 〜そう
+  reading: そう
+  default_meaning: ~해 보인다, ~할 것 같다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 590
+
+- seed_id: it_mitai
+  type: grammar
+  lemma: 〜みたい
+  reading: みたい
+  default_meaning: ~인 것 같다; ~처럼
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 600
+
+- seed_id: it_nakutemoii
+  type: grammar
+  lemma: 〜なくてもいい
+  reading: なくてもいい
+  default_meaning: ~안 해도 된다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 610
+
+- seed_id: it_janai
+  type: grammar
+  lemma: 〜じゃない？
+  reading: じゃない
+  default_meaning: ~잖아?, ~아니야?
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 620
+
+- seed_id: it_node
+  type: grammar
+  lemma: 〜ので
+  reading: ので
+  default_meaning: ~라서
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 630
+
+- seed_id: it_teageru
+  type: grammar
+  lemma: 〜てあげる
+  reading: てあげる
+  default_meaning: (내가 남에게) ~해 주다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 640
+
+- seed_id: it_moushiwakenai
+  type: expression
+  lemma: 申し訳ない
+  reading: もうしわけない
+  default_meaning: 죄송하다(정중)
+  difficulty_label: beginner
+  topic_tags: [work]
+  frequency_rank: 650
+
+- seed_id: it_sasou
+  type: word
+  lemma: 誘う
+  reading: さそう
+  default_meaning: 같이 하자고 하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 660
+
+- seed_id: it_kotowaru
+  type: word
+  lemma: 断る
+  reading: ことわる
+  default_meaning: 거절하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 670
+
+- seed_id: it_kariru
+  type: word
+  lemma: 借りる
+  reading: かりる
+  default_meaning: 빌리다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 680
+
+- seed_id: it_kasu
+  type: word
+  lemma: 貸す
+  reading: かす
+  default_meaning: 빌려주다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 690
+
+- seed_id: it_sagasu
+  type: word
+  lemma: 探す
+  reading: さがす
+  default_meaning: 찾다(찾는 중)
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 700
+
+- seed_id: it_mitsukeru
+  type: word
+  lemma: 見つける
+  reading: みつける
+  default_meaning: 찾아내다, 발견하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 710
+
+- seed_id: it_nakusu
+  type: word
+  lemma: 無くす
+  reading: なくす
+  default_meaning: 잃어버리다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 720
+
+- seed_id: it_renraku
+  type: word
+  lemma: 連絡する
+  reading: れんらくする
+  default_meaning: 연락하다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 730
+
+- seed_id: it_tanomu
+  type: word
+  lemma: 頼む
+  reading: たのむ
+  default_meaning: 부탁하다; 주문하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 740
+
+- seed_id: it_yameru
+  type: word
+  lemma: やめる
+  reading: やめる
+  default_meaning: 그만두다, 관두다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 750
+
+- seed_id: it_shinpai
+  type: word
+  lemma: 心配する
+  reading: しんぱいする
+  default_meaning: 걱정하다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 760
+
+- seed_id: it_soudan
+  type: word
+  lemma: 相談する
+  reading: そうだんする
+  default_meaning: 상의하다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 770
+
+- seed_id: it_saikin
+  type: word
+  lemma: 最近
+  reading: さいきん
+  default_meaning: 요즘; 최근
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 780
+
+- seed_id: it_kekkyoku
+  type: word
+  lemma: 結局
+  reading: けっきょく
+  default_meaning: 결국
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 790
+
+- seed_id: it_jitsuwa
+  type: word
+  lemma: 実は
+  reading: じつは
+  default_meaning: 실은
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 800
+
+- seed_id: it_zutto
+  type: word
+  lemma: ずっと
+  reading: ずっと
+  default_meaning: 쭉; 훨씬
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 810
+
+- seed_id: it_tabun
+  type: word
+  lemma: 多分
+  reading: たぶん
+  default_meaning: 아마
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 820
+
+- seed_id: it_kitto
+  type: word
+  lemma: きっと
+  reading: きっと
+  default_meaning: 분명, 틀림없이
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 830
+
+- seed_id: it_zettai
+  type: word
+  lemma: 絶対
+  reading: ぜったい
+  default_meaning: 절대; 꼭
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 840
+
+- seed_id: it_sugoi
+  type: word
+  lemma: すごい
+  reading: すごい
+  default_meaning: 대단하다; 엄청
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 850
+
+- seed_id: it_hontou
+  type: word
+  lemma: 本当
+  reading: ほんとう
+  default_meaning: 정말
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 860
+
+- seed_id: it_ureshii
+  type: word
+  lemma: 嬉しい
+  reading: うれしい
+  default_meaning: 기쁘다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 870
+
+- seed_id: it_tanoshii
+  type: word
+  lemma: 楽しい
+  reading: たのしい
+  default_meaning: 즐겁다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 880
+
+- seed_id: it_omoshiroi
+  type: word
+  lemma: 面白い
+  reading: おもしろい
+  default_meaning: 재미있다; 웃기다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 890
+
+- seed_id: it_zannen
+  type: word
+  lemma: 残念
+  reading: ざんねん
+  default_meaning: 아쉽다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 900
+
+- seed_id: it_hazukashii
+  type: word
+  lemma: 恥ずかしい
+  reading: はずかしい
+  default_meaning: 부끄럽다; 창피하다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 910
+
+- seed_id: it_mottainai
+  type: word
+  lemma: もったいない
+  reading: もったいない
+  default_meaning: 아깝다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 920
+
+- seed_id: it_nigate
+  type: word
+  lemma: 苦手
+  reading: にがて
+  default_meaning: 잘 못하다; 질색이다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 930
+
+- seed_id: it_heiki
+  type: word
+  lemma: 平気
+  reading: へいき
+  default_meaning: 아무렇지 않다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 940
+
+- seed_id: it_raku
+  type: word
+  lemma: 楽
+  reading: らく
+  default_meaning: 편하다, 수월하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 950
+
+- seed_id: it_meiwaku
+  type: word
+  lemma: 迷惑
+  reading: めいわく
+  default_meaning: 폐, 민폐
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 960
+
+- seed_id: it_tsukau
+  type: word
+  lemma: 使う
+  reading: つかう
+  default_meaning: 쓰다, 사용하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 970
+
+- seed_id: it_oboeru
+  type: word
+  lemma: 覚える
+  reading: おぼえる
+  default_meaning: 외우다; 기억하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 980
+
+- seed_id: it_yasumu
+  type: word
+  lemma: 休む
+  reading: やすむ
+  default_meaning: 쉬다; 결근·결석하다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 990
+
+- seed_id: it_kyuuni
+  type: word
+  lemma: 急に
+  reading: きゅうに
+  default_meaning: 갑자기
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1000
+
+- seed_id: it_komu
+  type: word
+  lemma: 混む
+  reading: こむ
+  default_meaning: 붐비다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1010
+
+- seed_id: it_tariru
+  type: word
+  lemma: 足りる
+  reading: たりる
+  default_meaning: 충분하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1020
+
+- seed_id: it_mayou
+  type: word
+  lemma: 迷う
+  reading: まよう
+  default_meaning: 망설이다; 길을 잃다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1030
+
+- seed_id: it_oshieru
+  type: word
+  lemma: 教える
+  reading: おしえる
+  default_meaning: 가르치다; 알려주다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1040
+
+- seed_id: it_shippai
+  type: word
+  lemma: 失敗する
+  reading: しっぱいする
+  default_meaning: 실수하다, 실패하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1050
+
+- seed_id: it_gaman
+  type: word
+  lemma: 我慢する
+  reading: がまんする
+  default_meaning: 참다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1060
+
+- seed_id: it_tsuideni
+  type: word
+  lemma: ついでに
+  reading: ついでに
+  default_meaning: 하는 김에
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1070
+
+- seed_id: it_wazawaza
+  type: word
+  lemma: わざわざ
+  reading: わざわざ
+  default_meaning: 일부러, 굳이
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1080
+
+- seed_id: it_daiji
+  type: word
+  lemma: 大事
+  reading: だいじ
+  default_meaning: 소중하다, 중요하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1090
+
+- seed_id: it_kibishii
+  type: word
+  lemma: 厳しい
+  reading: きびしい
+  default_meaning: 엄하다; 빠듯하다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 1100
+
+- seed_id: it_sabishii
+  type: word
+  lemma: 寂しい
+  reading: さびしい
+  default_meaning: 외롭다, 허전하다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1110
+
+- seed_id: it_kuyashii
+  type: word
+  lemma: 悔しい
+  reading: くやしい
+  default_meaning: 분하다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1120
+
+- seed_id: it_abunai
+  type: word
+  lemma: 危ない
+  reading: あぶない
+  default_meaning: 위험하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1130
+
+- seed_id: it_kuwashii
+  type: word
+  lemma: 詳しい
+  reading: くわしい
+  default_meaning: 자세하다; 잘 알다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1140
+
+- seed_id: it_mezurashii
+  type: word
+  lemma: 珍しい
+  reading: めずらしい
+  default_meaning: 드물다, 웬일이다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1150
+
+- seed_id: it_kibun
+  type: word
+  lemma: 気分
+  reading: きぶん
+  default_meaning: 기분; 속 상태
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1160
+
+- seed_id: it_choushi
+  type: word
+  lemma: 調子
+  reading: ちょうし
+  default_meaning: 상태, 컨디션
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1170
+
+- seed_id: it_genki
+  type: word
+  lemma: 元気
+  reading: げんき
+  default_meaning: 건강, 기운
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1180
+
+- seed_id: it_kanji
+  type: word
+  lemma: 感じ
+  reading: かんじ
+  default_meaning: 느낌
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1190
+
+- seed_id: it_dame
+  type: word
+  lemma: 駄目
+  reading: だめ
+  default_meaning: 안 됨, 소용없음
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1200
+
+- seed_id: it_uso
+  type: word
+  lemma: 嘘
+  reading: うそ
+  default_meaning: 거짓말; 설마
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1210
+
+- seed_id: it_onakagasuku
+  type: expression
+  lemma: お腹が空く
+  reading: おなかがすく
+  default_meaning: 배가 고프다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1220
+
+- seed_id: it_kazewohiku
+  type: expression
+  lemma: 風邪を引く
+  reading: かぜをひく
+  default_meaning: 감기에 걸리다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1230
+
+- seed_id: it_kakaru
+  type: word
+  lemma: かかる
+  reading: かかる
+  default_meaning: (시간·돈이) 들다, 걸리다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1240
+
+- seed_id: it_doushiyou
+  type: expression
+  lemma: どうしよう
+  reading: どうしよう
+  default_meaning: 어떡하지
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1250
+
+- seed_id: it_tashikani
+  type: word
+  lemma: 確かに
+  reading: たしかに
+  default_meaning: 확실히; 그렇네
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1260
+
+- seed_id: it_maamaa
+  type: word
+  lemma: まあまあ
+  reading: まあまあ
+  default_meaning: 그럭저럭; 자자
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1270
+
+- seed_id: it_douzo
+  type: word
+  lemma: どうぞ
+  reading: どうぞ
+  default_meaning: (권할 때) 드세요, 여기요
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1280
+
+- seed_id: it_doumo
+  type: word
+  lemma: どうも
+  reading: どうも
+  default_meaning: 고맙습니다; 안녕하세요
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1290
+
+- seed_id: it_gomen
+  type: expression
+  lemma: ごめん
+  reading: ごめん
+  default_meaning: 미안
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1300
+
+- seed_id: it_shitsurei
+  type: expression
+  lemma: 失礼します
+  reading: しつれいします
+  default_meaning: 실례합니다
+  difficulty_label: beginner
+  topic_tags: [daily, work]
+  frequency_rank: 1310
+
+- seed_id: it_kotogaaru
+  type: grammar
+  lemma: 〜ことがある
+  reading: ことがある
+  default_meaning: ~한 적이 있다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1320
+
+- seed_id: it_kotonisuru
+  type: grammar
+  lemma: 〜ことにする
+  reading: ことにする
+  default_meaning: ~하기로 하다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1330
+
+- seed_id: it_yasui
+  type: grammar
+  lemma: 〜やすい
+  reading: やすい
+  default_meaning: ~하기 쉽다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1340
+
+- seed_id: it_bayokatta
+  type: grammar
+  lemma: 〜ばよかった
+  reading: ばよかった
+  default_meaning: ~할 걸 그랬다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1350
+
+- seed_id: it_tewaikenai
+  type: grammar
+  lemma: 〜てはいけない
+  reading: てはいけない
+  default_meaning: ~하면 안 된다
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1360
+
+- seed_id: it_shi
+  type: grammar
+  lemma: 〜し
+  reading: し
+  default_meaning: ~하고, ~해서
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1370
+
+- seed_id: it_deshou
+  type: grammar
+  lemma: 〜でしょう
+  reading: でしょう
+  default_meaning: ~겠지; ~죠?
+  difficulty_label: beginner
+  topic_tags: [grammar]
+  frequency_rank: 1380
+
+- seed_id: it_yakusoku
+  type: word
+  lemma: 約束
+  reading: やくそく
+  default_meaning: 약속(지키기로 한 것)
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1390
+
+- seed_id: it_youji
+  type: word
+  lemma: 用事
+  reading: ようじ
+  default_meaning: 볼일
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1400
+
+- seed_id: it_jama
+  type: word
+  lemma: 邪魔
+  reading: じゃま
+  default_meaning: 방해
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1410
+
+- seed_id: it_kenka
+  type: word
+  lemma: 喧嘩する
+  reading: けんかする
+  default_meaning: 싸우다, 다투다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1420
+
+- seed_id: it_nomikai
+  type: word
+  lemma: 飲み会
+  reading: のみかい
+  default_meaning: 술자리, 회식
+  difficulty_label: beginner
+  topic_tags: [work, daily]
+  frequency_rank: 1430
+
+- seed_id: it_zangyou
+  type: word
+  lemma: 残業
+  reading: ざんぎょう
+  default_meaning: 야근, 잔업
+  difficulty_label: beginner
+  topic_tags: [work]
+  frequency_rank: 1440
+
+- seed_id: it_shimekiri
+  type: word
+  lemma: 締め切り
+  reading: しめきり
+  default_meaning: 마감
+  difficulty_label: beginner
+  topic_tags: [work]
+  frequency_rank: 1450
+
+- seed_id: it_kakunin
+  type: word
+  lemma: 確認する
+  reading: かくにんする
+  default_meaning: 확인하다
+  difficulty_label: beginner
+  topic_tags: [work]
+  frequency_rank: 1460
+
+- seed_id: it_machigaeru
+  type: word
+  lemma: 間違える
+  reading: まちがえる
+  default_meaning: 잘못하다, 착각하다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1470
+
+- seed_id: it_kawaru
+  type: word
+  lemma: 変わる
+  reading: かわる
+  default_meaning: 바뀌다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1480
+
+- seed_id: it_kimochiii
+  type: expression
+  lemma: 気持ちいい
+  reading: きもちいい
+  default_meaning: 기분 좋다(감각)
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1490
+
+- seed_id: it_daitai
+  type: word
+  lemma: 大体
+  reading: だいたい
+  default_meaning: 대강; 애초에
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1500
+
+- seed_id: it_nanka
+  type: word
+  lemma: なんか
+  reading: なんか
+  default_meaning: 뭔가, 좀
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1510
+
+- seed_id: it_yatto
+  type: word
+  lemma: やっと
+  reading: やっと
+  default_meaning: 겨우, 드디어
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1520
+
+- seed_id: it_tsukiau
+  type: word
+  lemma: 付き合う
+  reading: つきあう
+  default_meaning: 사귀다; 같이 가 주다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1530
+
+- seed_id: it_ochitsuku
+  type: word
+  lemma: 落ち着く
+  reading: おちつく
+  default_meaning: 진정되다; 마음이 편하다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1540
+
+- seed_id: it_yoru
+  type: word
+  lemma: 寄る
+  reading: よる
+  default_meaning: 들르다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1550
+
+- seed_id: it_okiru
+  type: word
+  lemma: 起きる
+  reading: おきる
+  default_meaning: 일어나다; 깨어 있다
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1560
+
+- seed_id: it_bikkuri
+  type: word
+  lemma: びっくりする
+  reading: びっくりする
+  default_meaning: 깜짝 놀라다
+  difficulty_label: beginner
+  topic_tags: [emotion]
+  frequency_rank: 1570
+
+- seed_id: it_yabai
+  type: word
+  lemma: やばい
+  reading: やばい
+  default_meaning: 큰일이다; 대박
+  difficulty_label: beginner
+  topic_tags: [daily]
+  frequency_rank: 1580
+
+- seed_id: it_kiwotsukau
+  type: expression
+  lemma: 気を使う
+  reading: きをつかう
+  default_meaning: 신경 써 주다, 배려하다
+  difficulty_label: intermediate
+  topic_tags: [daily]
+  frequency_rank: 1590
+
+- seed_id: it_aikawarazu
+  type: word
+  lemma: 相変わらず
+  reading: あいかわらず
+  default_meaning: 여전히
+  difficulty_label: intermediate
+  topic_tags: [daily]
+  frequency_rank: 1600
+
+- seed_id: it_douse
+  type: word
+  lemma: どうせ
+  reading: どうせ
+  default_meaning: 어차피
+  difficulty_label: intermediate
+  topic_tags: [emotion]
+  frequency_rank: 1610
+
+- seed_id: it_hazu
+  type: grammar
+  lemma: 〜はず
+  reading: はず
+  default_meaning: ~일 텐데, ~할 것이다
+  difficulty_label: intermediate
+  topic_tags: [grammar]
+  frequency_rank: 1620
+
+- seed_id: it_rashii
+  type: grammar
+  lemma: 〜らしい
+  reading: らしい
+  default_meaning: ~라고 한다; ~답다
+  difficulty_label: intermediate
+  topic_tags: [grammar]
+  frequency_rank: 1630
+
+- seed_id: it_bakari
+  type: grammar
+  lemma: 〜ばかり
+  reading: ばかり
+  default_meaning: ~만; 막 ~했다
+  difficulty_label: intermediate
+  topic_tags: [grammar]
+  frequency_rank: 1640
+
+- seed_id: it_tokoro
+  type: grammar
+  lemma: 〜ところ
+  reading: ところ
+  default_meaning: ~하려던 참, ~하는 중
+  difficulty_label: intermediate
+  topic_tags: [grammar]
+  frequency_rank: 1650
+
+- seed_id: it_wakejanai
+  type: grammar
+  lemma: 〜わけじゃない
+  reading: わけじゃない
+  default_meaning: ~인 건 아니다
+  difficulty_label: intermediate
+  topic_tags: [grammar]
+  frequency_rank: 1660
+
+- seed_id: it_younisuru
+  type: grammar
+  lemma: 〜ようにする
+  reading: ようにする
+  default_meaning: ~하도록 하다
+  difficulty_label: intermediate
+  topic_tags: [grammar]
+  frequency_rank: 1670
+
+- seed_id: it_tondemonai
+  type: expression
+  lemma: とんでもない
+  reading: とんでもない
+  default_meaning: 천만에요; 터무니없다
+  difficulty_label: intermediate
+  topic_tags: [daily]
+  frequency_rank: 1680
+
+- seed_id: it_osewa
+  type: expression
+  lemma: お世話になる
+  reading: おせわになる
+  default_meaning: 신세를 지다
+  difficulty_label: intermediate
+  topic_tags: [work]
+  frequency_rank: 1690
+
+- seed_id: it_haragatatsu
+  type: expression
+  lemma: 腹が立つ
+  reading: はらがたつ
+  default_meaning: 화가 나다
+  difficulty_label: intermediate
+  topic_tags: [emotion]
+  frequency_rank: 1700
+
+- seed_id: it_guchi
+  type: word
+  lemma: 愚痴
+  reading: ぐち
+  default_meaning: 푸념
+  difficulty_label: intermediate
+  topic_tags: [emotion]
+  frequency_rank: 1710
+
+- seed_id: it_muchuu
+  type: word
+  lemma: 夢中
+  reading: むちゅう
+  default_meaning: 푹 빠짐
+  difficulty_label: intermediate
+  topic_tags: [emotion]
+  frequency_rank: 1720
+
+- seed_id: it_monku
+  type: word
+  lemma: 文句
+  reading: もんく
+  default_meaning: 불평, 트집
+  difficulty_label: intermediate
+  topic_tags: [daily]
+  frequency_rank: 1730
+
+- seed_id: it_igaito
+  type: word
+  lemma: 意外と
+  reading: いがいと
+  default_meaning: 의외로
+  difficulty_label: intermediate
+  topic_tags: [daily]
+  frequency_rank: 1740
+
+- seed_id: it_ochikomu
+  type: word
+  lemma: 落ち込む
+  reading: おちこむ
+  default_meaning: 기운이 빠지다, 우울해하다
+  difficulty_label: intermediate
+  topic_tags: [emotion]
+  frequency_rank: 1750
+
+- seed_id: it_semete
+  type: word
+  lemma: せめて
+  reading: せめて
+  default_meaning: 적어도, 하다못해
+  difficulty_label: intermediate
+  topic_tags: [daily]
+  frequency_rank: 1760
+
+- seed_id: it_sassoku
+  type: word
+  lemma: 早速
+  reading: さっそく
+  default_meaning: 즉시, 바로
+  difficulty_label: intermediate
+  topic_tags: [daily, work]
+  frequency_rank: 1770
