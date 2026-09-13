@@ -199,10 +199,15 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
       sheetContainer: screen,
     })
     interactions = handle
+    // 힌트는 어느 표현이 학습 대상인지 암시하지 않는다(03_UI_UX_SPEC.md의 `tappable span 표시`).
+    const hint = document.createElement('p')
+    hint.className = 'sentence-hint'
+    hint.textContent = '모르는 표현을 눌러 보세요.'
     sentenceSlot.replaceChildren(
       renderSentence(next.render_segments, (sentenceItemId) => {
         handle.tapItem(sentenceItemId)
       }),
+      hint,
     )
     interactionSlot.replaceChildren(handle.element)
     nextButton.disabled = false

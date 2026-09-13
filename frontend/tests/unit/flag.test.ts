@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { FLAG_NOTE_MAX_LENGTH, FLAG_REASONS, renderFlagControl } from '../../src/ui/flag'
+import { FLAG_NOTE_MAX_LENGTH, FLAG_REASONS, FLAG_SUBMITTED_TEXT, renderFlagControl } from '../../src/ui/flag'
 import type { ContentFlagReason } from '../../src/types'
+import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
 import { buttons, byClass, fakeDocument, flatText } from './fake-dom'
 
@@ -36,6 +37,7 @@ function render(overrides: Overrides = {}): FakeElement {
   return renderFlagControl({
     open: overrides.open ?? false,
     submitted: overrides.submitted ?? false,
+    submittedText: FLAG_SUBMITTED_TEXT,
     note: overrides.note ?? '',
     failure: overrides.failure ?? null,
     onOpen: () => {},
@@ -124,16 +126,44 @@ describe('renderFlagControl', () => {
     const done = render({ submitted: true })
     const text = flatText(done)
 
-    expect(text).toContain('학습에 사용되지 않습니다')
+    expect(text).toBe(` ${FLAG_SUBMITTED_TEXT}`)
+    expect(text).toContain('이제 나오지 않아요')
     expect(text).toContain('다음 문장')
     // 같은 문장을 두 번 신고하는 자리를 남기지 않는다.
     expect(buttons(done)).toEqual([])
   })
 
   it('shows a failure instead of pretending the flag was filed', () => {
-    const failed = render({ open: true, failure: '저장하지 못했습니다. 다시 시도해 주세요.' })
+    const failed = render({ open: true, failure: MESSAGES.saveFailed })
 
-    expect(flatText(failed)).toContain('저장하지 못했습니다')
-    expect(flatText(failed)).not.toContain('학습에 사용되지 않습니다')
+    expect(flatText(failed)).toContain(MESSAGES.saveFailed)
+    expect(flatText(failed)).not.toContain(FLAG_SUBMITTED_TEXT)
+  })
+})
+
+describe('flag wording', () => {
+  it('uses the confirmed labels in the backend enum order', () => {
+    expect(FLAG_REASONS.map((reason) => reason.label)).toEqual([
+      '어색해요',
+      '틀린 내용이 있어요',
+      '너무 쉬워요',
+      '너무 어려워요',
+      '기타',
+    ])
+  })
+
+  it('opens, asks and labels the note in the confirmed wording', () => {
+    expect(byClass(render(), 'flag-open')[0]!.textContent).toBe('이 문장 신고하기')
+
+    const open = render({ open: true })
+    expect(byClass(open, 'flag-title')[0]!.textContent).toBe('어떤 점이 아쉬웠나요?')
+    expect(flatText(open)).toContain('더 알려 주실 내용 (선택)')
+    expect(byClass(open, 'flag-cancel')[0]!.textContent).toBe('취소')
+  })
+
+  it('keeps the quarantine fact in the submitted text', () => {
+    expect(FLAG_SUBMITTED_TEXT).toBe(
+      "알려 주셔서 고마워요. 이 문장은 이제 나오지 않아요. '다음 문장'으로 계속할 수 있어요.",
+    )
   })
 })

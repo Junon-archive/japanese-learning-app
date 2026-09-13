@@ -15,12 +15,19 @@ import type { ContentFlagReason } from '../types'
 
 /** `backend/app/models/enums.py`의 `ContentFlagReason`. 선언 순서가 표시 순서다. */
 export const FLAG_REASONS: readonly { value: ContentFlagReason; label: string }[] = [
-  { value: 'unnatural', label: '자연스럽지 않다' },
-  { value: 'wrong', label: '틀렸다' },
-  { value: 'too_easy', label: '너무 쉽다' },
-  { value: 'too_hard', label: '너무 어렵다' },
+  { value: 'unnatural', label: '어색해요' },
+  { value: 'wrong', label: '틀린 내용이 있어요' },
+  { value: 'too_easy', label: '너무 쉬워요' },
+  { value: 'too_hard', label: '너무 어려워요' },
   { value: 'other', label: '기타' },
 ]
+
+/**
+ * 학습 화면의 신고 접수 안내. 무엇이 일어났고("앞으로 학습에 쓰지 않는다") 다음에 무엇을 하면 되는지
+ * 한 번에 적는다.
+ */
+export const FLAG_SUBMITTED_TEXT =
+  "알려 주셔서 고마워요. 이 문장은 이제 나오지 않아요. '다음 문장'으로 계속할 수 있어요."
 
 /** `backend/app/schemas/study.py`의 `FLAG_NOTE_MAX_LENGTH`. 넘기면 422다. */
 export const FLAG_NOTE_MAX_LENGTH = 500
@@ -30,6 +37,8 @@ export type FlagControlOptions = {
   open: boolean
   /** 이미 신고했다. 같은 문장을 두 번 신고하는 자리를 남기지 않는다. */
   submitted: boolean
+  /** 신고 뒤 안내. 학습 화면은 `FLAG_SUBMITTED_TEXT`, demo는 저장되지 않는다는 안내다. */
+  submittedText: string
   /** 다시 그려도 남아 있어야 하는 입력값. */
   note: string
   failure: string | null
@@ -49,8 +58,7 @@ export function renderFlagControl(options: FlagControlOptions): HTMLElement {
     const done = document.createElement('p')
     done.className = 'flag-done'
     done.setAttribute('role', 'status')
-    done.textContent =
-      '신고를 접수했습니다. 이 문장은 앞으로 학습에 사용되지 않습니다. 아래 ‘다음 문장’으로 계속할 수 있습니다.'
+    done.textContent = options.submittedText
     box.append(done)
     return box
   }
@@ -59,7 +67,7 @@ export function renderFlagControl(options: FlagControlOptions): HTMLElement {
     const open = document.createElement('button')
     open.type = 'button'
     open.className = 'flag-open'
-    open.textContent = '이 문장 신고'
+    open.textContent = '이 문장 신고하기'
     open.addEventListener('click', options.onOpen)
     box.append(open)
     if (options.failure !== null) box.append(failureLine(options.failure))
@@ -68,11 +76,11 @@ export function renderFlagControl(options: FlagControlOptions): HTMLElement {
 
   const title = document.createElement('p')
   title.className = 'flag-title'
-  title.textContent = '어떤 점이 문제였나요?'
+  title.textContent = '어떤 점이 아쉬웠나요?'
 
   const noteField = document.createElement('label')
   noteField.className = 'flag-note-field'
-  noteField.textContent = '덧붙일 말 (선택)'
+  noteField.textContent = '더 알려 주실 내용 (선택)'
 
   const note = document.createElement('textarea')
   note.className = 'flag-note'

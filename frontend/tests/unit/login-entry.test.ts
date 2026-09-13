@@ -183,6 +183,24 @@ describe('login entry result', () => {
       'GET /api/auth/me': async () => json(200, USER),
       'POST /api/study/session': async () =>
         json(200, { session: SESSION, resumed: true, timed_out_session_id: null }),
+      'POST /api/study/session/7/next': async () =>
+        json(200, {
+          presentation: {
+            presentation_id: 11,
+            sentence_id: 3,
+            japanese: '気が乗らない。',
+            render_segments: [
+              { text: '気が乗らない', sentence_item_id: 21 },
+              { text: '。', sentence_item_id: null },
+            ],
+            presentation_role: 'new',
+            review_reason: null,
+            context_stage: 'anchor',
+            translation_revealed: false,
+            tappable_items: [{ sentence_item_id: 21, learning_item_id: 5 }],
+            probe: null,
+          },
+        }),
     })
 
     loginButton().click()
@@ -197,6 +215,8 @@ describe('login entry result', () => {
     // 안내는 오류가 아니다. 화면 안에 인라인 안내로 남기지 않는다.
     expect(flatText(byClass(root, 'notice-slot')[0]!)).not.toContain(MESSAGES.sessionResumed)
     expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session', 'POST /api/study/session/7/next'])
+    // 문장 아래 힌트. 어느 표현이 학습 대상인지 암시하지 않는다.
+    expect(flatText(byClass(root, 'sentence-box')[0]!)).toContain('모르는 표현을 눌러 보세요.')
   })
 
   it('keeps the app name usable while the study screen waits, and closes no session on the way home', async () => {

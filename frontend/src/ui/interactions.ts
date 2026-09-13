@@ -31,7 +31,7 @@
 
 import type { ContentFlagReason, ExplicitSignal, Explanation, Presentation } from '../types'
 import { renderExplanationPanel } from './explanation'
-import { renderFlagControl } from './flag'
+import { FLAG_SUBMITTED_TEXT, renderFlagControl } from './flag'
 import { renderProbe } from './probe'
 import type { SheetHandle } from './sheet'
 import { openSheet } from './sheet'
@@ -70,8 +70,8 @@ export type InteractionsHandle = {
   refresh: () => void
 }
 
-const ALREADY_RECORDED = '이미 기록했습니다.'
-const TRANSLATION_FAILED = '문장 뜻을 표시하지 못했습니다.'
+const ALREADY_RECORDED = '이미 기록했어요.'
+const TRANSLATION_FAILED = '문장 뜻을 불러오지 못했어요. 다시 눌러 주세요.'
 const EXPLANATION_SHEET_TITLE = '표현 설명'
 
 export type InteractionsOptions = {
@@ -82,6 +82,8 @@ export type InteractionsOptions = {
   signal: AbortSignal
   /** 설명 시트를 붙일 화면 요소. 화면이 떼어지면 시트도 함께 사라진다. */
   sheetContainer: HTMLElement
+  /** 신고 뒤 안내. 없으면 학습 화면의 접수 안내다. demo는 저장되지 않는다는 안내를 넘긴다. */
+  flagSubmittedText?: string
 }
 
 type ItemState = {
@@ -151,6 +153,7 @@ export function createInteractions(
       renderFlagControl({
         open: flagOpen,
         submitted: flagSubmitted,
+        submittedText: options.flagSubmittedText ?? FLAG_SUBMITTED_TEXT,
         note: flagNote,
         failure: flagFailure,
         onOpen: () => {
@@ -366,7 +369,7 @@ export function createInteractions(
       (failure) => {
         const text = failureText(failure)
         // 성공처럼 보이게 하지 않는다. 버튼은 남아 있어 사용자가 다시 누를 수 있다.
-        translationFailure = text === null ? null : `${TRANSLATION_FAILED} ${text}`
+        translationFailure = text === null ? null : TRANSLATION_FAILED
       },
     )
   }

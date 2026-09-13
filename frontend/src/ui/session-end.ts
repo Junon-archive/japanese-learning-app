@@ -24,7 +24,7 @@ export function renderSessionEndChoice(actions: SessionEndActions): HTMLElement 
 
   const text = document.createElement('p')
   text.className = 'session-end-text'
-  text.textContent = '오늘 목표한 학습 시간을 채웠습니다.'
+  text.textContent = '오늘 목표한 시간을 채웠어요.'
 
   const finish = document.createElement('button')
   finish.type = 'button'
@@ -55,7 +55,7 @@ export function renderSessionFinished(session: StudySession): HTMLElement {
 
   const title = document.createElement('h1')
   title.className = 'session-finished-title'
-  title.textContent = '오늘 학습을 마쳤습니다.'
+  title.textContent = '오늘 학습을 마쳤어요.'
 
   const summary = document.createElement('p')
   summary.className = 'session-finished-summary'

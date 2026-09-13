@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SELF_REPORT_CHOICES, itemTypeLabel, renderExplanationPanel } from '../../src/ui/explanation'
 import type { ExplicitSignal, Explanation } from '../../src/types'
+import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
 import { buttons, byClass, fakeDocument, flatText } from './fake-dom'
 
@@ -132,20 +133,20 @@ describe('renderExplanationPanel', () => {
     const panel = render({ reported: 'uncertain' })
 
     expect(buttons(panel).filter((b) => b.className === 'self-report')).toEqual([])
-    expect(flatText(panel)).toContain('애매함')
+    expect(flatText(panel)).toContain('기록했어요 · 애매함')
   })
 
   it('locks the buttons away when the server already has evidence', () => {
     const panel = render({ alreadyRecorded: true })
 
     expect(buttons(panel).filter((b) => b.className === 'self-report')).toEqual([])
-    expect(flatText(panel)).toContain('이미 기록했습니다')
+    expect(flatText(panel)).toContain('이 문장에서는 이미 기록했어요.')
   })
 
   it('shows a failure without pretending the report was saved', () => {
-    const panel = render({ failure: '저장하지 못했습니다. 다시 시도해 주세요.' })
+    const panel = render({ failure: MESSAGES.saveFailed })
 
-    expect(flatText(panel)).toContain('저장하지 못했습니다')
+    expect(flatText(panel)).toContain(MESSAGES.saveFailed)
     // 실패했으므로 버튼은 그대로 있다 --- 잠그면 사용자가 다시 시도할 수 없다.
     expect(buttons(panel).filter((b) => b.className === 'self-report')).toHaveLength(3)
   })
@@ -153,5 +154,21 @@ describe('renderExplanationPanel', () => {
   it('has no audio control', () => {
     // MVP에 audio가 없다(00_SCOPE.md). 듣기 버튼을 만들지 않는다.
     expect(flatText(render())).not.toMatch(/듣기|🔊/)
+  })
+})
+
+describe('explanation wording', () => {
+  it('names the fields and asks the optional self-report question', () => {
+    const panel = render()
+
+    expect(byClass(panel, 'explain-label').map((label) => label.textContent)).toEqual([
+      '뜻',
+      '이 문장에서',
+      '느낌',
+      '예문',
+    ])
+    expect(flatText(panel)).toContain('이 표현, 알고 있었나요?')
+    expect(flatText(panel)).toContain('고르지 않아도 괜찮아요.')
+    expect(panel.getAttribute('aria-label')).toBe('표현 설명')
   })
 })

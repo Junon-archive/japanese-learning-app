@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderSessionEndChoice } from '../../src/ui/session-end'
+import { renderSessionEndChoice, renderSessionFinished } from '../../src/ui/session-end'
 import type { FakeElement } from './fake-dom'
 import { fakeDocument } from './fake-dom'
 
@@ -68,5 +68,27 @@ describe('renderSessionEndChoice', () => {
     buttons(choice)[1]?.click()
 
     expect(finished).toEqual(['finish', 'extend'])
+  })
+})
+
+describe('session end wording', () => {
+  it('says the goal time is reached', () => {
+    const choice = renderSessionEndChoice({ onFinish: () => {}, onExtend: () => {} }) as unknown as FakeElement
+
+    expect(choice.children[0]!.textContent).toBe('오늘 목표한 시간을 채웠어요.')
+  })
+
+  it('ends with one line of completion and one line of study time', () => {
+    const finished = renderSessionFinished({
+      session_id: 1,
+      started_at: '2026-09-13T09:00:00Z',
+      last_activity_at: '2026-09-13T09:12:00Z',
+      ended_at: '2026-09-13T09:12:00Z',
+      active_seconds: 725,
+      target_minutes: 12,
+      extended_minutes: 0,
+    }) as unknown as FakeElement
+
+    expect(finished.children.map((child) => child.textContent)).toEqual(['오늘 학습을 마쳤어요.', '학습 시간 12분'])
   })
 })

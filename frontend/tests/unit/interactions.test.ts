@@ -16,6 +16,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { FLAG_SUBMITTED_TEXT } from '../../src/ui/flag'
 import { createInteractions } from '../../src/ui/interactions'
 import type { InteractionFailure, InteractionOps } from '../../src/ui/interactions'
 import type { Explanation, Presentation } from '../../src/types'
@@ -200,7 +201,7 @@ describe('translation reveal', () => {
     await flush()
 
     expect(byClass(element, 'translation')).toEqual([])
-    expect(text()).toContain('문장 뜻을 표시하지 못했습니다')
+    expect(text()).toContain('문장 뜻을 불러오지 못했어요. 다시 눌러 주세요.')
     // 버튼이 남아 있어 사용자가 다시 누를 수 있다. 무한 spinner를 만들지 않는다.
     expect(byClass(element, 'reveal-translation')).toHaveLength(1)
   })
@@ -394,7 +395,7 @@ describe('self-report', () => {
 
     expect(calls).toEqual(['click:5512', 'revealed:5512', 'self-report:5512:uncertain'])
     expect(byClass(element, 'self-report')).toEqual([])
-    expect(text()).toContain('기록했습니다')
+    expect(text()).toContain('기록했어요 · 애매함')
   })
 
   it('survives a refresh that re-enables every button', async () => {
@@ -421,7 +422,7 @@ describe('self-report', () => {
     await flush()
 
     expect(calls).toEqual(['click:5512', 'revealed:5512', 'self-report:5512:known'])
-    expect(text()).toContain('이미 기록했습니다')
+    expect(text()).toContain('이미 기록했어요')
     // 어떤 재시도도 성공하지 못한다(ADR-018). 버튼을 다시 주지 않는다.
     expect(byClass(element, 'self-report')).toEqual([])
   })
@@ -471,7 +472,7 @@ describe('probe', () => {
     await flush()
 
     expect(calls).toEqual(['probe:318:skip'])
-    expect(text()).toContain('건너뛰었습니다')
+    expect(text()).toContain('건너뛰었어요.')
     // 건너뛴 뒤에도 문장 상호작용은 그대로 열려 있다.
     expect(byClass(element, 'reveal-translation')).toHaveLength(1)
   })
@@ -487,8 +488,8 @@ describe('probe', () => {
 
     expect(calls).toEqual(['probe:318:known'])
     expect(byClass(element, 'probe-option')).toEqual([])
-    expect(text()).toContain('이미 기록했습니다')
-    expect(text()).not.toContain('기록했습니다: 알고 있었음')
+    expect(text()).toContain('이미 기록했어요')
+    expect(text()).not.toContain('기록했어요 · 알고 있었음')
   })
 
   it('answers once even on a double tap', async () => {
@@ -525,7 +526,7 @@ describe('content flag', () => {
     await flush()
 
     expect(calls).toEqual(['flag:wrong:앞뒤가 이어지지 않는다'])
-    expect(text()).toContain('학습에 사용되지 않습니다')
+    expect(text()).toContain(FLAG_SUBMITTED_TEXT)
     expect(byClass(element, 'flag-reason')).toEqual([])
   })
 

@@ -329,6 +329,33 @@ button.flag-reason {
   color: var(--muted);
 }
 
+.explain-block {
+  display: grid;
+  gap: 2px;
+}
+
+.explain-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feedback .feedback-question,
+.feedback .feedback-optional,
+.feedback .feedback-done {
+  flex-basis: 100%;
+}
+
+.feedback .feedback-question {
+  font-weight: 700;
+}
+
+.feedback .feedback-optional {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 button.flag-open,
 button.flag-cancel {
   min-height: 40px;
@@ -346,6 +373,12 @@ button.flag-cancel {
   padding: 14px;
   border: 1px dashed var(--line);
   border-radius: var(--radius);
+}
+
+.probe-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .probe-prompt {
@@ -416,6 +449,17 @@ button.flag-cancel {
 }
 
 /* --- 데모 배너 --------------------------------------------------------- */
+
+.demo-title {
+  margin: 8px 0 0;
+  font-size: 20px;
+}
+
+.sentence-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
 
 .demo-banner {
   display: flex;

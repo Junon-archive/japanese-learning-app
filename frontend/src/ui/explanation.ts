@@ -52,6 +52,29 @@ export type ExplanationPanelOptions = {
   onSelfReport: (value: ExplicitSignal) => void
 }
 
+/** 설명 칸 이름(03_UI_UX_SPEC.md의 화면 문구 표). 값은 서버 값이다. */
+const FIELD_LABELS = {
+  meaning: '뜻',
+  context: '이 문장에서',
+  nuance: '느낌',
+  example: '예문',
+} as const
+
+const SELF_REPORT_QUESTION = '이 표현, 알고 있었나요?'
+/** self-report는 진행을 막지 않는다. */
+const SELF_REPORT_OPTIONAL = '고르지 않아도 괜찮아요.'
+
+/** 칸 하나: 이름과 값들. */
+function block(label: string, values: HTMLElement[]): HTMLElement {
+  const box = document.createElement('div')
+  box.className = 'explain-block'
+  const name = document.createElement('h3')
+  name.className = 'explain-label'
+  name.textContent = label
+  box.append(name, ...values)
+  return box
+}
+
 function line(className: string, text: string, lang?: string): HTMLElement {
   const node = document.createElement('p')
   node.className = className
@@ -94,23 +117,29 @@ export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLEl
   head.append(words, tag)
   panel.append(head)
 
-  panel.append(line('meaning', explanation.core_meaning))
-  panel.append(line('meaning-context', explanation.meaning_in_context))
-  panel.append(line('nuance', explanation.nuance))
-  panel.append(line('example', explanation.example_sentence, 'ja'))
-  if (explanation.example_translation !== null) {
-    panel.append(line('example-translation', explanation.example_translation))
-  }
+  panel.append(block(FIELD_LABELS.meaning, [line('meaning', explanation.core_meaning)]))
+  panel.append(block(FIELD_LABELS.context, [line('meaning-context', explanation.meaning_in_context)]))
+  panel.append(block(FIELD_LABELS.nuance, [line('nuance', explanation.nuance)]))
+  panel.append(
+    block(FIELD_LABELS.example, [
+      line('example', explanation.example_sentence, 'ja'),
+      ...(explanation.example_translation === null
+        ? []
+        : [line('example-translation', explanation.example_translation)]),
+    ]),
+  )
 
   const feedback = document.createElement('div')
   feedback.className = 'feedback'
+  feedback.append(line('feedback-question', SELF_REPORT_QUESTION))
   if (options.reported !== null) {
     const label = SELF_REPORT_CHOICES.find((choice) => choice.value === options.reported)?.label
-    feedback.append(line('feedback-done', `기록했습니다: ${label ?? options.reported}`))
+    feedback.append(line('feedback-done', `기록했어요 · ${label ?? options.reported}`))
   } else if (options.alreadyRecorded) {
     // 어떤 재시도도 성공하지 못한다(ADR-018). 버튼을 다시 주지 않는다.
-    feedback.append(line('feedback-done', '이 문장에서는 이미 기록했습니다.'))
+    feedback.append(line('feedback-done', '이 문장에서는 이미 기록했어요.'))
   } else {
+    feedback.append(line('feedback-optional', SELF_REPORT_OPTIONAL))
     for (const choice of SELF_REPORT_CHOICES) {
       const button = document.createElement('button')
       button.type = 'button'

@@ -39,7 +39,10 @@ import {
 
 /** demo 전용 문구. 실제 화면 문구(`ui/notice.ts`의 `MESSAGES`)와 섞지 않는다. */
 const DEMO_MESSAGES = {
-  banner: '데모 모드입니다. 실제 계정이 아니며 학습 기록은 저장되지 않습니다.',
+  title: '표현 학습 체험',
+  banner: '체험 중이에요. 기록은 이 브라우저에만 남아요.',
+  /** demo 전용. 요청을 보내지 않으므로 신고가 저장되지 않는다. */
+  flagSubmitted: '체험에서는 신고가 저장되지 않아요.',
   lastSentence: '데모 문장을 모두 보았습니다.',
   restart: '처음부터 다시 보기',
   restarted: '데모 문장을 처음부터 다시 보여줍니다.',
@@ -60,6 +63,10 @@ export function mount(ctx: PublicScreenContext): void {
     onLogin: ctx.openLogin,
     actions: [],
   })
+
+  const title = document.createElement('h1')
+  title.className = 'demo-title'
+  title.textContent = DEMO_MESSAGES.title
 
   const banner = document.createElement('div')
   banner.className = 'demo-banner'
@@ -95,7 +102,7 @@ export function mount(ctx: PublicScreenContext): void {
   foot.className = 'study-foot'
   foot.append(nextButton)
 
-  screen.append(topBar, banner, progressSlot, noticeSlot, sentenceSlot, interactionSlot, endSlot, foot)
+  screen.append(topBar, title, banner, progressSlot, noticeSlot, sentenceSlot, interactionSlot, endSlot, foot)
   showScreen(ctx.root, screen, ctx.signal)
 
   // ----------------------------------------------------------------------
@@ -180,6 +187,7 @@ export function mount(ctx: PublicScreenContext): void {
     const handle = createInteractions(entry.presentation, demoOps(entry), {
       signal: ctx.signal,
       sheetContainer: screen,
+      flagSubmittedText: DEMO_MESSAGES.flagSubmitted,
     })
     sentenceSlot.replaceChildren(
       renderSentence(entry.presentation.render_segments, (sentenceItemId) => {
@@ -211,7 +219,7 @@ export function mount(ctx: PublicScreenContext): void {
   }
 
   function finish(): void {
-    screen.replaceChildren(topBar, banner, renderSessionFinished(session))
+    screen.replaceChildren(topBar, title, banner, renderSessionFinished(session))
   }
 
   function extend(): void {

@@ -67,6 +67,11 @@ describe('login form', () => {
     expect(inputs().map((input) => input.type)).toEqual(['text', 'password'])
     expect(buttons(form).map((button) => button.textContent)).toEqual(['로그인'])
     expect(byClass(root, 'demo-enter')).toEqual([])
+    expect(root.children[0]!.querySelector('h1')!.textContent).toBe('로그인')
+    expect(descendants(root).filter((node) => node.tagName === 'LABEL').map((label) => label.textContent)).toEqual([
+      '아이디',
+      '비밀번호',
+    ])
     expect(flatText(root)).not.toMatch(/데모|체험|회원가입|비밀번호 재설정|비밀번호 찾기/)
   })
 

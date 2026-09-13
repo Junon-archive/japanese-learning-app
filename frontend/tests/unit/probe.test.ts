@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROBE_LABELS, renderProbe } from '../../src/ui/probe'
 import type { Probe, ProbeResponseValue } from '../../src/types'
 import type { FakeElement } from './fake-dom'
-import { buttons, fakeDocument, flatText } from './fake-dom'
+import { buttons, byClass, fakeDocument, flatText } from './fake-dom'
 
 /** 서버 선언 순서는 `known, uncertain, unknown, skip`이다. 여기서는 섞여 있다. */
 const SHUFFLED_OPTIONS: ProbeResponseValue[] = ['skip', 'unknown', 'known', 'uncertain']
@@ -115,15 +115,28 @@ describe('renderProbe', () => {
     const node = render(PROBE, null, true)
 
     expect(optionLabels(node)).toEqual([])
-    expect(flatText(node)).toContain('이미 기록했습니다')
+    expect(flatText(node)).toContain('이미 기록했어요.')
     expect(flatText(node)).not.toContain('알고 있었음')
   })
 
   it('does not call a skip an answer', () => {
-    // skip은 evidence가 아니다. "기록했습니다"로 적으면 거짓이다.
+    // skip은 evidence가 아니다. "기록했어요"로 적으면 거짓이다.
     const node = render(PROBE, 'skip')
 
-    expect(flatText(node)).toContain('건너뛰었습니다')
-    expect(flatText(node)).not.toContain('기록했습니다')
+    expect(flatText(node)).toContain('건너뛰었어요.')
+    expect(flatText(node)).not.toContain('기록했어요')
+  })
+})
+
+describe('probe wording', () => {
+  it('has a small eyebrow and the fixed labels', () => {
+    const node = render(PROBE, null)
+
+    expect(byClass(node, 'probe-eyebrow')[0]!.textContent).toBe('잠깐 확인해요')
+    expect(node.getAttribute('aria-label')).toBe('이해도 확인')
+  })
+
+  it('says what was recorded with the chosen label', () => {
+    expect(flatText(render(PROBE, 'unknown'))).toContain('기록했어요 · 몰랐음')
   })
 })

@@ -34,7 +34,7 @@ export function mountLogin(root: HTMLElement, signal: AbortSignal, actions: Logi
 
   const title = document.createElement('h1')
   title.className = 'login-title'
-  title.textContent = 'Nihongo Context'
+  title.textContent = '로그인'
 
   const form = document.createElement('form')
   form.className = 'login-form'

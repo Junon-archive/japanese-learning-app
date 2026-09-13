@@ -194,7 +194,7 @@ describe('demo run', () => {
     // 6. probe는 언제나 건너뛸 수 있고 즉시 지나간다.
     click('probe-option', 3)
     await flush()
-    expect(text()).toContain('건너뛰었습니다')
+    expect(text()).toContain('건너뛰었어요.')
     expect(byClass(root, 'probe-option')).toEqual([])
 
     // 7. 다음 문장 -> 같은 표현이 새 문맥으로 돌아온다.
@@ -211,7 +211,7 @@ describe('demo run', () => {
 
     // 9. 종료.
     click('primary')
-    expect(text()).toContain('오늘 학습을 마쳤습니다')
+    expect(text()).toContain('오늘 학습을 마쳤어요.')
 
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -221,7 +221,9 @@ describe('demo run', () => {
     click('flag-reason', 0)
     await flush()
 
-    expect(text()).toContain('학습에 사용되지 않습니다')
+    // demo 전용 안내. 요청을 보내지 않으므로 저장됐다고 말하지 않는다.
+    expect(text()).toContain('체험에서는 신고가 저장되지 않아요.')
+    expect(text()).not.toContain('이제 나오지 않아요')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -279,7 +281,7 @@ describe('demo run', () => {
   })
 
   it('says it is a demo', () => {
-    expect(text()).toContain('데모')
-    expect(text()).toContain('저장되지 않습니다')
+    expect(root.children[0]!.querySelector('h1')!.textContent).toBe('표현 학습 체험')
+    expect(text()).toContain('체험 중이에요. 기록은 이 브라우저에만 남아요.')
   })
 })

@@ -9,6 +9,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, apiGet, apiPost, apiPostEvent } from '../../src/api'
+import { errorMessage } from '../../src/ui/api-failure'
+import { MESSAGES } from '../../src/ui/notice'
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -149,5 +151,40 @@ describe('requests', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(first).toBe(second)
+  })
+})
+
+/**
+ * 실패 -> 화면 문구(`ui/api-failure.ts`). 문구는 `03_UI_UX_SPEC.md`의 `공통 안내와 오류`와 같다.
+ * 주소·Origin·상태 코드를 문구에 적지 않는다.
+ */
+describe('failure wording', () => {
+  it('maps each failure to the confirmed wording', () => {
+    const cases: [ApiError | Error, string][] = [
+      [new ApiError('OriginRejected', 403), '설정 문제로 연결할 수 없어요. 관리자에게 알려 주세요.'],
+      [new ApiError('NotFound', 404), '내용을 찾지 못했어요.'],
+      [new ApiError('StateGate', 409), '이 학습은 이미 끝났어요. 새로 불러올게요.'],
+      [new ApiError('Invalid', 422), '이 요청은 처리할 수 없어요.'],
+      [new ApiError('Transient', 503), '지금 연결이 원활하지 않아요. 잠시 후 다시 시도해 주세요.'],
+      [new ApiError('Unexpected', 418), '예상하지 못한 문제가 생겼어요. 잠시 후 다시 시도해 주세요.'],
+      [new Error('boom'), '예상하지 못한 문제가 생겼어요. 잠시 후 다시 시도해 주세요.'],
+    ]
+
+    for (const [error, text] of cases) expect(errorMessage(error)).toBe(text)
+  })
+
+  it('keeps the common notices and buttons in the confirmed wording', () => {
+    expect(MESSAGES.sessionResumed).toBe('이어서 학습해요.')
+    expect(MESSAGES.previousSessionTimedOut).toBe('한동안 쉬어서 새로 시작해요. 지난 기록은 그대로 있어요.')
+    expect(MESSAGES.emptyPool).toBe('지금은 준비된 문장이 없어요. 잠시 후 다시 시도해 주세요.')
+    expect(MESSAGES.sessionClosedElsewhere).toBe('진행 중인 학습이 없어요. 새로 시작할 수 있어요.')
+    expect(MESSAGES.saveFailed).toBe('저장하지 못했어요. 다시 시도해 주세요.')
+    expect(MESSAGES.retry).toBe('다시 시도하기')
+    expect(MESSAGES.startNewSession).toBe('새로 시작하기')
+    // 보안 문구: 사유와 무관한 한 문구. 어느 쪽이 틀렸는지 암시하지 않는다.
+    expect(MESSAGES.loginFailed).toBe('아이디나 비밀번호를 다시 확인해 주세요.')
+    for (const message of Object.values(MESSAGES)) {
+      expect(message).not.toMatch(/서버|세션|API|요청이 거부|습니다/)
+    }
   })
 })

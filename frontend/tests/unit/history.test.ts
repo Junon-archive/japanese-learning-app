@@ -115,7 +115,7 @@ describe('date formatting', () => {
       dateFormat('Asia/Seoul').format,
     ) as unknown as FakeElement
 
-    expect(flatText(seoul)).toContain('복습 2026-09-13')
+    expect(flatText(seoul)).toContain('다음 복습 2026-09-13')
   })
 
   it('formats the same way whatever the host locale would prefer', () => {
@@ -164,8 +164,7 @@ describe('renderSessionHistory', () => {
     const text = flatText(sessions(1, false))
 
     expect(text).toMatch(/\d{4}-\d{2}-\d{2}/)
-    expect(text).toContain('학습 11분')
-    expect(text).toContain('완료 9문장')
+    expect(text).toContain('학습 11분 · 9문장 완료')
   })
 
   it('marks a session that is still open instead of leaving it blank', () => {
@@ -193,9 +192,7 @@ describe('renderItemHistory', () => {
     const text = flatText(items([ITEM]))
 
     expect(text).toContain(ITEM.lemma)
-    expect(text).toContain('노출 3회')
-    expect(text).toMatch(/복습 \d{4}-\d{2}-\d{2}/)
-    expect(text).toContain('32%')
+    expect(text).toMatch(/표현 · 32% · 본 횟수 3회 · 다음 복습 \d{4}-\d{2}-\d{2}/)
   })
 
   it('reads a null mastery as "not evaluated yet", never as 0', () => {
@@ -294,6 +291,19 @@ describe('mountHistory', () => {
     expect(screen.querySelector('h1')!.textContent).toBe('학습 기록')
   })
 
+  it('says it fell back to the device timezone in the confirmed wording', async () => {
+    mountHistory(root as unknown as HTMLElement, new AbortController().signal, {
+      timezone: 'Not/AZone',
+      onHome: () => {},
+      onBack: () => {},
+      onUnauthenticated: () => {},
+      onLoggedOut: () => {},
+    })
+    await flush()
+
+    expect(flatText(root)).toContain('학습 시간대를 확인하지 못했어요. 날짜는 이 기기 기준으로 보여 드려요.')
+  })
+
   it('keeps the screen and says so when logging out fails', async () => {
     mount()
     await flush()
@@ -304,5 +314,25 @@ describe('mountHistory', () => {
     expect(events).toEqual([])
     expect(byClass(root, 'history-section')).toHaveLength(2)
     expect(byClass(byClass(root, 'notice-slot')[0]!, 'notice')).toHaveLength(1)
+  })
+})
+
+describe('history wording', () => {
+  it('titles the lists and says when they are empty', () => {
+    const noSessions = flatText(renderSessionHistory({ sessions: [], truncated: false }, utcDates()) as unknown as FakeElement)
+    const noItems = flatText(renderItemHistory({ items: [], truncated: false }, utcDates()) as unknown as FakeElement)
+
+    expect(noSessions).toContain('최근 학습')
+    expect(noSessions).toContain('아직 학습 기록이 없어요.')
+    expect(noItems).toContain('학습한 표현')
+    expect(noItems).toContain('아직 학습한 표현이 없어요.')
+  })
+
+  it('says the list was cut without a number', () => {
+    expect(flatText(sessions(1, true))).toContain('오래된 기록은 여기서 보이지 않아요.')
+  })
+
+  it('labels the item type for display', () => {
+    expect(flatText(items([{ ...ITEM, item_type: 'grammar' }]))).toContain('문법 · ')
   })
 })
