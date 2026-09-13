@@ -1853,3 +1853,32 @@ ADR-022(선택 홈 route와 로그인 진입, 격리 경계 확장)가 확정되
 같은 초 백업 파일 이름 충돌, backfill 불일치 출력의 bidi 제어문자 미이스케이프, e2e (f)의 WebSocket 미기록, `local-store`
 `read`의 메모리 참조 반환)을 상태 `대기`로 더했다. `05_API_SPEC.md`, `04_DB_SPEC.md`, `10_ERROR_HANDLING.md`, 코드·테스트는
 변경하지 않았다.
+
+**6부 (Wave 3 착수 전 보완):** MVP-02 Wave 3(후리가나 화면, demo 진행·fixture 생성, 가나 화면) 계획에서 드러난 공백을
+Wave 3 보완 결정(2026-09-13)으로 채웠다. 위 서술 중 아래가 바꾼 부분은 아래가 우선한다.
+
+-   **[105] demo 진행의 끝과 "표현"의 단위** (`03_UI_UX_SPEC.md`의 `Demo`의 `진행 규칙`·`진도 저장`,
+    `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위`, mvp-02 12·13): 새 문장이 다 떨어졌는데 다시 보기
+    대기열이 남은 경우의 규칙이 없어 "`본 문장 수`가 상수만큼 늘어난 뒤"가 영원히 성립하지 않고 완료에 닿지 못할 수
+    있었다. 이때 대기열의 문장은 곧바로 due로 보고 대기열 순서대로 보여주며, 이 재노출도 `본 문장 수`에 더하지 않는다.
+    또 규칙의 "표현"이 문장 segment인지 learning item인지 정해지지 않았다. learning item(`learning_item_id`)으로
+    확정하고 자기평가 key도 `learning_item_id`로 했다. probe에 응답하면(건너뛰기 포함) "물었음"으로 기록해 한 번만
+    묻고, 그래서 `nc.demo.v1` 값 목록에 `probe로 물은 표현`을 더했다(03, `spec/04`, 12, 13의 목록을 함께 맞췄다).
+    probe의 "몰랐음/애매함"이 넣는 문장은 그 표현이 나온 문장 중 가장 최근에 본 문장이다.
+-   **[106] fixture 선택·검사·ruby 실패 세부** (`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`, `10_ERROR_HANDLING.md`의
+    `후리가나 계산 실패 (MVP-02)`, `14_CONFIGURATION.md`, mvp-02 12·13):
+    -   정렬 키의 `frequency_rank`가 없는 item(현재 seed에 있다)의 위치가 없었다. 같은 `difficulty_label` 안에서 rank가
+        있는 item 뒤에 두고 `seed_id` 순이다(`06_LEARNING_ENGINE.md`의 "없는 item은 맨 뒤"와 같은 원칙).
+    -   검사 3번의 상한이 `08_LLM_SPEC.md`를 가리키기만 해 스크립트가 어디서 값을 얻는지 없었다. 저장소의
+        `config/default.yaml`에서 `learning.max_new_items_per_sentence`를 읽고(숫자를 코드에 두지 않는다), 운영 override
+        파일은 읽지 않는다. 값이 바뀌면 검사 모드 결과가 달라져 fixture를 다시 만든다. `14_CONFIGURATION.md`의 이 키
+        소비처 서술에 fixture 스크립트를 더했다.
+    -   fixture 생성 중 문장 하나의 ruby 계산이 실패할 때의 처리가 없었다(seed 적재·backfill만 있었다). 그 문장을
+        ruby `[]`로 포함하고 `ruby_failed sentence=<seed_id> error=<예외 타입명>` 줄과 요약의 `failed`로 보고하며
+        exit 0이다.
+-   **[107] 가나 다시 나온 문제를 또 틀림** (`03_UI_UX_SPEC.md`의 `화면 문구 표`의 `가나 학습`, mvp-02 12·13): 다시 나온
+    문제는 또 나오지 않는데 오답 문구가 "이번 라운드에서 한 번 더 나와요."로 고정되어 사실과 어긋났다. 보고 고르기
+    피드백은 `정답은 {로마자}예요.`만, 보고 읽기는 토스트를 띄우지 않는다.
+
+6부는 명세만 바꿨다. 코드·테스트, `04_DB_SPEC.md`(Demo Data가 03의 `fixture`를 canonical로 참조하므로 그대로),
+`05_API_SPEC.md`, `11_OBSERVABILITY.md`는 변경하지 않았다.
