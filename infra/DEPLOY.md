@@ -55,6 +55,11 @@ wrangler) 동작만 확인하지 않은 것이다.
 | `<UV>` | `command -v uv`의 절대경로 (cron용) |
 | `<WRANGLER_VERSION>` | 배포 때 고정할 wrangler 버전 (6절) |
 | `<COMPAT_DATE>` | Workers compatibility date, `YYYY-MM-DD` (6절) |
+| `<PREV_COMMIT>` | 업데이트 직전에 운영 중이던 커밋. `git pull` 전에 `git rev-parse --short HEAD`로 적어 둔다 (17절) |
+| `<BACKEND_IMAGE>` | `C images backend`의 REPOSITORY 열 (17절) |
+| `<WORKER_IMAGE>` | `C images worker`의 REPOSITORY 열 (17절) |
+| `<SAFETY_BACKUP_DIR>` | 10.2에서 출력된 `safety backup dir:` 값 (`data/backups/pre-restore/<UTC>`) |
+| `<PRE_MVP02_BACKUP_DIR>` | 17.4에서 출력된 `pre-mvp02 backup dir:` 값 (`data/backups/pre-mvp02/<UTC>`) |
 
 secret은 표에 적지 않는다: `<POSTGRES_PASSWORD>`, `<OPENAI_API_KEY>`, 앱 로그인 password.
 
@@ -596,14 +601,18 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<FRONTEND_HOST>/     # 200
 
 휴대폰 브라우저로 `https://<FRONTEND_HOST>`를 연다. 순서대로 확인한다.
 
-1.  **로그인** --- `<LOGIN_ID>`와 password. 학습 화면으로 넘어간다.
-2.  **세션 시작·진행** --- 문장이 나오고, 단어를 누르면 설명이, 번역 보기를 누르면 번역이 나온다.
-    몇 문장 진행한다.
-3.  **세션 종료** --- 종료 화면이 나온다.
-4.  **새로고침** --- 로그인 화면으로 돌아가지 않고 로그인 상태가 유지된다.
-5.  **history** --- 방금 한 세션과 본 item이 보인다.
-6.  **demo** --- 로그아웃한 뒤 로그인 화면에서 demo로 들어간다. 로그인 없이 동작하고, 나오면
-    로그인 화면으로 돌아온다.
+1.  **선택 홈** --- 상단바에 앱 이름과 `로그인`, 그 아래 카드 두 개(`표현 학습 체험해 보기`,
+    `글자부터 배우기`)가 나온다.
+2.  **로그인** --- 상단바 `로그인`을 누르면 로그인 화면이 나온다. `<LOGIN_ID>`와 password. 학습
+    화면으로 넘어간다.
+3.  **세션 시작·진행** --- 문장이 나오고, 단어를 누르면 설명이 아래에서 올라오고, 번역 보기를 누르면
+    문장 아래에 번역이 펼쳐진다. 몇 문장 진행한다.
+4.  **세션 종료** --- 종료 화면이 나온다.
+5.  **새로고침** --- 선택 홈이 나온다(정상이다). 상단바 `로그인`을 누르면 로그인 화면 없이 곧바로 학습
+    화면이다. 로그인 상태가 유지된 것이다.
+6.  **history** --- 상단바 `학습 기록`. 방금 한 세션과 본 item이 보인다.
+7.  **demo·가나** --- 상단바 `로그아웃`을 누르면 선택 홈으로 돌아온다. `표현 학습 체험해 보기`로 들어가
+    로그인 없이 동작하는지, 앱 이름을 누르면 선택 홈인지 본다. `글자부터 배우기`도 같은 방식으로 본다.
 
 알아 둘 것:
 
@@ -711,8 +720,8 @@ ls -l data/backups/        # -rw------- 파일들
     지워지지 않는다.** 백업이 돌고 있지 않을 때(04:17 cron 시각을 피해) 확인하고 지운다.
 
     ``` sh
-    ls -l data/backups/*.partial data/backups/pre-restore/*/*.partial 2>/dev/null
-    rm -f data/backups/*.partial data/backups/pre-restore/*/*.partial
+    ls -l data/backups/*.partial data/backups/pre-restore/*/*.partial data/backups/pre-mvp02/*/*.partial 2>/dev/null
+    rm -f data/backups/*.partial data/backups/pre-restore/*/*.partial data/backups/pre-mvp02/*/*.partial
     ```
 
 -   (선택) **`data/backups/` 디렉터리 권한.** Git이 만든 디렉터리는 `drwxrwxr-x`라, 파일 내용은 못 읽어도
@@ -945,6 +954,8 @@ cd <REPO> && git pull
 
 4.  `frontend/`가 바뀌었으면 6.2를 다시 실행한다.
 
+MVP-02(후리가나·선택 홈·가나) 첫 업데이트는 이 절 대신 17절을 따른다.
+
 ---
 
 ## 12. seed 초기화 (확장 seed 적재, 1회)
@@ -1050,6 +1061,8 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<API_HOST>/api/health
 | 증상 | 확인 | 원인과 조치 |
 |---|---|---|
 | `C ps worker`가 `Restarting` (알림 없이 간격을 늘리며 재시작만 반복한다) | `C logs --tail 30 worker` | `no active prompt_versions row` → 4.5를 안 했다. `relation ... does not exist` → 4.2를 안 했다. `app.llm.provider.ProviderConfigError: unknown LLM provider ''; supported: 'openai'` → `.env`의 `LLM_PROVIDER`가 비었거나 `openai`가 아니다. `... requires an API key` → `LLM_API_KEY`가 비었다. 고친 뒤 `C up -d --no-deps worker`. |
+| `C ps worker`가 `Restarting`, 로그에 `ModuleNotFoundError: No module named 'sudachipy'` (MVP-02 이후) | `grep -c -- '--group furigana' infra/Dockerfile.worker` (1이어야 한다) | worker 이미지에 형태소 분석기가 없다. worker는 분석기가 없으면 일부러 기동하지 않는다. 옛 이미지를 띄웠거나 재빌드를 건너뛰었다. `C build worker` → 17.3의 worker 확인 → `C up -d --no-deps worker`. 호스트의 `make backfill-ruby`가 같은 오류로 끝나면 `uv sync`를 안 한 것이다(17.1). 그동안 학습 세션은 이미 만들어진 문장으로 계속된다. |
+| `make backfill-ruby`의 출력에 `failed sentence=<id> error=<예외 타입>` | 같은 출력의 `ruby: ... failed=N` | 그 문장의 후리가나 계산이 실패했다. 그 문장은 `ruby_json`이 NULL로 남아 후리가나 없이 보일 뿐 학습에는 쓰인다. 명령은 exit 0이 아니다(`--apply`여도 나머지 문장은 이미 썼다 --- `updated N of M` 줄). 다시 실행하면 실패한 문장만 다시 계산한다. 계속 실패하면 id와 예외 타입을 적어 두고 진행한다. 데이터를 손으로 고치지 않는다. |
 | `C ps backend`가 `Restarting` | `C logs --tail 30 backend` | `CORS_ALLOW_ORIGINS contains an invalid origin` → 끝의 `/`, path, 공백을 지운다. `auth_session_ttl_days` 검증 오류 → `.env`에 `AUTH_SESSION_TTL_DAYS=30`. |
 | `C ps postgres`가 `Restarting`, `ls data/postgres`나 `git status`가 Permission denied | `C logs --tail 30 postgres` | `initdb: error: directory "/var/lib/postgresql/data" exists but is not empty`(`.gitkeep`) → `PGDATA`가 없는 옛 compose로 띄웠다. 14.1. |
 | 운영 명령이 `password authentication failed` | `grep -c '^POSTGRES_PASSWORD=.*\$' .env` (1이면 `$`가 있다) | password에 `$`가 있었다면 DB가 다른 password로 초기화되었다(2.1). 이미 초기화된 DB의 password는 `.env`를 고쳐도 바뀌지 않는다. 데이터가 없는 첫 기동 직후라면 14.1과 같은 방식으로 `data/postgres/pgdata`를 비우고 영숫자 password로 다시 초기화한다(검증되지 않음, root 필요). `~/.pgpass` 권한(0600)과 사용자 이름도 본다. |
@@ -1134,3 +1147,456 @@ Security → WAF → **Rate limiting rules**에서 규칙 하나를 만든다(�
 
 켠 뒤 5절의 `422` curl을 연속으로 여러 번 쳐서 차단 응답(429 등)이 나오는지 본다. 사용자 본인이 잠기지
 않을 만큼 넉넉하게 잡는다.
+
+---
+
+## 17. MVP-02 업데이트 (후리가나·선택 홈·가나, 1회)
+
+MVP-01이 돌고 있는 운영에 MVP-02를 올리는 첫 업데이트다. **11절 대신 이 절을 따른다.** 모든 명령은 2.3의
+운영 셸에서 친다.
+
+이 절의 기대 출력은 운영과 분리된 로컬 DB(pgserver, seed만 적재)에서 **옛 코드로 계정·학습 기록을 만든 뒤
+새 코드로 17.4\~17.7을 실제로 실행한 결과**다. 운영에서는 문장 수(`765`)와 통계 숫자가 다르고, 서버 버전은
+`16.x`다. 이 리허설은 docker 없이 했다. 그래서 이미지 태그(17.2, 17.11 A)와 이미지 안의 확인(17.3)은
+**확인 필요**다.
+
+### 17.0 무엇이 바뀌나
+
+``` text
+DB          migration 0003 -> 0004. sentences.ruby_json JSONB NULL 컬럼 하나를 더한다(additive). 기존 행은 그대로다
+            기존 문장의 후리가나는 migration이 아니라 backfill(make backfill-ruby)이 채운다
+worker      이미지에 형태소 분석기(SudachiPy + 사전)가 들어간다. 이미지가 약 212M(압축 전) 커진다
+            분석기가 없으면 worker는 기동하지 않는다
+backend     의존성 그대로다. 분석기가 없고, 저장된 읽기를 응답에 실어 보내기만 한다
+호스트      uv sync로 분석기가 .venv에 들어온다. backfill은 호스트에서 돈다
+frontend    선택 홈, 상단바, 체험 확장, 글자 배우기, 후리가나 토글 -> 6.2로 다시 배포한다
+그대로      config/default.yaml, .env, infra/docker-compose.yml, prompt, seed
+```
+
+-   **운영 DB를 초기화하지 않는다.** 계정과 학습 기록은 그대로 남는다.
+-   정책 파일·compose·prompt·seed가 그대로이므로 **3절, 12절, `make prompts`는 하지 않는다.** 11절 1단계의
+    diff만 한다.
+-   순서: 사전 확인 → 이전 이미지 보존 → 재빌드(서비스는 계속 돈다) → 정지·백업 → migration → backfill →
+    재기동 → 프론트 → 확인. **17.4부터 17.8까지 API와 worker가 멈춰 있다.**
+
+### 17.1 사전 확인
+
+``` sh
+cd <REPO>
+git status --short                 # 출력 없음
+git rev-parse --short HEAD         # <PREV_COMMIT>로 적어 둔다
+C images backend worker            # REPOSITORY 열을 <BACKEND_IMAGE>, <WORKER_IMAGE>로 적어 둔다
+```
+
+`git status`에 무엇이든 나오면 멈춘다. 적어 둔 세 값은 되돌리기(17.11)에 쓴다. 그다음 코드를 받는다.
+
+``` sh
+git pull
+diff config/default.yaml /etc/nihongo-context/config.yaml    # 11절 1단계. 두 한도 줄만 달라야 한다
+uv sync
+uv run python -c 'import sudachipy, sudachidict_core; print("analyzer import ok")'
+df -h .
+```
+
+-   `analyzer import ok`가 나와야 한다. `ModuleNotFoundError`면 `uv sync` 출력을 다시 본다. backfill이 이
+    `.venv`로 돈다.
+-   `df`의 Avail을 본다. worker 이미지 증가분, 보존하는 옛 이미지(17.2), 백업 세 개(17.4, 17.5, 17.7)가 더 필요하다.
+
+### 17.2 이전 이미지 보존 (확인 필요)
+
+재빌드(17.3)는 `latest` 이름을 새 이미지로 옮긴다. 그 전에 지금 이미지에 이름을 하나 더 붙여 둔다. 이름이
+없어진 옛 이미지는 되돌리기(17.11 A)에 쓸 수 없다.
+
+``` sh
+docker tag <BACKEND_IMAGE>:latest <BACKEND_IMAGE>:pre-mvp02
+docker tag <WORKER_IMAGE>:latest <WORKER_IMAGE>:pre-mvp02
+docker image ls <BACKEND_IMAGE>; docker image ls <WORKER_IMAGE>   # 각각 latest와 pre-mvp02의 IMAGE ID가 같다
+```
+
+-   **확인 필요:** 리허설은 docker 없이 했다. `C images`의 TAG 열이 `latest`가 아니면 그 값으로 바꿔 친다.
+
+### 17.3 이미지 재빌드
+
+``` sh
+C build backend worker
+docker run --rm --pull never --network none <WORKER_IMAGE>:latest python -c 'import sys; sys.path.insert(0, "backend"); from app.furigana import load_analyzer; load_analyzer(); print("analyzer ok")'
+docker run --rm --pull never --network none <BACKEND_IMAGE>:latest python -c 'import importlib.util as u; print("sudachipy", "present" if u.find_spec("sudachipy") else "absent")'
+```
+
+-   **실행 중인 컨테이너는 옛 이미지로 계속 돈다.** 새 이미지는 17.8에서 띄운다.
+-   **build가 실패하면 여기서 멈춘다.** 두 Dockerfile은 `--no-build`로 `uv.lock`에 고정된 wheel만 설치한다.
+    wheel이 없는 패키지가 있으면 컴파일로 넘어가지 않고 실패하는 것이 의도한 동작이다. 운영은 옛 이미지로
+    그대로 돌고 있다.
+-   기대: worker는 `analyzer ok`, backend는 `sudachipy absent`. backend가 `present`면 `infra/Dockerfile.backend`의
+    `uv sync` 명령이 바뀐 것이다. 멈춘다(ADR-021 결정 6).
+-   두 `docker run`은 이미지만 돌린다. `.env`, mount, 네트워크가 없다. `--pull never`: 이 호스트에서 방금 빌드한
+    이미지만 쓰고, 이름이 틀려도 레지스트리에서 받아 오지 않고 실패한다.
+-   **확인 필요:** 같은 두 명령을 호스트 Python으로는 확인했다(`analyzer ok`). 이미지 안에서는 확인하지 않았다.
+
+### 17.4 정지와 백업 (rotation 밖)
+
+`B`는 이번 업데이트 전용 백업 디렉터리다. 출력된 `pre-mvp02 backup dir:` 줄을 적어 둔다.
+
+``` sh
+B="data/backups/pre-mvp02/$(date -u +%Y%m%dT%H%M%SZ)" && printf 'pre-mvp02 backup dir: %s\n' "$B"
+```
+
+아래 체인은 한 덩어리로 붙여 넣는다.
+
+``` sh
+prod_db \
+  && [ -n "$B" ] && [ ! -e "$B" ] \
+  && C stop backend worker \
+  && make db-backup ARGS="--pg-bin $PG_BIN --backup-dir $B" \
+  && echo stopped-and-backed-up
+```
+
+기대 출력:
+
+``` text
+target: host=127.0.0.1 port=5432 database=<POSTGRES_DB>
+dsn: postgresql+psycopg://<POSTGRES_USER>@127.0.0.1:5432/<POSTGRES_DB>
+pg_dump client: pg_dump (PostgreSQL) 16.2
+server version: 16.x
+backup verified: data/backups/pre-mvp02/<UTC>/backup-<UTC>.dump
+backup written: data/backups/pre-mvp02/<UTC>/backup-<UTC>.dump
+stopped-and-backed-up
+```
+
+-   **왜 따로 백업하나:** 17.5의 migration도 직전 백업을 만들지만 `data/backups/`의 7개 rotation 안이라 cron
+    백업에 밀려 사라진다. `pre-mvp02/`는 Git 제외 경로 안이고 rotation이 세지 않는다. **17.10 통과 후 최소 7일
+    보존한다**(cron rotation이 한 바퀴 돌면 이것이 유일한 0003 백업이다). 그동안 되돌리기(17.11 B)의 기준이다.
+-   `<UTC>` 디렉터리는 `drwx------`, 파일은 `-rw-------`로 만들어졌다(리허설).
+-   마지막 줄에 `stopped-and-backed-up`이 없으면:
+    -   `STOP: DATABASE_URL이 운영 DSN이 아니다` → 아무것도 실행되지 않았다. 터미널을 닫고 2.3부터 다시.
+    -   출력 없이 끝났다 → `B=` 줄을 빼먹었거나 체인만 다시 붙여 넣었다(`$B`가 이미 있다). 아무것도 실행되지
+        않았다. `B=` 줄부터 다시.
+    -   `backup failed` → 서비스만 멈춰 있고 DB는 그대로다. 원인을 고치기 전에 운영을 다시 켜려면
+        `C start backend worker`를 친다. **`C up`이 아니다** --- `up`은 17.3에서 만든 새 이미지로 컨테이너를
+        다시 만들 수 있다. `start`는 멈춘 옛 컨테이너를 그대로 다시 켠다.
+
+### 17.5 migration
+
+``` sh
+prod_db && make db-migrate ARGS="--pg-bin $PG_BIN"
+```
+
+기대 출력:
+
+``` text
+target: host=127.0.0.1 port=5432 database=<POSTGRES_DB>
+dsn: postgresql+psycopg://<POSTGRES_USER>@127.0.0.1:5432/<POSTGRES_DB>
+pending migrations: 0003 -> 0004
+precondition: API and worker are stopped until the upgrade finishes (rollback = restoring the backup taken below)
+pg_dump client: pg_dump (PostgreSQL) 16.2
+server version: 16.x
+backup verified: <REPO>/data/backups/backup-<UTC>.dump
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, sentences.ruby_json
+alembic upgrade head: done (0003 -> 0004)
+```
+
+-   `db-migrate`는 `backup written:` 줄을 출력하지 않는다. `backup verified:`가 백업 완료다. 백업이 7개를
+    넘으면 `rotated out: ...` 줄이 더 나온다.
+-   `pending migrations:`가 `0003 -> 0004`가 아니면 멈춘다. `error: database revision ... is not in this code's
+    migration history`는 코드와 DB가 맞지 않는다는 뜻이다. 17.1의 `git pull`과 `target:` 줄을 다시 본다.
+-   `error: upgrade failed; roll back by restoring ...`가 나오면 17.11 B로 간다.
+
+확인 --- 한 번 더 실행하면 아무것도 하지 않아야 한다.
+
+``` sh
+prod_db && make db-migrate ARGS="--pg-bin $PG_BIN"
+# target: host=127.0.0.1 port=5432 database=<POSTGRES_DB>
+# dsn: postgresql+psycopg://<POSTGRES_USER>@127.0.0.1:5432/<POSTGRES_DB>
+# already at head (0004); nothing to do, no backup taken
+```
+
+``` sh
+C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT version_num FROM alembic_version;
+SELECT count(*) AS total, count(*) FILTER (WHERE ruby_json IS NULL) AS null_rows FROM sentences;
+SQL
+```
+
+기대: `0004`, 그리고 `total`과 `null_rows`가 같다(리허설: `765 | 765`). 이 `total`을 **N**으로 적어 둔다.
+
+### 17.6 backfill dry-run (쓰기 없음)
+
+``` sh
+prod_db && make backfill-ruby; echo "exit=$?"
+```
+
+리허설 출력(seed 765문장):
+
+``` text
+target: host=127.0.0.1 port=5432 database=<POSTGRES_DB>
+dsn: postgresql+psycopg://<POSTGRES_USER>@127.0.0.1:5432/<POSTGRES_DB>
+algorithm_version=2
+sentences with ruby_json IS NULL: 765
+ruby: algorithm_version=2 sentences=765 computed=765 failed=0 omitted_tappable_boundary=0 omitted_numeric=55 omitted_no_reading=0 corrected_explanation_tokens=508 corrected_table_rules=97 reading_mismatches=0 explanation_overrides=0 kanji_tokens=2097
+rule 私->わたし hits=16
+rule 明日->あした hits=28
+rule 今日->きょう hits=34
+rule 何->なに next=か|が|も|を hits=17
+rule 中->じゅう prev=今日 hits=1
+rule 中->じゅう prev=日 hits=1
+rule 空い->すい prev=お腹,が hits=0
+rule 空く->すく prev=お腹,が hits=0
+dry-run: nothing written
+exit=0
+```
+
+읽을 줄:
+
+| 줄 | 기대 |
+|---|---|
+| `target:` | `host=127.0.0.1 port=5432 database=<POSTGRES_DB>`. 다르면 Ctrl-C |
+| `algorithm_version=2` | `2` |
+| `sentences with ruby_json IS NULL:` | 17.5의 N |
+| `ruby: ...` | `computed=`가 N, **`failed=0`** |
+| `rule ... hits=` | 교정 표 규칙별 적중 수. 0이어도 줄이 나온다. 참고용 |
+| `mismatch kind=reading_mismatch` / `kind=explanation_override` | 설명의 읽기와 분석기의 읽기가 다른 곳. 참고용이며 실패가 아니다(종료 코드에 영향 없음). 설명 데이터를 자동으로 고치지 않는다. 리허설(seed만)에서는 0줄이었다. 생성 문장에서 나오면 줄을 적어 둔다 |
+| `dry-run: nothing written` | DB에 아무것도 쓰지 않았다 |
+
+`exit=0`이면 17.7로 간다. **그 밖이면** 원인을 출력 줄로 가른다(make는 실패 종류와 무관하게 같은 종료 코드를 낸다).
+
+-   `failed sentence=<id> error=<예외 타입>` 줄이 있고 `failed=`가 1 이상 → 그 문장만 계산이 실패했다. 14절. 17.7로
+    진행해도 된다(실패한 문장은 NULL로 남는다).
+-   `ModuleNotFoundError: No module named 'sudachipy'` → 17.1의 `uv sync`. DB에 닿기 전에 끝났다.
+-   `STOP: DATABASE_URL이 운영 DSN이 아니다` → 아무것도 실행되지 않았다. 2.3부터 다시.
+
+### 17.7 backfill 적용
+
+``` sh
+prod_db && make backfill-ruby ARGS="--apply --pg-bin $PG_BIN" && echo applied
+```
+
+리허설 출력:
+
+``` text
+target: host=127.0.0.1 port=5432 database=<POSTGRES_DB>
+dsn: postgresql+psycopg://<POSTGRES_USER>@127.0.0.1:5432/<POSTGRES_DB>
+algorithm_version=2
+sentences with ruby_json IS NULL: 765
+ruby: algorithm_version=2 sentences=765 computed=765 failed=0 ... (17.6과 같은 줄)
+rule ... (17.6과 같은 여덟 줄)
+pg_dump client: pg_dump (PostgreSQL) 16.2
+server version: 16.x
+backup verified: <REPO>/data/backups/backup-<UTC>.dump
+updated 765 of 765 sentences
+applied
+```
+
+-   쓰기 전에 검증된 백업을 만든다(건너뛰는 옵션은 없다). `backup written:` 줄은 없다.
+-   `updated N of N sentences`: 두 수가 같고 17.6의 N이다. 계산 실패가 F개면 `updated N−F of N−F sentences`다
+    (뒤의 수는 계산에 성공해 쓸 행 수다).
+-   마지막 줄에 `applied`가 없으면:
+    -   `error: backup failed; nothing was written: ...` → 아무것도 쓰지 않았다. 원인(디스크, `$PG_BIN`)을 고치고
+        같은 명령을 다시 친다.
+    -   `backfill_ruby.py: error: argument --pg-bin: expected one argument` → `$PG_BIN`이 비었다(`--pg-bin` 뒤에
+        값이 없어 인자 해석에서 끝났다. 리허설 확인). 2.3의 운영 셸이 아니다. `--pg-bin` 자체를 빼먹었으면
+        `error: --apply requires --pg-bin ...`이다. 둘 다 DB에 닿기 전에 끝났다.
+    -   `updated ... of ... sentences` 뒤에 끝났다 → 계산 실패 문장이 있다(17.6과 같은 `failed sentence=` 줄).
+        **나머지 문장은 이미 썼다.** 14절.
+
+확인 --- 한 번 더 실행하면 쓸 것이 없어야 한다.
+
+``` sh
+prod_db && make backfill-ruby ARGS="--apply --pg-bin $PG_BIN" && echo applied
+```
+
+``` text
+target: host=127.0.0.1 port=5432 database=<POSTGRES_DB>
+dsn: postgresql+psycopg://<POSTGRES_USER>@127.0.0.1:5432/<POSTGRES_DB>
+algorithm_version=2
+sentences with ruby_json IS NULL: 0
+ruby: algorithm_version=2 sentences=0 computed=0 failed=0 omitted_tappable_boundary=0 omitted_numeric=0 omitted_no_reading=0 corrected_explanation_tokens=0 corrected_table_rules=0 reading_mismatches=0 explanation_overrides=0 kanji_tokens=0
+rule ... hits=0 (여덟 줄 모두 0)
+nothing to write; no backup taken
+applied
+```
+
+-   **두 번째의 `applied`는 "쓸 것이 없어 성공"이다.** 판단은 `nothing to write; no backup taken` 줄로 한다.
+    백업도 생기지 않는다.
+-   계산 실패 문장이 있었다면 `IS NULL:`이 그 수이고, 다시 계산해 또 실패하면 `applied` 없이 끝난다.
+
+``` sh
+C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT count(*) AS total, count(*) FILTER (WHERE ruby_json IS NULL) AS null_rows FROM sentences;
+SELECT ruby_json->>'algorithm_version' AS algorithm_version, count(*) FROM sentences WHERE ruby_json IS NOT NULL GROUP BY 1;
+SQL
+```
+
+기대: `null_rows`가 0(계산 실패 문장이 있으면 그 수), `algorithm_version`은 `2` 한 행이고 그 count가
+`total - null_rows`다(리허설: `765 | 0`, `2 | 765`).
+
+### 17.8 재기동 (worker 먼저)
+
+worker를 먼저 띄워 분석기가 이미지에 있는지 본다. 없으면 worker가 기동하지 않는다.
+
+``` sh
+C up -d --no-deps worker
+sleep 40
+C ps worker                                                       # STATUS가 "Up ..."
+C logs worker 2>&1 | grep -c -E 'sudachi|ModuleNotFoundError'     # 0
+C logs worker 2>&1 | grep -c 'cost.guard_disabled'                # 0
+C logs worker 2>&1 | tail -20                                     # Traceback이 없어야 한다
+```
+
+-   `Restarting`이고 로그에 `No module named 'sudachipy'` → 새 이미지가 아니다. 14절. worker가 멈춰 있는
+    동안에도 backend는 띄워도 된다. 학습 세션은 이미 만들어진 문장으로 계속된다.
+
+``` sh
+C up -d --no-deps backend
+sleep 5
+C ps backend
+C images backend worker            # IMAGE ID가 17.2의 pre-mvp02와 달라야 한다
+curl -s http://127.0.0.1:8000/api/health; echo
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/docs            # 404
+```
+
+health 기대값은 4.7과 같다(`database`와 `worker`가 `ok`).
+
+### 17.9 프론트
+
+**6.2의 체인을 그대로 한 덩어리로** 실행한다. 명령은 바뀌지 않았다. 체인의 두 grep은 MVP-02 번들에서도
+그대로 성립한다(로컬 빌드로 확인: API 주소는 로그인 영역 청크에만 들어 있고 `localhost:8000`은 없다). backend
+재기동(17.8) 뒤에 한다.
+
+### 17.10 확인
+
+데스크톱 브라우저로 `https://<FRONTEND_HOST>`를 열고 개발자 도구의 Network 탭을 켠다.
+
+-   [ ] **서버 요청 0건:** 선택 홈, `표현 학습 체험해 보기`, `글자부터 배우기`를 오가는 동안 `<API_HOST>`로 가는
+    요청이 없다. 상단바 `로그인`을 누를 때 처음으로 `/api/auth/me`가 한 번 나간다.
+-   [ ] **로그인 흐름:** `로그인` → 로그인 화면 → 학습 화면. 새로고침하면 선택 홈이고, 다시 `로그인`을 누르면
+    곧바로 학습 화면이다. `로그아웃`하면 선택 홈이다.
+-   [ ] **후리가나:** 학습 화면 상단바 `후리가나`. 처음에는 꺼져 있다. 켜면 한자 위에 읽기가 나오고, 새로고침
+    뒤에도 켜진 채다. backfill한 기존 문장에도 읽기가 있다. 설정은 이 브라우저에서 체험과 공유되므로, 체험에서
+    먼저 켰다면 켜진 상태로 시작한다(그래서 이 확인을 체험보다 먼저 한다).
+-   [ ] **글자 배우기:** 히라가나·가타카나 탭, 퀴즈 한 라운드, 결과.
+-   [ ] **체험:** 진행 표시가 `0 / 171`에서 시작한다. 몇 문장 본 뒤 새로고침하면 같은 위치에서 이어진다.
+    `진도 초기화` → `초기화하기`면 처음부터다. (시간이 있으면) 끝까지 보면 완료 화면이 나온다.
+-   [ ] **health:** 17.8의 `curl`이 `ok` / `ok`.
+-   [ ] **DB:** 17.7의 SQL에서 `null_rows`가 그대로다.
+-   [ ] **로그:** 아래 두 수가 0이다.
+
+    ``` sh
+    C logs --since 24h worker 2>&1 | grep -c -E 'ruby\.(failed|log_failed)'
+    C logs --since 24h backend 2>&1 | grep -c 'ruby.invalid_stored'
+    ```
+
+-   [ ] **휴대폰:** 7절 전체. iOS 홈 화면 PWA는 Safari와 cookie 저장소가 따로라 PWA 안에서 다시 로그인한다.
+
+### 17.11 되돌리기
+
+문제의 범위에 맞는 것 하나를 고른다.
+
+``` text
+화면만 문제                 -> 프론트만: <PREV_COMMIT>으로 6.2
+backend·worker가 문제       -> A 이미지만 (DB는 0004 그대로, 학습 기록 보존)
+DB까지 되돌려야 한다        -> B pre-mvp02 백업 복원 (17.4 백업 이후의 모든 쓰기가 사라진다)
+후리가나 읽기만 문제        -> C ruby_json만 비운다
+```
+
+#### 프론트만
+
+``` sh
+cd <REPO> && git switch --detach <PREV_COMMIT>
+```
+
+그 상태에서 6.2 체인을 실행하고, 끝나면 돌아온다.
+
+``` sh
+cd <REPO> && git switch -          # 17.1에서 pull한 브랜치로
+```
+
+-   **detach한 동안 `make db-migrate`, `make db-restore-check`, `make backfill-ruby`를 치지 않는다.** 옛 코드는
+    0004를 모른다(리허설: 옛 코드의 `make db-migrate`가 `error: database revision '0004' is not in this code's
+    migration history`로 멈췄다).
+-   옛 화면은 새 API와 함께 돈다(새 응답의 필드는 추가뿐이다). 반대로 **새 화면은 옛 API와 돌지 않는다** ---
+    옛 API 응답에는 `ruby`가 없다. 그래서 A는 프론트를 먼저 되돌린다.
+
+#### A. 이미지만
+
+리허설: 옛 코드(API)를 migration·backfill이 끝난 0004 DB에 붙여 login, `/api/auth/me`, 세션 시작, `/next`,
+`/click`, `/complete`, history가 모두 200이었다. 새 코드로 학습한 뒤 다시 붙였을 때도 같았다.
+
+먼저 위의 "프론트만"을 한다. 그다음:
+
+``` sh
+docker tag <BACKEND_IMAGE>:pre-mvp02 <BACKEND_IMAGE>:latest
+docker tag <WORKER_IMAGE>:pre-mvp02 <WORKER_IMAGE>:latest
+C up -d --no-deps --no-build backend worker
+C images backend worker            # IMAGE ID가 17.2의 pre-mvp02와 같다
+curl -s http://127.0.0.1:8000/api/health; echo
+```
+
+-   `<REPO>`의 코드는 새 커밋에 둔다. DB가 0004이므로 호스트 운영 명령도 새 코드로 친다.
+-   **되돌린 동안 `C build`를 치지 않는다.** 새 코드로 다시 빌드되어 `latest`가 새 이미지가 된다.
+-   옛 API는 `ruby_json`을 읽지 않는다(화면에 후리가나 없음). 옛 worker가 만든 문장은 `ruby_json`이 NULL로
+    남는다. 다시 올릴 때는 17.3(재빌드) → 17.8(재기동) → 17.6·17.7(그 문장만 채운다) → 17.9(프론트 재배포)다.
+    17.4(pre-mvp02 백업)와 17.5(migration)는 하지 않는다. DB가 이미 0004라 17.5는 `already at head (0004)`로
+    끝나고, 17.7이 쓰기 전에 백업을 만든다.
+-   **확인 필요:** 태그를 되돌린 뒤 `up`이 컨테이너를 옛 이미지로 다시 만드는지(리허설은 docker 없이 했다).
+    옛 worker가 0004 DB에서 생성 job을 처리하는지(provider 호출이 필요해 리허설하지 않았다).
+
+#### B. DB까지 (pre-mvp02 백업 복원)
+
+downgrade 명령은 없다. 17.4의 백업을 10.2 절차로 복원한다.
+
+> **17.4 백업 이후의 모든 쓰기가 사라진다.** 학습 기록, 생성된 문장·job과 그 LLM 비용, 로그인 세션, 계정·비밀번호
+> 변경이 전부다. 운영한 날이 길수록 잃는 것이 많으므로 **A나 C로 풀리는지 먼저 본다.** 10.2 체인이 복원 직전에
+> 만드는 안전 백업 `$R`이 **그 쓰기들의 유일한 사본**이다. 10.2의 정리 규칙대로, 운영이 정상임을 확인하기 전에는
+> 지우지 않는다.
+
+리허설: 17.4의 백업을 별도 DB에 10.2와 같은 `pg_restore` 옵션으로 복원해 `restored`, `alembic_version`
+`0003`, 옛 코드로 만든 학습 행 보존, `ruby_json` 컬럼 없음을 확인했다.
+
+-   **10.1(`make db-restore-check`)은 하지 않는다.** 그 검증은 백업을 지금 DB와 비교한다. pre-mvp02 백업은
+    지금 DB(0004, 그 뒤의 쓰기)와 다르므로 반드시 실패한다.
+
+1.  10.2의 경고대로 **백업을 만든 시점의 코드로 먼저 돌아간다.**
+
+    ``` sh
+    cd <REPO> && git switch --detach <PREV_COMMIT> && uv sync
+    ls -l <PRE_MVP02_BACKUP_DIR>/      # 17.4에서 적어 둔 pre-mvp02 backup dir. backup-*.dump 하나
+    ```
+
+2.  **프론트를 먼저 되돌린다:** 6.2 체인을 실행한다(이미 `<PREV_COMMIT>`에 있다). 옛 화면은 지금의 새 API와도
+    돌지만, 새 화면은 복원 뒤의 옛 API와 돌지 않는다(A와 같은 이유).
+3.  10.2를 한다. `F=`에는 위 디렉터리의 그 파일 경로를 넣는다. `R=` 줄과 체인은 10.2 그대로다.
+4.  이미지를 되돌린다: A의 `docker tag` 두 줄.
+5.  10.2의 "복원 뒤"를 한다. `make db-migrate`는 옛 코드라 `already at head (0003)`이다.
+    17.4 이후 비밀번호를 바꿨거나 세션을 끊었다면(로그아웃·폐기) 복원으로 옛 비밀번호 hash와 세션이 되살아나므로
+    복원 뒤 다시 한다.
+
+MVP-02를 다시 시도할 때는 `git switch -`로 돌아와 17.1부터 한다.
+
+#### C. 후리가나만 비우기
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+UPDATE sentences SET ruby_json = NULL;
+SQL
+```
+
+-   기대: `UPDATE <total>`(리허설: `UPDATE 765`). 학습 기록은 그대로다. 표시 보조 컬럼만 비운다.
+-   **C는 백업을 만들지 않는다.** 지운 값은 backfill 재계산으로만 다시 생긴다.
+-   후리가나를 켜도 읽기가 나오지 않는다. worker가 새로 만드는 문장에는 다시 계산되어 들어간다.
+-   **같은 코드로 다시 채우면 같은 값이 다시 들어간다.** 읽기가 틀려서 비웠다면 코드를 고친 뒤에만 17.6·17.7을
+    다시 돌린다(리허설: 비운 뒤 `IS NULL: 765`, `updated 765 of 765 sentences`).
+-   worker가 생성할 때 넣은 원래 값과 backfill이 다시 계산한 값은 다를 수 있다(backfill은 그 시점의 설명 읽기로
+    계산한다).
+
+#### pre-mvp02 백업과 이미지 정리
+
+**17.10 통과 후 최소 7일 보존한다**(cron rotation이 한 바퀴 돌면 이것이 유일한 0003 백업이다). 그 전에는
+17.11 B의 기준이다. 그 뒤에 이상이 없으면 지운다. rotation이 세지 않으므로 직접 지운다(password hash가 들어 있다).
+
+``` sh
+ls -l data/backups/pre-mvp02/
+rm -r data/backups/pre-mvp02
+docker image rm <BACKEND_IMAGE>:pre-mvp02 <WORKER_IMAGE>:pre-mvp02    # 이름만 지운다 (확인 필요)
+```
