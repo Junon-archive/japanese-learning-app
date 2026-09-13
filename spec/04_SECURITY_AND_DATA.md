@@ -178,7 +178,7 @@ key              용도           저장하는 것                              
 nc.furigana.v1   후리가나 설정  {"on": boolean}                                   frontend/src/ui/furigana.ts
 nc.kana.v1       가나 진도      글자·단어별 맞음/틀림 수, 전체 마지막 학습 시각     frontend/src/kana/
 nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 자기평가,         frontend/src/demo/
-                                다시 보기 대기열, 본 문장 수
+                                다시 보기 대기열, 본 문장 수, probe로 물은 표현
 ```
 
 화면 규칙은 `mvp-01-core/03_UI_UX_SPEC.md`의 `Translation/Furigana`, `가나 학습`, `Demo`에 있다.
@@ -213,7 +213,9 @@ nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 �
     kana       글자·단어 key가 정적 가나 데이터에 있는 것뿐이다. 맞음/틀림 수는 0 이상의 안전한 정수다.
                마지막 학습 시각은 유한한 수다
     demo       fixture 식별자가 지금 fixture와 같다. 현재 위치는 0 이상 문장 수 이하의 정수다.
-               자기평가·다시 보기 대기열·본 문장 수가 가리키는 문장·표현은 지금 fixture에 있고 값은 허용값 안이다
+               자기평가·다시 보기 대기열·본 문장 수·probe로 물은 표현이 가리키는 문장·표현은 지금 fixture에 있고
+               값은 허용값 안이다. 표현은 learning item이고 자기평가의 key는 learning_item_id다
+               (Wave 3 보완 결정, 2026-09-13)
     ```
 
 -   **로그인 영역(`private.ts` 그래프) 안의 `localSlot` 호출은 `nc.furigana.v1` 하나뿐이다.** AST로 확인한다.
