@@ -807,6 +807,8 @@ def test_g14c_furigana_imports_only_render_inside_the_app() -> None:
     # guard가 빈 import 목록을 훑고 통과하지 않도록 실제 import가 보이는지 확인한다.
     assert any(_imports_package(imported, "sudachipy") for imported, _ in imports)
     assert any(_imports_package(imported, FURIGANA_ALLOWED_APP_IMPORT) for imported, _ in imports)
+    # 12_TEST_PLAN G14(c): `render.py`는 분석기를 모르는 L0로 남는다(G11(b)의 대상).
+    assert "render.py" in PURE_MODULES
 
 
 # --------------------------------------------------------------------------

@@ -642,6 +642,57 @@ def _seed_items(entry: dict[str, Any]) -> list[RubyItem]:
     ]
 
 
+def _is_hiragana_reading(reading: str) -> bool:
+    """R4를 명세 표 그대로 다시 적는다(U+3041..U+3096, ゝ ゞ ー). 구현의 판정 함수를 쓰지 않는다."""
+    return bool(reading) and all(
+        0x3041 <= ord(char) <= 0x3096 or char in "ゝゞー" for char in reading
+    )
+
+
+def test_every_seed_ruby_json_has_the_stored_shape() -> None:
+    """12_TEST_PLAN `ruby_json 모양`을 seed 전체에 대해 구현과 독립된 판정으로 본다.
+
+    키 전부가 항상 있고, span은 원문 안·start 오름차순·서로 겹치지 않음·읽기 히라가나이며,
+    모든 span이 모든 tappable span의 안이거나 완전히 밖이다(AC 20·23).
+    """
+    entries: list[dict[str, Any]] = yaml.safe_load(Path(SEED_SENTENCES).read_text("utf-8"))
+    checked_spans = 0
+    for entry in entries:
+        japanese: str = entry["japanese"]
+        items = _seed_items(entry)
+        stored = compute_ruby(japanese, items, now=NOW).ruby_json
+        label = entry["seed_id"]
+
+        assert set(stored) == {
+            "algorithm_version",
+            "analyzer",
+            "dictionary",
+            "split_mode",
+            "computed_at",
+            "spans",
+            "omitted",
+            "corrected",
+        }, label
+        assert set(stored["omitted"]) == {"tappable_boundary", "numeric", "no_reading"}, label
+        assert set(stored["corrected"]) == {"explanation_tokens", "table_rules"}, label
+
+        tappable = [(span.start_codepoint, span.end_codepoint) for i in items for span in i.spans]
+        previous_end = 0
+        for start, end, reading in stored["spans"]:
+            assert 0 <= start < end <= len(japanese), (label, start, end)
+            assert start >= previous_end, (label, "ascending and disjoint", start)
+            previous_end = end
+            assert _is_hiragana_reading(reading), (label, reading)
+            for t_start, t_end in tappable:
+                assert (t_start <= start and end <= t_end) or end <= t_start or t_end <= start, (
+                    label,
+                    (start, end),
+                    (t_start, t_end),
+                )
+            checked_spans += 1
+    assert checked_spans > 0
+
+
 def test_seed_boundary_omission_ratio() -> None:
     """경계 때문에 생략한 토큰 / 한자를 포함한 토큰을 seed 전체로 계산해 출력한다(5% 이하).
 

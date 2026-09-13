@@ -29,7 +29,7 @@ from app.jobs import persistence
 from app.jobs.persistence import NewSentence, Provenance
 from app.llm.schemas import ExplanationPayload, ItemPayload, SentencePayload, SpanPayload
 from app.models.content import Sentence
-from app.models.enums import CandidateStatus, StartingLevel
+from app.models.enums import CandidateStatus, ExplanationStatus, StartingLevel
 from app.services.seed_loader import load_seed
 from app.settings import get_settings
 from tests import db_support, factories
@@ -173,6 +173,74 @@ def test_dry_run_writes_nothing_and_prints_the_target_first(
     password = target_db.password
     if password:
         assert str(password) not in out
+
+
+@pytest.mark.integration
+def test_the_printed_target_masks_a_real_password(
+    target_db: URL, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """위 테스트의 DSN에는 password가 없을 수 있다. password가 든 DSN으로 가림을 직접 본다."""
+    secret = "nc-backfill-secret-0413"
+    with_password = target_db.set(password=secret)
+    monkeypatch.setenv("DATABASE_URL", with_password.render_as_string(hide_password=False))
+    get_settings.cache_clear()
+
+    code = _run([])
+
+    out = capsys.readouterr().out
+    assert code == EXIT_OK, out
+    assert f"database={target_db.database}" in out
+    assert secret not in out
+    assert "***" in out
+
+
+@pytest.mark.integration
+def test_the_explanation_reading_comes_from_the_smallest_validated_row_of_tappable_items(
+    target_db: URL, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """04_DB_SPEC.md backfill 2: 설명 읽기는 `validated` 중 id가 가장 작은 행이고, 경계는 tappable
+    item의 span뿐이다.
+
+    `明日` 설명 행: draft(가장 작은 id) `みょうにち`, validated `あす`, validated `あした`.
+    validated 최소 id(`あす`)만 계층 1을 성립시키면서 분석기(교정 후 あした)와 달라 override가
+    된다. non-tappable item `日は`[1, 3)를 경계로 쓰면 `明日`[0, 2)가 걸쳐 계산이 실패한다.
+    """
+    engine = sa.create_engine(target_db, poolclass=NullPool)
+    try:
+        with Session(engine) as session:
+            item = factories.make_learning_item(session, lemma="明日")
+            other = factories.make_learning_item(session, lemma="日")
+            sentence = factories.make_sentence(session, japanese="明日は早い。")
+            tappable = factories.make_sentence_item(session, sentence, item, surface_form="明日")
+            factories.make_span(session, tappable, start=0, end=2)
+            plain = factories.make_sentence_item(
+                session, sentence, other, surface_form="日は", is_tappable=False
+            )
+            factories.make_span(session, plain, start=1, end=3)
+            for status, reading in (
+                (ExplanationStatus.DRAFT, "みょうにち"),
+                (ExplanationStatus.VALIDATED, "あす"),
+                (ExplanationStatus.VALIDATED, "あした"),
+            ):
+                explanation = factories.make_explanation(session, tappable, status=status)
+                explanation.reading = reading
+            session.commit()
+            sentence_id = sentence.id
+            tappable_id = tappable.id
+    finally:
+        engine.dispose()
+
+    code = _run(_apply(tmp_path))
+
+    out = capsys.readouterr().out
+    assert code == EXIT_OK, out
+    stored = _ruby(target_db)[sentence_id]
+    assert stored is not None
+    assert stored["spans"][0] == [0, 2, "あす"]
+    assert (
+        f"mismatch kind=explanation_override sentence={sentence_id} item={tappable_id} "
+        "surface=明日 explanation=あす analyzer=あした"
+    ) in out.splitlines()
 
 
 # --------------------------------------------------------------------------

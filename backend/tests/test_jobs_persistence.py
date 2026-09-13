@@ -665,6 +665,76 @@ def test_a_reading_mismatch_is_logged_with_the_stored_sentence_item_id(
 
 
 @pytest.mark.integration
+def test_an_explanation_override_is_logged_with_the_tappable_items_stored_id(
+    db: Session, study_clock: MutableClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    """AC 25: 계층 1 정렬이 성립했는데 분석기와 다르면 `ruby.explanation_override`다.
+
+    앞에 non-tappable item을 두어 로그의 `sentence_item_id`가 payload 순번이 아니라 **그
+    tappable item의 실제 id**임을 본다. 저장 ruby는 설명 읽기이고 설명 데이터는 그대로다.
+    """
+    plain = factories.make_learning_item(db)
+    target = factories.make_learning_item(db)
+    job = _job(db)
+    explanation = ExplanationPayload(**{**_explanation().model_dump(), "reading": "にんせる"})
+    payload = SentencePayload(
+        japanese=JAPANESE,
+        korean_translation="내일은 너에게 맡길게.",
+        difficulty_label=StartingLevel.BEGINNER,
+        items=(
+            ItemPayload(
+                item_ref="plain",
+                surface_form="明日",
+                is_tappable=False,
+                spans=(SpanPayload(start_codepoint=0, end_codepoint=2, span_order=0),),
+                explanation=None,
+            ),
+            ItemPayload(
+                item_ref="target",
+                surface_form=SURFACE,
+                is_tappable=True,
+                spans=(SpanPayload(start_codepoint=5, end_codepoint=8, span_order=0),),
+                explanation=explanation,
+            ),
+        ),
+    )
+
+    with caplog.at_level(logging.INFO, logger=RUBY_LOGGER):
+        completion = persistence.save_sentences(
+            db,
+            job=job,
+            sentences=[
+                NewSentence(
+                    payload=payload,
+                    item_ids={"plain": plain.id, "target": target.id},
+                    parent_sentence_id=None,
+                )
+            ],
+            rejected=[],
+            provenance=_provenance(study_clock),
+            now=study_clock.now(),
+        )
+
+    (sentence_id,) = completion.stored
+    sentence = db.get(Sentence, sentence_id, populate_existing=True)
+    assert sentence is not None
+    assert sentence.status is SentenceStatus.VALIDATED
+    assert sentence.ruby_json is not None
+    assert [5, 6, "にん"] in sentence.ruby_json["spans"]
+    tappable_item_id = db.execute(
+        sa.select(SentenceItem.id).where(SentenceItem.is_tappable.is_(True))
+    ).scalar_one()
+    (record,) = _records(caplog, observability.RUBY_EXPLANATION_OVERRIDE)
+    assert (record.__dict__["sentence_id"], record.__dict__["sentence_item_id"]) == (
+        sentence_id,
+        tappable_item_id,
+    )
+    assert _records(caplog, observability.RUBY_READING_MISMATCH) == []
+    assert "にんせる" not in repr(record.__dict__) and "任せる" not in repr(record.__dict__)
+    assert db.execute(sa.select(SentenceItemExplanation.reading)).scalar_one() == "にんせる"
+
+
+@pytest.mark.integration
 def test_a_failed_ruby_computation_still_stores_a_validated_sentence(
     db: Session,
     study_clock: MutableClock,
