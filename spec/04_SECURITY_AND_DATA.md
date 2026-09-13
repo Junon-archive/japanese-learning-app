@@ -67,9 +67,27 @@ frontend/src/home/ demo/ kana/       공개 화면. API 모듈과 private.ts에 
     모듈과 `main.ts`는 그 함수를 `renderTopBar({ onHome, onLogin, actions })`의 `onLogin`으로 넘기기만 하고 부르지
     않는다. 부팅, route 적용, 타이머, 저장값 복원 같은 경로에서 불리지 않는다. 정적 그래프 검사는 "언제
     불리는가"를 보지 못하므로 이 호출 위치 검사와 부팅 런타임 단정이 그 부분을 맡는다.
+-   **`openLogin`을 값으로 넘기는 곳도 정해져 있다**(같은 AST 검사, Wave 2 보완 결정, 2026-09-13).
+
+    ``` text
+    renderTopBar({ onLogin: openLogin })   상단바 로그인 버튼 (공개 화면은 ctx.openLogin)
+    startRouter({ openLogin })              main.ts -> routes.ts
+    enterPrivate({ openLogin })             main.ts -> private.ts. 로그인 확인 실패·로그인 영역 불러오기 실패 화면의
+                                            상단바 로그인에 넘기기 위해서다
+    routes.ts가 공개 화면 ctx를 만드는 곳   반환 객체의 openLogin
+    ```
+
+    선언(함수 선언, 매개변수, 구조 분해, 타입의 속성 이름)과 `onLogin`의 존재 확인 밖에서, 다른 이름으로
+    넘기거나 변수에 담거나 타이머·이벤트 리스너 객체·안내 버튼의 동작으로 넘기면 위반이다.
 -   **떠난 화면은 새 화면 진입 요청을 시작하지 않는다.** 화면의 `signal`이 abort되었으면 화면 전환뿐 아니라 새
     화면에 들어가는 요청(로그인 영역 진입의 `fetchMe`, study session 시작)도 시작하지 않는다. 이미 나간 요청은
     취소하지 않고 결과만 그리지 않는다.
+-   **로그인 영역 안의 화면도 화면마다 `signal`을 가진다**(Wave 2 보완 결정, 2026-09-13). 학습, 학습 기록, 로그인,
+    로그인 확인 실패 화면은 각자 새 `signal`로 그려진다. 영역 안에서 화면을 옮기면(학습 → 기록 등, hash 변화 없음)
+    이전 화면의 `signal`을 abort하고, 로그인 영역을 떠나면 지금 화면의 `signal`도 함께 abort된다.
+-   **`await` 뒤에도 `signal`을 다시 확인한다**(Wave 2 보완 결정, 2026-09-13). 요청 시작 직전뿐 아니라 응답을
+    받은 뒤에도 abort됐으면 새 요청(다음 문장, 진행 조회)도 토스트(세션 시작 안내 등)도 화면 전환도 하지 않는다.
+    떠난 화면에 늦게 도착한 409의 session 재획득과 401의 Login 이동도 abort됐으면 하지 않는다.
 -   이 규칙은 화면 진입 요청에만 적용한다. 이미 진행 중인 학습의 event 전송과 그 재시도는 기존 규칙을 따른다.
     그중 설명 표시는 `mvp-01-core/05_API_SPEC.md`의 `explanation_revealed를 언제 보내는가`(응답 전에 떠나면
     `item_clicked`만 남고 `explanation_revealed`를 보내지 않는다)가 canonical이다.
@@ -101,12 +119,19 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
                      - new Worker / new SharedWorker
                      - eval, Function 생성자, 첫 인자가 함수가 아닌 setTimeout / setInterval, require()
                      - document.createElement의 인자가 문자열 리터럴이 아님, 또는 'script' 리터럴
+                       (document.createElementNS의 태그 인자도 같다)
                      - HTML 삽입: innerHTML, outerHTML, insertAdjacentHTML, document.write, document.writeln,
                        Range.createContextualFragment, DOMParser.parseFromString, iframe srcdoc 대입
                      - setAttribute로 on* 속성·srcdoc에 값을 넣음 (리터럴이어도 위반)
                      - setAttribute로 href·src에 문자열 리터럴이 아닌 값을 넣음
+                     - setAttribute의 속성 이름이 문자열 리터럴이 아님
+                       (setAttributeNS도 위 세 줄과 같다. xlink:href처럼 접두사가 붙은 이름은 접두사를 떼고 본다)
+                     - src, action, formAction, data 속성에 문자열 리터럴이 아닌 값을 대입
                      - 이동: location.href 대입, location.assign, location.replace, window.open,
                        a 요소 href 대입에 고정 route 상수가 아닌 값을 넣음
+                     - 전역 객체를 거친 접근도 같다: window, globalThis, self, top, parent, frames와 그 연결
+                       (window.window.fetch, top.fetch), document.defaultView를 거친 접근
+                     (위 보강 항목: Wave 2 보완 결정, 2026-09-13)
 (e) 빌드 산출물      현재 소스로 빌드한 entry 청크에 API base URL 문자열이 없다. 어떤 청크에는 있다(양성 대조군)
 (f) 브라우저 e2e     API origin에 아무도 listen하지 않는 구성에서 '', '#/demo', '#/kana'를 열고 조작해도
                      frontend origin 밖으로 나가는 요청 0건 (API origin과 제3자 origin 모두).
@@ -131,7 +156,8 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
 
 -   **`frontend/src/` 전체에서 HTML 문자열 삽입을 쓰지 않는다**(`innerHTML`, `outerHTML`, `insertAdjacentHTML`,
     `document.write`, `document.writeln`, `Range.createContextualFragment`, `DOMParser.parseFromString`,
-    `iframe.srcdoc`). `setAttribute`로 `on*`·`srcdoc`에는 어떤 값도 넣지 않고 `href`·`src`에는 동적 값을 넣지 않으며, 페이지 이동
+    `iframe.srcdoc`). `setAttribute`로 `on*`·`srcdoc`에는 어떤 값도 넣지 않고 `href`·`src`에는 동적 값을 넣지 않으며(`setAttributeNS`도
+    같다), `src`·`action`·`formAction`·`data` 속성 대입에도 동적 값을 넣지 않고, 페이지 이동
     (`location.href =`, `location.assign`, `location.replace`, `window.open`, `a.href =`)에는 고정 route 상수만 쓴다.
     DOM은 `textContent`와 요소 생성으로만 만든다. 위 (d)가 AST로 검사한다. 학습 콘텐츠·fixture·서버 응답은 모두
     텍스트로만 들어간다.
@@ -194,8 +220,8 @@ nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 �
 -   **key 이름은 네임스페이스 `nc.`와 끝의 형식 버전이다.** 형식을 호환되지 않게 바꾸면 버전을 올리고
     (`nc.demo.v2`) 옛 key는 옮기지 않는다. fixture가 바뀐 경우는 key 버전이 아니라 값 안의 fixture
     식별자로 판정한다.
--   **세 용도 밖에서 브라우저 저장소를 쓰지 않는다.** `sessionStorage`, `indexedDB`, `document.cookie`, `caches`,
-    `window.name`, `navigator.storage`는 `frontend/src/` 어디에도 없다. `history.pushState`/`replaceState`의 state
+-   **세 용도 밖에서 브라우저 저장소를 쓰지 않는다.** `sessionStorage`, `indexedDB`, `document.cookie`, `cookieStore`,
+    `caches`, `window.name`, `navigator.storage`는 `frontend/src/` 어디에도 없다(`cookieStore`: Wave 2 보완 결정, 2026-09-13). `history.pushState`/`replaceState`의 state
     인자는 `null`만 허용한다. 인증 cookie는 지금처럼 서버가 설정하는 `HttpOnly`
     cookie뿐이다(`Session Cookie (MVP 확정)`).
 -   **넣지 않는 것:** secret, 인증 token·cookie 값, 로그인 여부, `login_id`, password, 서버 응답에서 온 데이터
@@ -203,7 +229,8 @@ nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 �
     표현은 공개 정적 fixture의 값이며 서버 데이터가 아니다.
 -   **저장이 없어도 정상 동작한다.** 모든 읽기·쓰기는 예외가 날 수 있다고 보고 감싼다(저장소 차단,
     용량 초과, 사생활 보호 모드). 실패하면 그 페이지 안에서 메모리만으로 동작하고 오류를 띄우지
-    않는다.
+    않는다. `write`가 부르는 `isValid`도 감싸는 범위 안에 있다. `isValid`가 던지면 메모리에도 저장소에도 쓰지
+    않고 던지지 않는다(Wave 2 보완 결정, 2026-09-13).
 -   읽은 값이 형식에 맞지 않으면(파싱 실패, 형식 불일치, fixture 식별자 불일치) 조용히 기본값으로
     시작한다.
 -   **서버로 보내지 않는다.** 계정 진도와 합치지 않는다. 계정 동기화는 MVP-02 범위 밖이다

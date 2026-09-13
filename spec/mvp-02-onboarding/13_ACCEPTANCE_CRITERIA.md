@@ -30,7 +30,7 @@
     click 리스너 안 한 곳뿐이다. 하위 경로로 부팅하거나 타이머를 진행해도 요청이 없다. 떠난 화면은 새 화면 진입 요청(`fetchMe`, study session 시작)을
     시작하지 않는다.
     (ADR-022)
-    확인: `login-entry.test.ts` 부팅 런타임 단정·늦은 응답, `test_home_browser.py`, 변이 검증 14.
+    확인: `login-entry.test.ts` 부팅 런타임 단정·늦은 응답, `study.test.ts`의 세션 시작 늦은 응답(토스트·`/next` 없음), `test_home_browser.py`, 변이 검증 14.
 6.  `로그인`을 누른 결과가 로그인됨이면 Study Screen, 401이면 Login, 403이면 버튼 없이 출처 거부 문구, 그 밖의 연결 실패면 그 자리의 안내와
     `fetchMe`만 다시 부르는 `다시 시도하기`, 로그인 영역 코드 적재 실패면 버튼 없이 상단바 `로그인`을 다시 누르라는 안내이며 공개 화면은
     계속 쓸 수 있다.
@@ -60,7 +60,7 @@
     기다리지 않는다. `/click` 응답 전에 화면을 떠났으면 보내지 않는다. 시트를 닫고 같은 표현을 다시 탭해도 `item_clicked`와 `explanation_revealed`는 presentation + item당
     1회이고 `/click`을 다시 부르지 않는다.
     확인: `explanation.test.ts`(애니메이션 종료 이벤트가 없는 가짜 DOM), `interactions.test.ts`의 재열기와 떠난 뒤
-    도착한 응답(`explanation-revealed` 0건).
+    도착한 응답(`explanation-revealed` 0건), `study.test.ts`의 학습 기록으로 떠난 뒤 도착한 `/click` 응답(시트 없음, `explanation-revealed` 0건).
 14. `prefers-reduced-motion: reduce`이면 이동 없이 짧은 fade만 남는다.
     확인: `test_frontend_invariants.py`의 reduced-motion 에뮬레이션.
 15. 프레임워크·애니메이션 라이브러리·새 frontend 의존성이 없고 View Transitions API를 쓰지 않는다.

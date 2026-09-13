@@ -126,7 +126,8 @@ openLogin()    0 사용자 이벤트 핸들러(상단바 로그인 버튼의 cli
                    예: "로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요."
                    [다시 시도하기] 버튼을 두지 않는다. 다시 시도는 상단바 로그인 버튼이 한다
                    (openLogin 호출 위치를 ui/topbar.ts의 click 리스너 한 곳으로 유지하기 위해서다)
-               4 signal.aborted면 멈춘다. 아니면 enterPrivate({ root, signal, goHome: () => navigate('#/') })
+               4 signal.aborted면 멈춘다. 아니면 enterPrivate({ root, signal, goHome: () => navigate('#/'), openLogin })
+                 openLogin은 실패 화면 상단바의 로그인에 값으로만 넘긴다 (Wave 2 보완 결정, 2026-09-13)
 로그아웃       goHome()
 ```
 
@@ -149,6 +150,11 @@ openLogin()    0 사용자 이벤트 핸들러(상단바 로그인 버튼의 cli
     `POST /api/study/session`을 보내 사용자가 떠난 뒤에 study session을 만들거나 resume한다. 그래서 요청을
     시작하는 지점(로그인 영역 진입, `fetchMe` 뒤의 학습 화면 진입, 로그인 성공 뒤의 학습 화면 진입)은 시작
     직전에 `signal.aborted`를 확인하고 abort됐으면 아무것도 하지 않는다.
+-   **로그인 영역 안의 화면도 화면마다 `signal`을 가진다(Wave 2 보완 결정, 2026-09-13).** 영역 안 이동은 콜백이라
+    `hashchange`가 없으므로 route의 signal 하나로는 학습 → 기록 이동을 "떠남"으로 알 수 없다. `enterPrivate`는 받은
+    `signal`에 묶인 화면별 signal을 만들어 학습·기록·로그인·로그인 확인 실패 화면에 넘기고, 화면을 옮기면 이전 화면의
+    signal을 abort한다. 요청을 시작하는 지점뿐 아니라 `await` 뒤에도 확인하며, 떠난 화면에 늦게 온 409의 session
+    재획득과 401의 Login 이동도 하지 않는다. canonical은 `spec/04_SECURITY_AND_DATA.md`의 `모듈 경계`다.
 -   **`beforeunload`/`pagehide`/`visibilitychange`에는 여전히 아무것도 달지 않는다**(기존 `ui/study.ts`
     규칙). abort는 요청을 취소하지 않는다. 떠난 화면의 요청은 끝까지 가고, 결과만 그리지 않는다.
 -   **떠난 화면에 늦게 온 `/click` 응답은 설명을 그리지 않고 `explanation_revealed`도 보내지 않는다(Wave 1 보완 결정, 2026-09-13).**
@@ -210,6 +216,8 @@ PRIVATE      private.ts
                    on*·srcdoc은 리터럴이어도 위반)
                  - location.href 대입, location.assign, location.replace, window.open, <a>의 href 대입에
                    동적 값을 넣는다 (routes.ts의 고정 route 상수만 허용)
+                 Wave 2 보완 결정(2026-09-13)으로 더한 항목(createElementNS, setAttributeNS, URL 속성 대입,
+                 다단계 전역 객체 접근)은 spec/04_SECURITY_AND_DATA.md의 격리 검사 (d)가 canonical이다
 (a) main.ts     정적 그래프에 API_MODULES와 PRIVATE가 없다
 (b) src/home/ src/demo/ src/kana/ 의 모든 모듈
                 정적 + 리터럴 동적 그래프에 API_MODULES와 PRIVATE가 없다
@@ -428,7 +436,12 @@ const PUBLIC_ROUTES: PublicRoute[] = [
 ### 로그인 영역 (`src/private.ts`)
 
 ``` ts
-export function enterPrivate(ctx: { root: HTMLElement; signal: AbortSignal; goHome: () => void }): void
+export function enterPrivate(ctx: {
+  root: HTMLElement
+  signal: AbortSignal
+  goHome: () => void
+  openLogin: () => void   // 실패 화면 상단바의 로그인에 값으로만 넘긴다 (Wave 2 보완 결정, 2026-09-13)
+}): void
 ```
 
 ### 공통 문장 렌더러 (`src/ui/segments.ts`, Wave 3 `furigana-fe` 소유)

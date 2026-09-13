@@ -1785,3 +1785,71 @@ ADR-022(선택 홈 route와 로그인 진입, 격리 경계 확장)가 확정되
     어긋났다. 403이면 `출처 거부` 문구를 그대로 쓰고 버튼을 두지 않으며, 그 밖의 연결 실패만 인라인 안내와
     `다시 시도하기`(`fetchMe`만 다시 부름)로 확정했다. 또 상단바 표에 두 실패 화면(로그인 확인 실패, 로그인 영역
     불러오기 실패)의 행이 없었다. 두 화면의 오른쪽은 `로그인`이고 누르면 로그인 진입을 처음부터 다시 한다.
+
+**5부 (Wave 2 구현 중 보완):** Wave 2 구현과 게이트에서 드러난 공백·모순을 Wave 2 보완 결정(2026-09-13)으로 채웠다.
+구현을 바꾸지 않았고 반영한 사실은 main의 `frontend/src/`, `backend/app/furigana.py`, `backend/app/jobs/persistence.py`,
+`scripts/backfill_ruby.py`, `infra/Dockerfile.*`에서 확인했다. 위 [95]까지의 서술 중 아래가 바꾼 부분은 아래가 우선한다.
+
+-   **[96] 화면 제목과 포커스** (`03_UI_UX_SPEC.md`의 `화면 전환과 시트`·`화면 문구 표`): `03`은 "화면을 바꾸면 제목에
+    포커스"라고만 적었고 보이는 제목이 없는 Study Screen의 제목과 Login의 첫 포커스 대상이 없었다. 제목은 화면의 첫
+    `h1`이고 `h1`이 없는 화면은 포커스를 옮기지 않는다. Study Screen은 시각적으로 숨긴 `h1` "오늘의 학습"(목업과 같다),
+    Login은 `h1` "로그인"에 포커스를 두고 아이디 입력에 자동 포커스하지 않는다.
+-   **[97] 문구 표 세부** (`03_UI_UX_SPEC.md`의 `화면 문구 표`): 학습 문장 아래 힌트를 문장 바로 아래에 두고 Demo도 같다고
+    적었다. 로그인 확인 연결 실패의 두 문장은 한 문단(안내 하나)으로 적는다. Demo 신고 뒤 안내는 Study Screen과 같은
+    상호작용 모듈에 안내 문구 옵션(`flagSubmittedText`)을 넘겨 바꾼다. Demo에서 fixture에 설명이 빠진 표현을 탭하면 공통
+    `찾을 수 없음` 문구 "내용을 찾지 못했어요."를 쓰고 예외 메시지·fixture 내부 값을 화면에 내지 않는다(행 추가).
+-   **[98] 요청 중에도 상단바 활성** (`03_UI_UX_SPEC.md`의 `상단바`): 요청 중 화면을 잠그는 범위가 없었다. 화면 안
+    버튼만 잠그고 앱 이름·`학습 기록`·`로그아웃`은 누를 수 있다. 요청 도중 떠나는 경로가 있어야 아래 [99]의 늦은 응답
+    규칙이 뜻을 가진다.
+-   **[99] 로그인 영역 화면별 signal과 `await` 뒤 확인** (`spec/04_SECURITY_AND_DATA.md`의 `모듈 경계`, `03`의
+    `로그인 진입`, `docs/decisions/ADR-022`): `spec/04`는 "화면의 `signal`이 abort되면"을 전제로 했지만 로그인 영역 안
+    이동(학습 → 기록)은 hash가 바뀌지 않는 콜백이라 abort가 일어나지 않았다. 그러면 학습 기록으로 옮긴 뒤 늦게 온
+    `/click` 응답이 `explanation_revealed`를 보내 `05_API_SPEC.md`의 `explanation_revealed를 언제 보내는가`와
+    어긋난다. 학습·기록·로그인·로그인 확인 실패 화면마다 `signal`을 새로 만들고, 영역 안에서 화면을 옮기면 이전
+    화면의 `signal`을 abort한다. 요청 시작 직전뿐 아니라 `await` 뒤에도 확인해 새 요청·토스트·화면 전환을 하지 않고,
+    떠난 화면에 늦게 온 409의 session 재획득과 401의 Login 이동도 하지 않는다. 우선순위: `spec/04`(canonical)와 `03`을
+    고치고 ADR-022는 그 절을 참조하게 했다.
+-   **[100] `enterPrivate` 시그니처와 `openLogin` 값 전달 허용처** (`docs/decisions/ADR-022` 결정 1·5,
+    `spec/04_SECURITY_AND_DATA.md`의 `모듈 경계`): [95]가 로그인 확인 실패 화면의 상단바에 `로그인`을 두게 했는데
+    ADR-022의 `enterPrivate({ root, signal, goHome })`에는 그 동작을 받을 자리가 없었다. 명세(`03`)가 ADR보다 앞서므로
+    ADR 시그니처를 `enterPrivate({ root, signal, goHome, openLogin })`로 보정했다. `openLogin`을 값으로 넘기는 곳을
+    `renderTopBar`의 `onLogin`, `startRouter`, `enterPrivate`, `routes.ts`가 공개 화면 ctx를 만드는 곳으로 한정하고, 그
+    밖의 전달(이름 바꾸기, 변수에 담기, 타이머·리스너 객체·안내 버튼)은 위반이라고 적었다. 호출 위치 규칙(상단바
+    click 리스너 한 곳)은 그대로다.
+-   **[101] 격리 검사 (d) 보강과 저장소 세부** (`spec/04_SECURITY_AND_DATA.md`의 `격리 검사`·`HTML 삽입과 URL 값`·
+    `localStorage 사용 범위`, mvp-02 12, ADR-022 결정 2): (d)에 `document.createElementNS`의 태그 인자,
+    `setAttributeNS`(접두사를 뗀 이름으로 판정), 속성 이름이 리터럴이 아닌 `setAttribute`, `src`·`action`·`formAction`·
+    `data` 속성의 동적 대입, 다단계 전역 객체(`window.window`, `top`, `parent`, `frames`, `document.defaultView`)를 거친
+    접근을 더했다. 금지 저장소에 `cookieStore`를 더했다. `local-store`의 `write`가 부르는 `isValid`도 예외를 감싸는 범위
+    안이며 던지면 아무것도 쓰지 않는다. ADR-022의 (d) 목록은 보강 항목에 대해 `spec/04`를 참조하게 했다.
+-   **[102] 가나 단어 한글 규칙과 표 빈 칸** (`03_UI_UX_SPEC.md`의 `정답 표기`): 단어 한글을 "데이터에 단어마다"로만
+    두어 데이터 일관성 테스트가 기댈 규칙이 없었다. 촉음은 앞 음절 받침(다음 소리 k·g → ㄱ, p·b → ㅂ, 그 밖 → ㅅ),
+    히라가나 お단 뒤 う(おう·こう 등)는 소리대로 '오', 가타카나 ー는 앞 모음 반복, 확장 표기 ファ 파·フォ 포·フェ 페·
+    シェ 셰·チェ 체·ディ 디·ティ 티로 적고, ん이 든 단어는 넣지 않는다(받침 규칙을 두지 않았다). 글자 표는 다섯 칸
+    격자(요음은 세 칸)이고 や행·わ행·ん의 빈 칸 위치를 적었다. 빈 칸은 문항이 아니다.
+-   **[103] 후리가나 계산·관측 세부** (`docs/decisions/ADR-021`, `11_OBSERVABILITY.md`):
+    -   ADR-021 실측은 버전을 `importlib.metadata`로 조회했으나 `backend/app/`은 `importlib`을 쓰지 못한다(ADR-015 G13).
+        guard에 예외를 열지 않고 `ANALYZER_VERSION`·`DICTIONARY_VERSION` 코드 상수로 적고 테스트가 설치 버전과 대조한다.
+    -   계층 1의 run은 불연속 span 경계뿐 아니라 **span 경계마다** 자른다(위치가 이어지는 span의 경우가 적혀 있지
+        않았다). run이 항상 span 하나 안에 있다.
+    -   컬럼 매핑이 Python `None`을 JSON `null`로 써서 `ruby_json IS NULL`(미계산 판정)에 걸리지 않는 행이 생길 수 있었다.
+        `None`은 SQL NULL로 저장한다(`JSONB(none_as_null=True)`).
+    -   CLI 요약 줄 끝에 `kanji_tokens=N`(생략 비율의 분모)을 둔다. 조건 규칙 줄은 `prev=`/`next=`를 덧붙여 같은 표면형
+        규칙을 구분한다.
+    -   비교할 수 없는 item(분석기 읽기에 읽기 없는 한자가 남은 item, validated 설명이 없는 tappable item)은 불일치로
+        보고하지 않고 계산 결과의 `uncomparable_items`로 센다. CLI 요약 줄과 로그 필드에는 싣지 않는다.
+    -   새 로그 이벤트 `ruby.log_failed`(warning, `sentence_id`, `error_type`): worker의 ruby 로그 단계에서 난 예외가 문장
+        저장·validated 승격을 막지 않고 예외 타입 이름만 남긴다. 기존 `ruby.*` 이벤트의 이름과 필드는 바꾸지 않았다.
+    -   두 Dockerfile의 `uv sync`에 `--no-build`를 붙인다(고정된 wheel만 설치).
+    -   backfill은 `--apply`에 `--pg-bin`이 없으면 분석기 적재·DB 접속 전에 exit 2로 끝나고, 계산 실패 줄에는 예외
+        타입 이름만 싣는다.
+-   **[104] 테스트와 합격 기준** (`spec/mvp-02-onboarding/12_TEST_PLAN.md`, `13_ACCEPTANCE_CRITERIA.md`): 학습 기록으로 떠난
+    뒤 도착한 `/click` 응답(시트 없음, `explanation-revealed` 0건)과 세션 시작 응답이 떠난 뒤 도착한 경우(토스트·`/next`
+    없음)의 단정을 한 줄씩 더했다. `localSlot` 호출 규칙은 최종 상태(key마다 정확히 1회, 소유 위치, 리터럴 key)를 그대로
+    두었다. 명세는 최종 상태를 적으며 Wave 단계별 적용 메모를 두지 않는다. (d) 보강 항목과 `cookieStore`를 12의 목록에도
+    반영했다.
+
+5부에서 `updates/backlog.md` 5절에 다섯 줄(API 프로세스 로깅 설정 부재로 `ruby.invalid_stored`의 `sentence_id` 미노출,
+같은 초 백업 파일 이름 충돌, backfill 불일치 출력의 bidi 제어문자 미이스케이프, e2e (f)의 WebSocket 미기록, `local-store`
+`read`의 메모리 참조 반환)을 상태 `대기`로 더했다. `05_API_SPEC.md`, `04_DB_SPEC.md`, `10_ERROR_HANDLING.md`, 코드·테스트는
+변경하지 않았다.

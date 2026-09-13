@@ -48,7 +48,9 @@ Makefile 타깃 이름은 구현이 정한다. 테스트는 위 스크립트를 
         `outerHTML`, `insertAdjacentHTML`, `document.write`, `document.writeln`, `Range.createContextualFragment`,
         `DOMParser.parseFromString`, `iframe.srcdoc` 대입), `setAttribute`로 `on*`·`srcdoc`에 넣는 값(리터럴 포함)과 `href`·`src`에 넣는 동적 값,
         고정 route 상수가 아닌 값의 이동(`location.href =`, `location.assign`, `location.replace`, `window.open`,
-        `a.href =`).
+        `a.href =`). `createElementNS`·`setAttributeNS`, `src`·`action`·`formAction`·`data` 동적 대입, 다단계 전역 객체
+        접근(`window.window`, `top`, `parent`, `frames`, `document.defaultView`)도 목록에 든다(`spec/04_SECURITY_AND_DATA.md`의
+        (d)가 canonical).
     -   **fail-closed:** 판정 함수가 풀지 못한 지정자를 건너뛰지 않고 위반으로 낸다.
     -   **양성 대조군:** `private.ts` 그래프에 `endpoints.ts`가 있다. (d)의 판정 함수가 합성 소스의
         `import('../' + 'api')`, `import.meta.glob`, `import './api.js'`, `import 'some-pkg'`, `import W from './x?worker'`,
@@ -70,6 +72,8 @@ Makefile 타깃 이름은 구현이 정한다. 테스트는 위 스크립트를 
 -   **늦은 응답:** `fetchMe` 응답을 기다리는 동안 `hashchange`로 홈에 가면, 늦게 온 200이 학습 화면을 그리지
     않고 **다음 요청(세션 요청)도 시작하지 않는다**(`signal.aborted`). 동적 import 도중 떠나면 `fetchMe`도 나가지
     않는다.
+-   **세션 시작 늦은 응답:** `POST /api/study/session` 응답을 기다리는 동안 학습 화면의 `signal`이 abort되고 그 뒤
+    응답이 도착하면 세션 시작 안내 토스트가 없고 `/next` 요청도 나가지 않는다(`study.test.ts`).
 -   **URL 값 비출력:** 모르는 hash나 하위 경로 문자열(예: `<img>`가 든 값)을 넣어도 화면 텍스트와 DOM에 그 값이
     나오지 않는다.
 
@@ -112,6 +116,8 @@ Makefile 타깃 이름은 구현이 정한다. 테스트는 위 스크립트를 
 -   **떠난 뒤 도착한 응답:** 표현을 탭해 `/click`이 대기 중일 때 상단바 앱 이름이나 뒤로 가기(`hashchange`)로
     화면을 떠나고 그 뒤 `/click` 응답이 도착하면, 설명이 그려지지 않고 `explanation-revealed` 요청이 **0건**이다
     (`item_clicked`만 남는다).
+-   **학습 기록으로 떠난 뒤 도착한 응답:** `/click` 대기 중에 상단바 `학습 기록`으로 로그인 영역 안에서 화면을 옮겨도
+    같다. 늦게 온 응답 뒤 설명 시트가 없고 `explanation-revealed` 요청이 0건이며 `/click`은 1건이다(`study.test.ts`).
 -   **재열기:** 설명 시트를 닫고 같은 표현을 다시 탭하면 설명이 다시 보이고, `/click`과 `explanation-revealed`
     요청이 **presentation + item당 1회**뿐이다. 다른 표현을 탭하면 그 item의 첫 요청이 나간다.
 -   **`showScreen`:** `signal`이 abort되었으면 아무것도 하지 않는다.
@@ -185,7 +191,7 @@ Makefile 타깃 이름은 구현이 정한다. 테스트는 위 스크립트를 
 -   `localStorage` 식별자가 `src/local-store.ts`에만 나온다.
 -   **계산된 속성 접근:** `globalThis`, `window`, `self`, `document`, `navigator`, `history`, `location`에 대한 `[...]`
     접근이 없고, `local-store.ts` 밖의 문자열 리터럴에 `Storage`, `cookie`, `indexedDB` 조각이 없다.
--   `sessionStorage`, `indexedDB`, `document.cookie`, `caches`, `window.name`, `navigator.storage`가 `src/` 어디에도
+-   `sessionStorage`, `indexedDB`, `document.cookie`, `cookieStore`, `caches`, `window.name`, `navigator.storage`가 `src/` 어디에도
     없고, `history.pushState`/`replaceState`의 state 인자가 `null`뿐이다.
 -   `LOCAL_STORE_KEYS`가 `nc.furigana.v1`, `nc.kana.v1`, `nc.demo.v1`과 같다. `localSlot` 호출이 key마다 정확히 한
     번이고 소유 위치(`ui/furigana.ts`, `src/kana/` 한 모듈, `src/demo/` 한 모듈)에만 있으며 key 인자가 문자열

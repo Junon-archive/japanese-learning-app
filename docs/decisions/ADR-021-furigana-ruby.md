@@ -211,6 +211,10 @@ v1 대비 읽기가 바뀐 ruby span                -         68           68
     ruby가 달라지고, demo fixture 일치 테스트가 그 변화를 잡는다. 사전 갱신은 `uv.lock` 변경 +
     fixture 재생성을 한 커밋으로 한다. 이미 저장된 행을 다시 계산하는 수단은 지금 없으며(`한계`), 사전을
     올리는 변경이 그 수단을 함께 설계한다.
+-   **`ruby_json`에 적는 분석기·사전 버전은 `app/furigana.py`의 코드 상수(`ANALYZER_VERSION`, `DICTIONARY_VERSION`)다
+    (Wave 2 보완 결정, 2026-09-13).** `backend/app/`은 `importlib`을 쓰지 않으므로(ADR-015 G13) 실행 중에 설치
+    버전을 조회하지 않고, 이 guard에 예외를 열지 않는다. 대신 테스트가 `importlib.metadata`로 설치 버전과 두
+    상수를 대조한다. 그래서 `uv.lock`으로 버전을 올리는 커밋은 상수도 함께 올려야 테스트가 통과한다.
 -   **SplitMode.C**(가장 긴 단위)로 토큰화한다. 복합어 읽기(本棚 ほんだな의 연탁)는 긴 단위가
     정확하다. 짧은 단위(A)는 경계 충돌을 풀 때만 조건부로 쓴다(`결정 3`).
 -   `sudachidict-core`는 `full`보다 작고(고유명사 확장 없음) 이름 표본(田中, 山田)은 core로 맞았다.
@@ -256,6 +260,9 @@ computed_at   UTC ISO-8601. 호출자가 주입한 now (ADR-007: 계산 모듈�
 -   **`algorithm_version`**은 `결정 3`과 `결정 3a`(교정 표 내용 포함)의 규칙 버전이다.
     `mastery_algorithm_version`, `fsrs_params_version`과 같은 방식이다. 정렬 규칙이나 교정 표가 바뀌면 1씩
     올린다. 1은 교정 계층이 없는 규칙이며 **배포된 적이 없다.** 첫 배포 값은 2다.
+-   **Python `None`은 SQL NULL로 저장한다(Wave 2 보완 결정, 2026-09-13).** 컬럼 매핑을 `JSONB(none_as_null=True)`로
+    둔다. 기본 매핑은 `None`을 JSON `null` 값으로 써서 `ruby_json IS NULL`(미계산 판정, backfill 대상)에 걸리지
+    않는 행이 생긴다.
 -   **DB CHECK를 두지 않는다.** 실제로 지켜야 하는 무결성(원문 길이 안, 겹침 없음, tappable 경계
     안)은 다른 컬럼·테이블과 대조해야 해서 CHECK로 표현되지 않는다. `sentence_item_spans`도 원문
     대조를 애플리케이션 검증으로 한다. 같은 검증 함수를 계산 시점과 표시 시점에 **둘 다** 부른다
@@ -370,7 +377,9 @@ item의 span은 렌더링에서 일반 텍스트로 흐르므로(`app/render.py`
 대상      is_tappable = true 이고 surface_form에 한자 문자가 있는 item
 입력      그 item의 span들을 span_order 순으로 이은 code point 위치 목록 P
           읽기 R = 가나변환(explanation.reading에서 NFKC -> 모든 공백 제거)
-run       P의 글자를 한자/비한자로 자르고, **위치가 이어지지 않는 곳(불연속 span 경계)에서도 자른다**
+run       P의 글자를 한자/비한자로 자르고, **span 경계마다 자른다** (위치가 이어지지 않는 불연속 span 경계뿐
+          아니라 위치가 이어지는 span 경계에서도 자른다. 그래서 run이 항상 span 하나 안에 있다.
+          Wave 2 보완 결정, 2026-09-13)
 정렬      결정 3의 3과 같은 방식으로 R에 대해 정렬을 찾는다(2개까지)
           정확히 1개이고 모든 부분 읽기가 히라가나 조건을 만족 -> 한자 run마다 explanation span
           0개 또는 2개 이상                                  -> 이 item은 계층 1을 쓰지 않는다
@@ -461,6 +470,11 @@ CORRECTION_RULES: tuple[CorrectionRule, ...] = (
 보고 두 종류
   reading_mismatch      계층 1 정렬 불성립 + 두 읽기가 다르다   -> 저장된 ruby는 분석기 읽기
   explanation_override  계층 1 정렬 성립   + 두 읽기가 다르다   -> 저장된 ruby는 explanation 읽기
+비교 불가   다음 item은 비교하지 않고 uncomparable_items로 센다 (Wave 2 보완 결정, 2026-09-13)
+              분석기 읽기에 ruby 없는 한자 문자가 남은 item
+              validated 설명이 없는 tappable item (설명 읽기 없음. 계층 1도 쓰지 않고 span은 tappable
+              경계로만 쓴다. 빈 설명과의 불일치를 보고하지 않기 위해서다)
+            uncomparable_items는 계산 결과(compute_ruby 반환값)의 관측 값이며 CLI 요약 줄과 로그 필드에는 없다
 ```
 
 -   결과는 **stdout(CLI)과 로그로만** 낸다. DB에 저장하지 않는다. 설명 데이터를 자동으로 고치지 않는다.
@@ -553,12 +567,19 @@ worker  ruby.computed              info     sentence_id, algorithm_version, span
         ruby.failed                warning  sentence_id, error (observability.describe_error)
         ruby.reading_mismatch      info     sentence_id, sentence_item_id
         ruby.explanation_override  info     sentence_id, sentence_item_id
+        ruby.log_failed            warning  sentence_id, error_type   (위 ruby 로그 단계에서 예외가 났다.
+                                            예외 타입 이름만 싣는다. 문장 저장·promote를 막지 않는다.
+                                            Wave 2 보완 결정, 2026-09-13)
 API     ruby.invalid_stored        warning  sentence_id   (저장값이 validate_ruby_spans를 통과 못 함)
 CLI     seed / backfill / fixture 생성의 stdout 요약 + 규칙별 적중 + 불일치 목록
         ruby: algorithm_version=2 sentences=N computed=N failed=N omitted_tappable_boundary=N
               omitted_numeric=N omitted_no_reading=N corrected_explanation_tokens=N
-              corrected_table_rules=N reading_mismatches=N explanation_overrides=N
+              corrected_table_rules=N reading_mismatches=N explanation_overrides=N kanji_tokens=N
+              (kanji_tokens = 생략 비율의 분모인 한자를 포함한 토큰 수. 줄 끝. Wave 2 보완 결정, 2026-09-13)
         rule 私->わたし hits=N  (CORRECTION_RULES 순서대로 한 줄씩, 0이어도 출력)
+        rule 中->じゅう prev=今日 hits=N          조건 있는 규칙은 prev=(앞 토큰, 쉼표로 이음)와
+        rule 何->なに next=か|が|も|を hits=N     next=(다음 토큰 후보, 정렬해 |로 이음)를 덧붙인다.
+                                                 같은 표면형 규칙이 여러 줄이어도 구분된다 (Wave 2 보완 결정, 2026-09-13)
         mismatch kind=<reading_mismatch|explanation_override> sentence=<seed_id 또는 id>
                  item=<sentence_item_id> surface=<표면형> explanation=<설명 읽기> analyzer=<분석기 읽기>
         (운영자 터미널 출력이다. 로그 파일이 아니므로 텍스트를 싣는다)
@@ -574,8 +595,12 @@ DB      SELECT count(*) FROM sentences WHERE ruby_json IS NULL   = 미계산 잔
 2 대상 조회     WHERE ruby_json IS NULL ORDER BY id
                 그 문장들의 tappable span과 explanation.reading(validated 중 최소 id)
 3 계산          메모리에서만. 요약, 규칙별 적중, 불일치 목록 출력. 계산 실패 수 F를 센다
+                실패한 문장은 "failed sentence=<id> error=<예외 타입 이름>" 한 줄. 예외 메시지는 싣지 않는다
+                (Wave 2 보완 결정, 2026-09-13)
 4 dry-run       --apply가 없으면 "dry-run: nothing written" 을 출력하고 끝낸다
                 F > 0 이면 exit 2, 아니면 exit 0
+0 인자 확인     --apply인데 --pg-bin이 없으면 분석기 적재·DB 접속 전에 exit 2로 끝난다
+                (계산을 다 한 뒤 백업 단계에서야 실패하지 않게. Wave 2 보완 결정, 2026-09-13)
 5 --apply       쓸 행(계산 성공 행)이 0이면 백업 없이 7로
                 있으면 db_backup.create_backup(--pg-bin 필수, 새 백업 검증 포함)
                 백업 실패 -> 아무것도 쓰지 않고 exit 2. 백업을 건너뛰는 옵션은 없다
@@ -751,10 +776,14 @@ default-groups = ["dev", "furigana"]
 ```
 
 ``` text
-Dockerfile.backend  RUN uv sync --frozen --no-default-groups                    (분석기 없음)
-Dockerfile.worker   RUN uv sync --frozen --no-default-groups --group furigana  (분석기 포함)
+Dockerfile.backend  RUN uv sync --frozen --no-default-groups --no-build                    (분석기 없음)
+Dockerfile.worker   RUN uv sync --frozen --no-default-groups --group furigana --no-build  (분석기 포함)
 호스트              uv sync / uv run  (기본 group 전부: dev + furigana)
 ```
+
+-   **두 이미지 명령에 `--no-build`를 붙인다(Wave 2 보완 결정, 2026-09-13).** 이미지 빌드에서 sdist를 빌드하지 않고
+    `uv.lock`에 고정된 wheel만 설치한다. wheel이 없는 패키지가 생기면 이미지 빌드가 조용히 컴파일로 넘어가지 않고
+    실패한다.
 
 임시 환경의 프로젝트 사본(pyproject + uv.lock 복사 후 group 추가, `uv lock`)으로 확인했다.
 

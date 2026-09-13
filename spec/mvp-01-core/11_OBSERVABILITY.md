@@ -91,20 +91,28 @@ worker  ruby.computed              info     sentence_id, algorithm_version, span
         ruby.failed                warning  sentence_id, error
         ruby.reading_mismatch      info     sentence_id, sentence_item_id
         ruby.explanation_override  info     sentence_id, sentence_item_id
+        ruby.log_failed            warning  sentence_id, error_type   (위 ruby 로그를 남기는 단계에서 예외가 남)
 API     ruby.invalid_stored        warning  sentence_id   (저장값이 검증을 통과하지 못함)
 ```
 
+-   **ruby 로그 단계의 예외는 문장 저장을 막지 않는다**(Wave 2 보완 결정, 2026-09-13). worker가 `ruby.*` 로그를
+    남기다 예외가 나면 `ruby.log_failed`만 남기고 저장과 validated 승격을 그대로 끝낸다. 실패한 로그를 다시
+    시도하지 않고 `error_type`에는 예외 타입 이름만 싣는다(메시지 없음).
+
 -   **문장 텍스트와 읽기 문자열은 로그에 남기지 않는다**(생성 콘텐츠 원문을 로그에 싣지 않는 기존 규칙).
 -   분석기·사전 버전은 로그가 아니라 `sentences.ruby_json` 안에 남는다(`04_DB_SPEC.md`의 `ruby_json`).
-    로그에는 `algorithm_version`만 싣는다.
+    로그에는 `algorithm_version`만 싣는다. 그 버전 값은 계산 모듈의 코드 상수이고, 테스트가 설치된 패키지
+    버전과 대조한다(ADR-021 결정 1, Wave 2 보완 결정, 2026-09-13).
 
 CLI stdout 요약(seed·backfill·fixture 생성 공통):
 
 ``` text
 ruby: algorithm_version=2 sentences=N computed=N failed=N omitted_tappable_boundary=N
       omitted_numeric=N omitted_no_reading=N corrected_explanation_tokens=N
-      corrected_table_rules=N reading_mismatches=N explanation_overrides=N
+      corrected_table_rules=N reading_mismatches=N explanation_overrides=N kanji_tokens=N
 rule 私->わたし hits=N          (교정 표 규칙 순서대로 한 줄씩, 0이어도 출력)
+rule 中->じゅう prev=今日 hits=N          (조건 있는 규칙은 prev=앞 토큰(쉼표로 이음),
+rule 何->なに next=か|が|も|を hits=N      next=다음 토큰 후보(정렬해 |로 이음)를 덧붙인다)
 mismatch kind=<reading_mismatch|explanation_override> sentence=<seed_id 또는 id>
          item=<sentence_item_id> surface=<표면형> explanation=<설명 읽기> analyzer=<분석기 읽기>
 ```
@@ -112,7 +120,12 @@ mismatch kind=<reading_mismatch|explanation_override> sentence=<seed_id 또는 i
 CLI 출력은 운영자 터미널 출력이고 로그 파일이 아니므로 표면형과 읽기를 싣는다. **설명 읽기처럼 LLM에서 온
 문자열은 제어문자(개행, ESC 등)를 이스케이프해 출력한다.** 터미널 제어 시퀀스가 실행되거나 한 항목이 여러
 줄로 갈라져 목록을 위조하지 않게 하기 위해서다. 생략 비율 판정의 분모인
-"한자를 포함한 토큰 수"도 요약에 함께 낸다.
+"한자를 포함한 토큰 수"도 요약에 함께 낸다. 그 값은 요약 줄 끝의 `kanji_tokens=N`이다. 조건 규칙 줄의
+`prev=`/`next=`는 같은 표면형의 규칙이 여러 줄일 때 서로 구분하기 위해서다. (Wave 2 보완 결정, 2026-09-13)
+
+backfill은 계산에 실패한 문장마다 `failed sentence=<id> error=<예외 타입 이름>` 한 줄을 낸다. 예외 메시지는
+싣지 않는다. `--apply`에 `--pg-bin`이 없으면 계산·DB 접속 전에 실패한다(ADR-021의 backfill 스크립트, Wave 2
+보완 결정, 2026-09-13).
 
 미계산 잔량: `SELECT count(*) FROM sentences WHERE ruby_json IS NULL`. 새 테이블이 없다.
 
@@ -128,6 +141,10 @@ CLI 출력은 운영자 터미널 출력이고 로그 파일이 아니므로 표
     reading_mismatch      설명 읽기로 정렬이 성립하지 않았고 두 읽기가 다르다 -> 저장된 ruby는 분석기 읽기
     explanation_override  설명 읽기로 정렬이 성립했고 두 읽기가 다르다     -> 저장된 ruby는 설명 읽기
     ```
+
+    비교하지 못하는 item은 불일치로 보고하지 않고 계산 결과의 `uncomparable_items`로 센다(Wave 2 보완 결정,
+    2026-09-13): 분석기 읽기에 읽기 없는 한자가 남은 item, validated 설명이 없는 tappable item(빈 설명과의
+    불일치를 보고하지 않는다). 이 수는 CLI 요약 줄과 로그 필드에 싣지 않는다.
 
     `explanation_override`를 따로 보는 이유는 생성 문장의 설명 읽기가 LLM 출력이고 읽기의 정확성은 검증하지
     않기 때문이다. 결과는 **stdout과 로그로만** 낸다. DB에 저장하지 않고 설명 데이터를 자동으로 고치지

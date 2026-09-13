@@ -75,10 +75,15 @@ MVP-01에서 다음 사이클로 미룬 항목이다. **명세가 아니고 구�
 | 모바일에서 세션 시작/진행/종료 가능 (#1) | iOS 실기기에서 세션 종료까지 진행한다 | 대기 |
 | Postgres 직접 인터넷 노출 없음 (#37) | 외부에서 DB 포트 접속이 실패하는지 확인한다 | 대기 |
 
-## 5. MVP-02에서 제기된 항목 (1건)
+## 5. MVP-02에서 제기된 항목 (6건)
 
 MVP-02 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 항목이다.
 
 | 항목 | 근거 | 상태 |
 |---|---|---|
 | CSP(Content-Security-Policy) 도입: API origin을 하드코딩하지 않고 정적 헤더에 주입하는 설계 필요 | MVP-02 보안 검토에서 제기. `spec/04_SECURITY_AND_DATA.md`의 `HTML 삽입과 URL 값 (MVP-02 확정)` | 대기 |
+| API 프로세스에 로깅 설정이 없어 `ruby.invalid_stored`의 `sentence_id`가 운영 로그에 보이지 않는다 | MVP-02 Wave 2 구현에서 제기. `spec/mvp-01-core/11_OBSERVABILITY.md`의 후리가나 로그 이벤트 | 대기 |
+| 같은 초에 백업이 두 번 만들어지면 백업 파일 이름이 충돌한다(backfill `--apply`를 동시에 돌리면 늦은 쪽이 exit 2로 끝나며 데이터는 안전하다) | MVP-02 Wave 2 구현에서 제기. `docs/decisions/ADR-021-furigana-ruby.md`의 backfill 스크립트 | 대기 |
+| backfill 불일치 출력이 bidi 제어문자(U+202E 등)를 이스케이프하지 않는다(C0·C1·U+007F만 이스케이프) | MVP-02 Wave 2 게이트에서 제기. `spec/mvp-01-core/11_OBSERVABILITY.md`의 CLI 출력 이스케이프 | 대기 |
+| 브라우저 e2e 격리 검사 (f)가 WebSocket 요청을 기록·차단하지 않는다(식별자 AST 검사 (d)가 막고 있어 이중 방어 중 한 겹만 빈다) | MVP-02 Wave 2 게이트에서 제기. `spec/04_SECURITY_AND_DATA.md`의 `격리 검사 (MVP-02 확정)` | 대기 |
+| `local-store.ts`의 `read`가 메모리에 든 값의 참조를 그대로 돌려준다(현재 호출자는 복사해서 쓴다) | MVP-02 Wave 2 게이트에서 제기. `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)` | 대기 |
