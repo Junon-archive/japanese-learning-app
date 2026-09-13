@@ -125,7 +125,7 @@ def load_targets(connection: sa.Connection) -> list[Target]:
 
     설명 읽기는 `validated` 중 id가 가장 작은 행이다(`EXPLAIN_ITEM` 재실행으로 둘일 수 있다).
     validated 설명이 없는 tappable item(아직 ready가 아닌 문장)도 span은 경계로 넘기고 읽기는
-    빈 문자열로 둔다 --- 계층 1이 성립하지 않고 분석기 읽기로 계산된다.
+    None으로 둔다 --- 계층 1을 쓰지 않고 불일치 비교에서 빠진다(`uncomparable_items`).
     """
     targets = sa.select(Sentence.id).where(Sentence.ruby_json.is_(None)).subquery()
     sentences = connection.execute(
@@ -175,7 +175,7 @@ def load_targets(connection: sa.Connection) -> list[Target]:
                 RubyItem(
                     sentence_item_id=item_id,
                     spans=tuple(item_spans),
-                    explanation_reading=readings.get(item_id, ""),
+                    explanation_reading=readings.get(item_id),
                 )
                 for item_id, item_spans in spans.get(int(sentence_id), {}).items()
             ),

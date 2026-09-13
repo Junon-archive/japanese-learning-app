@@ -449,7 +449,7 @@ def _compute_ruby(
     `RubyItem.sentence_item_id`에는 payload 안의 item **순번**을 넣는다. 아직 DB id가 없고,
     `item_ref`는 한 문장에서 겹칠 수 있는 요청 라벨이다. 순번은 `_log_ruby`에서 실제 id로 바뀐다.
     tappable item의 explanation은 validation이 보장한다. 없으면 `_promote_to_validated`가 그
-    문장을 되돌리므로 여기서는 빈 읽기(계층 1 불성립)로만 다룬다.
+    문장을 되돌리므로 여기서는 설명 없음(None: 경계로만 쓰고 불일치 비교에서 뺀다)으로 다룬다.
     """
     items = [
         RubyItem(
@@ -458,7 +458,7 @@ def _compute_ruby(
                 ItemSpan(span.start_codepoint, span.end_codepoint, span.span_order)
                 for span in item.spans
             ),
-            explanation_reading="" if item.explanation is None else item.explanation.reading,
+            explanation_reading=None if item.explanation is None else item.explanation.reading,
         )
         for index, item in enumerate(payload.items)
         if item.is_tappable

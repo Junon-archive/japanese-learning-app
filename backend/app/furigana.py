@@ -107,11 +107,14 @@ class RubyItem:
 
     `sentence_item_id`는 호출자의 식별자다(seed는 문장 안 식별자, worker는 로컬 식별자,
     backfill은 DB id). 계산은 이 값을 보지 않고 불일치 보고에 그대로 싣는다.
+
+    `explanation_reading`이 None이면 validated 설명이 없는 item이다. span은 tappable 경계로 계속
+    쓰지만 계층 1을 쓰지 않고, 불일치 비교에서 빼서 `uncomparable_items`로 센다.
     """
 
     sentence_item_id: int | str
     spans: tuple[ItemSpan, ...]
-    explanation_reading: str
+    explanation_reading: str | None
 
 
 @dataclass(frozen=True)
@@ -307,8 +310,10 @@ def _item_runs(japanese: str, item: RubyItem) -> list[_Run]:
 def _explanation_spans(japanese: str, item: RubyItem) -> list[RubySpan] | None:
     """정렬이 정확히 1개이고 부분 읽기가 전부 히라가나 조건을 만족하면 한자 run마다 span.
 
-    그 밖(0개, 2개 이상, 조건 위반)은 None --- 이 item은 계층 1을 쓰지 않는다.
+    그 밖(0개, 2개 이상, 조건 위반, 설명 없음)은 None --- 이 item은 계층 1을 쓰지 않는다.
     """
+    if item.explanation_reading is None:
+        return None
     runs = _item_runs(japanese, item)
     reading = normalize_explanation_reading(item.explanation_reading)
     found, parts = _alignment(runs, reading)
@@ -553,7 +558,7 @@ def compute_ruby_from_tokens(
     uncomparable = 0
     for item, item_explanation_spans in explained:
         analyzer = _analyzer_reading(japanese, item, analyzer_spans)
-        if analyzer is None:
+        if item.explanation_reading is None or analyzer is None:
             uncomparable += 1
             continue
         if normalize_explanation_reading(item.explanation_reading) == analyzer:

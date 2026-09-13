@@ -53,7 +53,7 @@ SEED_SENTENCES = REPO_ROOT / "seed" / "sentences.yaml"
 OMISSION_STOP_RATIO = 0.05
 
 
-def item(item_id: int | str, spans: list[tuple[int, int]], reading: str) -> RubyItem:
+def item(item_id: int | str, spans: list[tuple[int, int]], reading: str | None) -> RubyItem:
     return RubyItem(
         sentence_item_id=item_id,
         spans=tuple(ItemSpan(start, end, order) for order, (start, end) in enumerate(spans)),
@@ -463,6 +463,21 @@ def test_equal_readings_after_normalization_are_not_reported() -> None:
     result = ruby("明日は早い。", [item(3, [(0, 2)], "ア シ タ")])
 
     assert result.mismatches == ()
+
+
+def test_an_item_without_a_validated_explanation_is_a_boundary_but_not_compared() -> None:
+    """설명이 없으면(None) 계층 1도 불일치 비교도 없다. span은 tappable 경계로 계속 쓴다.
+
+    `本棚`에서 tappable `本`: 설명이 없어도 경계가 살아 있어 토큰 전체가 생략된다.
+    seed·worker·backfill이 모두 이 `compute_ruby` 경로를 지난다.
+    """
+    result = ruby("本棚を買った。明日は早い。", [item(1, [(0, 1)], None), item(2, [(7, 9)], None)])
+
+    assert spans_of(result) == [(3, 4, "か"), (7, 9, "あした"), (10, 11, "はや")]
+    assert result.omitted_tappable_boundary == 1
+    assert result.corrected_explanation_tokens == 0
+    assert result.mismatches == ()
+    assert result.uncomparable_items == 2
 
 
 def test_items_without_kanji_are_not_compared() -> None:
