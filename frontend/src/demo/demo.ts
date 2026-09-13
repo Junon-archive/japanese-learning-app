@@ -142,11 +142,8 @@ export function mount(ctx: PublicScreenContext): void {
       flagContent: async (reason: ContentFlagReason, note: string | null) => {
         answers.push(`flag:${reason}:${note ?? ''}`)
       },
-      // demo에서는 실패가 없다. 그래도 화면이 문구를 낼 수 있게 채워 둔다.
-      reportFailure: (error: unknown) => ({
-        kind: 'message',
-        text: error instanceof Error ? error.message : '데모 데이터를 불러오지 못했습니다.',
-      }),
+      // 실패는 fixture에 설명이 빠진 경우뿐이다. 예외 메시지·fixture id를 화면에 내지 않고 고정 문구만 쓴다.
+      reportFailure: () => ({ kind: 'message', text: MESSAGES.notFound }),
     }
   }
 

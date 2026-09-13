@@ -47,12 +47,13 @@ export function localSlot<T>(
       }
     },
     write(value) {
-      if (!isValid(value)) return
-      memory.set(key, value)
       try {
+        // isValid도 던질 수 있다. 그때는 쓰지 않는다.
+        if (!isValid(value)) return
+        memory.set(key, value)
         localStorage.setItem(key, JSON.stringify(value))
       } catch {
-        // 용량 초과, 사생활 보호 모드, 접근 거부. 메모리 값으로 계속한다.
+        // 용량 초과, 사생활 보호 모드, 접근 거부. 메모리에 쓴 값으로 계속한다.
       }
     },
     remove() {

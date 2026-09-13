@@ -125,7 +125,12 @@ def test_core_e2e_13_steps_in_a_real_browser(e2e_stack: E2EStack, page: Page) ->
     expect(panel.locator(".nuance")).to_have_text(stored.nuance)
 
     clicked = flow.events(stack, learner, event_type=EventType.ITEM_CLICKED)
-    revealed = flow.events(stack, learner, event_type=EventType.EXPLANATION_REVEALED)
+    # `explanation_revealed`는 시트에 설명을 넣은 직후 응답을 기다리지 않고 보낸다. 화면이 떴다고 그
+    # event가 커밋됐다는 뜻이 아니므로 커밋될 때까지 기다린 뒤 센다.
+    revealed = flow._poll(
+        lambda: flow.events(stack, learner, event_type=EventType.EXPLANATION_REVEALED) or None,
+        what="explanation_revealed event",
+    )
     assert [row.learning_item_id for row in clicked] == [focus.id]
     assert [row.learning_item_id for row in revealed] == [focus.id]
 

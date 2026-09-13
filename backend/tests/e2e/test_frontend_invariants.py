@@ -869,15 +869,25 @@ def test_reopening_an_explanation_sends_click_and_revealed_once(
     }
 
 
+# 학습 화면을 떠나는 상단바 버튼과 떠난 뒤의 화면. 앱 이름은 공개 route(선택 홈)로, `학습 기록`은 로그인
+# 영역 안의 콜백 이동(History)으로 떠난다. 두 길 모두 학습 화면의 signal을 abort해야 한다.
+LEAVE_STUDY_BY = {
+    "app-name": (".topbar .topbar-brand", ".screen.home"),
+    "history": (".topbar .history-link", ".screen.history"),
+}
+
+
 @pytest.mark.integration
+@pytest.mark.parametrize("leave_by", list(LEAVE_STUDY_BY))
 def test_a_late_click_response_after_leaving_reveals_nothing(
-    e2e_stack: E2EStack, page: Page
+    e2e_stack: E2EStack, page: Page, leave_by: str
 ) -> None:
     """`/click` 응답 전에 화면을 떠나면 늦게 온 응답으로 설명을 그리지 않고 `explanation_revealed`도 없다.
 
-    요청은 서버까지 보낸다(`route.fetch()`) --- 그래야 `item_clicked`만 남는 실제 상황이다. 응답은 앱
-    이름을 눌러 선택 홈으로 떠난 **뒤에** 브라우저에 건넨다.
+    요청은 서버까지 보낸다(`route.fetch()`) --- 그래야 `item_clicked`만 남는 실제 상황이다. 응답은 상단바
+    앱 이름(선택 홈) 또는 `학습 기록`(History)으로 떠난 **뒤에** 브라우저에 건넨다.
     """
+    leave_button, left_screen = LEAVE_STUDY_BY[leave_by]
     stack = e2e_stack
     started = _start(stack, page, _cfg(minimum_meaningful_exposures=MINIMUM_EXPOSURES))
     learner, focus_id = started.learner, started.focus_id
@@ -896,8 +906,8 @@ def test_a_late_click_response_after_leaving_reveals_nothing(
         page.wait_for_timeout(50)
     assert held, "/click 요청이 나가지 않았다"
 
-    page.locator(".topbar .topbar-brand").click()
-    page.locator(".screen.home").wait_for(state="visible")
+    page.locator(leave_button).click()
+    page.locator(left_screen).wait_for(state="visible")
 
     late = held[0]
     late.fulfill(response=late.fetch())
@@ -905,7 +915,7 @@ def test_a_late_click_response_after_leaving_reveals_nothing(
     page.unroute("**/click")
 
     assert page.locator(".sheet").count() == 0, "떠난 뒤에 설명 시트가 열렸다"
-    assert page.locator(".screen.home").count() == 1
+    assert page.locator(left_screen).count() == 1
     assert sent == [], f"떠난 뒤 explanation_revealed를 보냈다: {sent}"
     assert _interaction_counts(stack, presentation.id, focus_id) == {
         EventType.ITEM_CLICKED: 1,

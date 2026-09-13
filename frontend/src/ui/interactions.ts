@@ -282,6 +282,8 @@ export function createInteractions(
     try {
       await task()
     } catch (error) {
+      // 떠난 뒤 늦게 온 실패는 화면을 고치지 않고 호출부의 복구(로그인 이동, session 재획득)도 부르지 않는다.
+      if (signal.aborted) return
       onFailure(ops.reportFailure(error))
       render()
     } finally {

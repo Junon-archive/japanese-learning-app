@@ -67,6 +67,8 @@ export function mountLogin(root: HTMLElement, signal: AbortSignal, actions: Logi
 
     login({ login_id: loginIdField.input.value, password: passwordField.input.value })
       .then((user) => {
+        // 떠났으면 학습 화면으로 가로채지 않는다(study session도 시작하지 않는다).
+        if (signal.aborted) return
         actions.onAuthenticated(user)
       })
       .catch((error: unknown) => {

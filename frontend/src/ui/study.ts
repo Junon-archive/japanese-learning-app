@@ -184,9 +184,13 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     sentence?.abort()
     const controller = new AbortController()
     sentence = controller
-    signal.addEventListener('abort', () => {
+    if (signal.aborted) {
       controller.abort()
-    })
+    } else {
+      signal.addEventListener('abort', () => {
+        controller.abort()
+      })
+    }
     return controller.signal
   }
 
@@ -256,6 +260,8 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
    * 알 수 없는 사유는 일반 오류로 다룬다 --- 추측해서 재획득하지 않는다.
    */
   function reportInteractionFailure(error: unknown): InteractionFailure {
+    // 떠난 화면은 로그인 이동도 session 재획득도 시작하지 않는다.
+    if (signal.aborted) return { kind: 'handled' }
     if (error instanceof ApiError) {
       if (error.kind === 'Unauthenticated') {
         onUnauthenticated()
@@ -317,6 +323,8 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     // 떠난 화면은 새 화면 진입 요청을 시작하지 않는다(04_SECURITY_AND_DATA.md의 `모듈 경계`).
     if (signal.aborted) return
     const started = await startSession()
+    // 응답을 기다리는 동안 떠났다. 안내도 `/next`도 없다.
+    if (signal.aborted) return
     applySession(started.session)
     setNotice(null)
     // 한 번 사라지는 안내(토스트). 학습 진행을 막지 않는다(03_UI_UX_SPEC.md의 `세션 시작 안내`).
@@ -333,6 +341,7 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     const current = session
     if (current === null) return
     const response = await fetchNextPresentation(current.session_id)
+    if (signal.aborted) return
     if (response.presentation === null) {
       clearSentence()
       setNotice(
@@ -364,15 +373,18 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
       return
     }
     clearSentence()
+    // 떠난 화면은 다음 요청(진행 조회, 다음 문장)을 시작하지 않는다.
+    if (signal.aborted) return
 
     // 진행 갱신. 조회이므로 `last_activity_at`과 `active_seconds`를 건드리지 않는다.
     await refreshSession()
-    if (session === null) return
+    if (session === null || signal.aborted) return
     await loadNext()
   }
 
   async function refreshSession(): Promise<void> {
     const open = await fetchOpenSession()
+    if (signal.aborted) return
     if (open.session === null) {
       // 다른 경로(직접 종료 / 다른 탭)로 이미 닫혔다. 자동으로 새 세션을 만들지 않는다.
       session = null
@@ -398,9 +410,10 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
       const current = session
       if (current === null) return
       const finished = await finishSession(current.session_id)
+      // 학습이 끝났으므로 문장도 Next도 남기지 않는다. 문장 signal도 끝낸다 --- 늦게 온 `/click`
+      // 응답이 시트를 열거나 `explanation_revealed`를 보내지 못한다.
+      clearSentence()
       session = finished
-      presentation = null
-      // 학습이 끝났으므로 문장도 Next도 남기지 않는다.
       screen.replaceChildren(topBar, renderSessionFinished(finished))
     }, MESSAGES.saveFailed)
   }
@@ -419,6 +432,8 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
   // ----------------------------------------------------------------------
 
   async function handleError(error: unknown, failureMessage?: string): Promise<void> {
+    // 떠난 화면은 로그인 이동도 session 재획득도 하지 않는다.
+    if (signal.aborted) return
     if (error instanceof ApiError) {
       if (error.kind === 'Unauthenticated') {
         onUnauthenticated()
@@ -444,13 +459,17 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
    * 이 안에서 다시 실패하면 **재귀하지 않는다.** 안내와 수동 재시도로 끝낸다.
    */
   async function recoverSession(): Promise<void> {
+    // study session 시작은 새 화면 진입 요청이다. 떠났으면 시작하지 않는다.
+    if (signal.aborted) return
     clearSentence()
     try {
       const started = await startSession()
+      if (signal.aborted) return
       applySession(started.session)
       setNotice(renderNotice(MESSAGES.sessionChanged, 'info'))
       await loadNext()
     } catch (error) {
+      if (signal.aborted) return
       if (error instanceof ApiError && error.kind === 'Unauthenticated') {
         onUnauthenticated()
         return
@@ -473,7 +492,7 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
    */
   async function resume(): Promise<void> {
     await refreshSession()
-    if (session === null || presentation !== null) return
+    if (session === null || presentation !== null || signal.aborted) return
     await loadNext()
   }
 

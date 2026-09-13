@@ -276,6 +276,24 @@ describe('demo run', () => {
     expect(document.cookie).toBe('')
   })
 
+  it('shows only fixed wording when the fixture lacks an explanation', async () => {
+    const explanations = DEMO_SENTENCES[0]!.explanations
+    const [id, saved] = Object.entries(explanations)[0]!
+    delete explanations[Number(id)]
+    try {
+      mount()
+      click('token')
+      await flush()
+
+      // 예외 메시지(영어, fixture id)를 화면에 내지 않는다.
+      expect(text()).toContain(MESSAGES.notFound)
+      expect(text()).not.toContain('demo fixture')
+      expect(text()).not.toContain(id)
+    } finally {
+      explanations[Number(id)] = saved
+    }
+  })
+
   it('has no logout control', () => {
     // Demo는 Login 화면을 지나지 않으므로 폐기할 세션이 없다(03_UI_UX_SPEC.md의 `로그아웃`).
     expect(text()).not.toContain('로그아웃')

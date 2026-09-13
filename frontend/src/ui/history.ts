@@ -262,6 +262,8 @@ export function mountHistory(root: HTMLElement, signal: AbortSignal, actions: Hi
         )
       })
       .catch((error: unknown) => {
+        // 떠난 화면은 로그인 화면으로 가로채지 않는다.
+        if (signal.aborted) return
         if (error instanceof ApiError && error.kind === 'Unauthenticated') {
           actions.onUnauthenticated()
           return
