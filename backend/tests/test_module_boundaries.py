@@ -1,4 +1,4 @@
-"""ADR-007의 정적 guard G1~G10 + ADR-015의 G11~G13.
+"""ADR-007의 정적 guard G1~G10 + ADR-015의 G11~G13 + ADR-021의 G14.
 
 `backend/app/` 전체를 AST로 훑어 모듈 경계와 시각 주입 규약을 강제한다. 주석은
 지켜지지 않는다 --- Wave 1의 `app/api/router.py`가 보여준 대로 **구조로 강제하고
@@ -126,6 +126,32 @@ BACKGROUND_TASK_MODULE = "starlette.background"
 # G13: 동적 import는 AST에 보이지 않으므로 G4/G12를 통째로 우회한다. 그래서 수단 자체를
 # 없앤다.
 DYNAMIC_IMPORT_NAMES: frozenset[str] = frozenset({"importlib", "__import__"})
+
+# G14 (ADR-021 결정 4): 형태소 분석기는 API 프로세스에 들어오지 않는다.
+# (a) 분석기 패키지 import는 `app/furigana.py`에서만.
+ANALYZER_PACKAGES: frozenset[str] = frozenset({"sudachipy", "sudachidict_core"})
+FURIGANA_MODULE = "furigana.py"
+# (b) `app.furigana`를 import할 수 있는 app 모듈. allowlist다. 늘리려면 ADR-021을 먼저 고친다.
+# `scripts/`(backfill·fixture 생성·run_worker)는 검사 범위 밖이다.
+ANALYZER_IMPORTERS: frozenset[str] = frozenset({"services/seed_loader.py", "jobs/persistence.py"})
+# (c) `app/furigana.py`는 DB·설정·시계·다른 계층을 모른다. app 내부 import는 L0 `app.render`뿐이다.
+FURIGANA_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
+    {
+        "sqlalchemy",
+        "app.db",
+        "app.models",
+        "app.services",
+        "app.api",
+        "app.jobs",
+        "app.learning",
+        "app.srs",
+        "app.llm",
+        "app.config",
+        "app.settings",
+        "app.clock",
+    }
+)
+FURIGANA_ALLOWED_APP_IMPORT = "app.render"
 
 # G3/G4: 외부 패키지를 부를 수 있는 자리.
 FSRS_PACKAGE = "fsrs"
@@ -731,6 +757,61 @@ def test_g13_no_dynamic_imports_anywhere_in_the_app() -> None:
 
 
 # --------------------------------------------------------------------------
+# G14 --- 형태소 분석기 경계 (ADR-021 결정 4)
+# --------------------------------------------------------------------------
+
+
+def test_g14a_analyzer_packages_are_imported_only_in_furigana() -> None:
+    """API 이미지에는 분석기가 없다. 다른 모듈이 직접 import하면 그 경로가 API에 닿는 순간 죽는다."""
+    violations = [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        if module.path != FURIGANA_MODULE
+        for imported, lineno in _imports(module)
+        for package in ANALYZER_PACKAGES
+        if _imports_package(imported, package)
+    ]
+    assert violations == [], _report(violations)
+
+
+def test_g14b_furigana_is_imported_only_by_the_analyzer_importers() -> None:
+    """요청 경로(`api/`, `services/presentation.py`)가 `app.furigana`를 보면 불변식 15가 깨진다.
+
+    allowlist 두 모듈 자체가 요청 경로로 전이되는 것은 정적으로 막지 못한다. 그것은
+    `test_no_provider_in_request_path.py`의 런타임 탐침이 잡는다.
+    """
+    violations = [
+        f"{module.path}:{lineno} imports {imported}"
+        for module in _modules()
+        if module.path not in ANALYZER_IMPORTERS
+        for imported, lineno in _imports(module)
+        if _imports_package(imported, "app.furigana")
+    ]
+    assert violations == [], _report(violations)
+
+
+def test_g14c_furigana_imports_only_render_inside_the_app() -> None:
+    """계산 모듈이 DB·설정·시계를 보면 seed·worker·backfill·fixture가 같은 입력에 다른 값을 낼 수 있다."""
+    (furigana,) = [module for module in _modules() if module.path == FURIGANA_MODULE]
+    imports = list(_imports(furigana))
+    violations = [
+        f"{furigana.path}:{lineno} imports {imported}"
+        for imported, lineno in imports
+        if any(_imports_package(imported, package) for package in FURIGANA_FORBIDDEN_IMPORTS)
+        or (
+            _imports_package(imported, "app")
+            and not _imports_package(imported, FURIGANA_ALLOWED_APP_IMPORT)
+        )
+    ]
+    assert violations == [], _report(violations)
+    # guard가 빈 import 목록을 훑고 통과하지 않도록 실제 import가 보이는지 확인한다.
+    assert any(_imports_package(imported, "sudachipy") for imported, _ in imports)
+    assert any(_imports_package(imported, FURIGANA_ALLOWED_APP_IMPORT) for imported, _ in imports)
+    # 12_TEST_PLAN G14(c): `render.py`는 분석기를 모르는 L0로 남는다(G11(b)의 대상).
+    assert "render.py" in PURE_MODULES
+
+
+# --------------------------------------------------------------------------
 # guard 자체가 살아 있는지
 # --------------------------------------------------------------------------
 
@@ -746,4 +827,6 @@ def test_the_guard_actually_sees_the_app() -> None:
     # 그러면 "밖에서 import 가능한 jobs 모듈이 하나도 없다"가 통과해 버린다.
     assert paths >= ENQUEUE_MODULES
     assert {"jobs/runner.py", "jobs/worker.py"} <= paths
+    # G14의 allowlist와 대상 모듈이 실제 파일을 가리키는지.
+    assert paths >= ANALYZER_IMPORTERS | {FURIGANA_MODULE}
     assert len(_model_class_names()) >= 10

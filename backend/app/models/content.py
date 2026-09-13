@@ -82,6 +82,16 @@ class Sentence(Base):
     status: Mapped[SentenceStatus] = mapped_column(
         enum_column(SentenceStatus, "status"), nullable=False
     )
+    # 후리가나 표시 보조(MVP-02, ADR-021 결정 2). NULL = 미계산이며 backfill 대상이다.
+    # server default를 두지 않는다: `'{}'`나 `spans: []`가 기본값이면 "계산했고 달 읽기가
+    # 없다"와 "계산하지 않았다"가 구별되지 않는다. 무결성은 다른 테이블과 대조해야 하므로
+    # CHECK도 두지 않는다(`app/render.py`의 검증이 계산·표시 시점에 본다).
+    # `none_as_null=True`: Python `None`을 JSON `null`이 아니라 **SQL NULL**로 쓴다. 기본값(False)이면
+    # 계산 실패로 `ruby_json=None`을 넣은 행이 `'null'::jsonb`가 되어 `ruby_json IS NULL`(backfill
+    # 대상, 미계산 잔량 조회)에 걸리지 않는다. DDL은 바뀌지 않는다.
+    ruby_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     created_at: Mapped[datetime] = created_at_column()
 
     __table_args__ = (sa.Index("ix_sentences_normalized_hash", "normalized_hash"),)

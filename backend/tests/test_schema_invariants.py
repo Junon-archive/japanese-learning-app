@@ -302,6 +302,37 @@ def test_sentences_is_global_content(db_engine: Engine) -> None:
 
 
 @pytest.mark.integration
+def test_ruby_json_is_a_nullable_jsonb_without_default_or_check(db_engine: Engine) -> None:
+    """ADR-021 결정 2 / 04_DB_SPEC.md의 `ruby_json`: JSONB, NULL 허용, default 없음, CHECK 없음.
+
+    NULL이 "미계산"이고 backfill 대상 조건(`ruby_json IS NULL`)이다. NOT NULL이면 계산 실패를
+    기록할 수 없어 문장 저장이 막히고(실패가 ready를 막으면 안 된다), default가 있으면
+    기존·새 문장이 "계산했고 읽기 없음"과 구별되지 않아 backfill 대상에서 사라진다. 무결성은
+    다른 테이블과 대조해야 하므로 CHECK로 두지 않는다(`app/render.py`의 검증이 맡는다).
+    """
+    with db_engine.connect() as connection:
+        rows = list(
+            connection.execute(
+                sa.text(
+                    "SELECT data_type, is_nullable, column_default "
+                    "FROM information_schema.columns WHERE table_schema = 'public' "
+                    "AND table_name = 'sentences' AND column_name = 'ruby_json'"
+                )
+            )
+        )
+    assert len(rows) == 1, "sentences.ruby_json이 없다"
+    assert rows[0].data_type == "jsonb"
+    assert rows[0].is_nullable == "YES"
+    assert rows[0].column_default is None
+    checks = [
+        row.constraint_name
+        for row in _check_constraints(db_engine)
+        if row.table_name == "sentences" and row.column_name == "ruby_json"
+    ]
+    assert checks == []
+
+
+@pytest.mark.integration
 def test_sentence_items_has_no_role_column(db_engine: Engine) -> None:
     # 04_DB_SPEC.md: new/review/exploration은 사용자별·시점별 속성이므로
     # 언어적 annotation 테이블에 두지 않는다(v0.2의 role = incidental 설계는 제거됨).

@@ -30,6 +30,7 @@ from app.models import (
     LearningItem,
     ReviewState,
     Sentence,
+    SentenceItemSpan,
     StudyPresentation,
     StudySession,
     User,
@@ -44,6 +45,7 @@ from app.models.enums import (
     ReviewReason,
     SentenceStatus,
 )
+from app.render import RenderSpanError, RubyPart, RubySpanError
 from app.services.interactions import respond_to_probe
 from app.services.presentation import (
     PresentationClosedError,
@@ -580,6 +582,52 @@ def test_next_renders_segments_that_rebuild_the_sentence(
     assert view is not None
     assert "".join(segment.text for segment in view.render_segments) == scene.sentence.japanese
     assert [item.learning_item_id for item in view.tappable_items] == [scene.item.id]
+
+
+def test_next_attaches_stored_ruby_to_the_segments(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """저장된 `ruby_json`을 자르기만 한다(05_API_SPEC.md R1~R3). 분석기를 부르지 않는다."""
+    scene = _scene(db_session)
+    scene.sentence.ruby_json = {"spans": [[3, 4, "きみ"], [5, 6, "まか"]]}
+    db_session.flush()
+
+    view = next_presentation(
+        db_session,
+        user=scene.user,
+        session_id=scene.study_session.id,
+        now=study_clock.now(),
+        cfg=get_config(),
+    )
+
+    assert view is not None
+    assert [(segment.text, segment.ruby) for segment in view.render_segments] == [
+        ("それは君に", (RubyPart("それは", None), RubyPart("君", "きみ"), RubyPart("に", None))),
+        ("任せる", (RubyPart("任", "まか"), RubyPart("せる", None))),
+        ("。", ()),
+    ]
+
+
+def test_a_tappable_span_error_is_not_swallowed_as_invalid_ruby(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """tappable segment를 먼저 만든다. 그 실패는 ruby 무효(200)가 아니라 `RenderSpanError`(500)다."""
+    scene = _scene(db_session)
+    scene.sentence.ruby_json = {"spans": "broken"}
+    span = db_session.execute(sa.select(SentenceItemSpan)).scalars().one()
+    span.end_codepoint = len(scene.sentence.japanese) + 1
+    db_session.flush()
+
+    with pytest.raises(RenderSpanError) as caught:
+        next_presentation(
+            db_session,
+            user=scene.user,
+            session_id=scene.study_session.id,
+            now=study_clock.now(),
+            cfg=get_config(),
+        )
+
+    assert not isinstance(caught.value, RubySpanError)
 
 
 def test_next_creates_a_presentation_and_marks_the_candidate_shown(

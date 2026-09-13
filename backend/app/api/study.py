@@ -59,6 +59,7 @@ from app.schemas.study import (
     ProbeResultResponse,
     RenderSegmentPayload,
     ResourceId,
+    RubyPartPayload,
     SelfReportRequest,
     StartSessionResponse,
     StudySessionPayload,
@@ -428,7 +429,13 @@ def _presentation_payload(view: presentation.PresentationView) -> PresentationPa
         sentence_id=view.sentence_id,
         japanese=view.japanese,
         render_segments=[
-            RenderSegmentPayload(text=segment.text, sentence_item_id=segment.sentence_item_id)
+            RenderSegmentPayload(
+                text=segment.text,
+                sentence_item_id=segment.sentence_item_id,
+                ruby=[
+                    RubyPartPayload(text=part.text, reading=part.reading) for part in segment.ruby
+                ],
+            )
             for segment in view.render_segments
         ],
         presentation_role=view.presentation_role,

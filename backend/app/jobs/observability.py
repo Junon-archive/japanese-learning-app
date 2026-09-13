@@ -53,6 +53,13 @@ POOL_READY_SIZE = "pool.ready_size"
 COST_CEILING_REACHED = "cost.ceiling_reached"
 COST_GUARD_DISABLED = "cost.guard_disabled"
 
+# MVP-02 후리가나(11_OBSERVABILITY.md의 `MVP-02 추가: 후리가나 계산 결과`). 위 닫힌 집합과 별도
+# 이름공간이다. **문장 텍스트와 읽기 문자열을 싣지 않는다** --- id와 숫자뿐이다.
+RUBY_COMPUTED = "ruby.computed"
+RUBY_FAILED = "ruby.failed"
+RUBY_READING_MISMATCH = "ruby.reading_mismatch"
+RUBY_EXPLANATION_OVERRIDE = "ruby.explanation_override"
+
 
 def describe_error(error: BaseException) -> str:
     """예외를 한 줄로 줄인다. `last_error`와 로그가 같은 문자열을 쓴다.
@@ -165,3 +172,40 @@ def log_ready_pool_size(*, user_id: int, role: str, size: int) -> None:
     실제로 회복시켰는지는 이 값으로만 보인다.
     """
     logger.info(POOL_READY_SIZE, extra={"user_id": user_id, "role": role, "size": size})
+
+
+def log_ruby_computed(
+    *,
+    sentence_id: int,
+    algorithm_version: int,
+    spans: int,
+    omitted_tappable_boundary: int,
+    omitted_numeric: int,
+    omitted_no_reading: int,
+    corrected_explanation_tokens: int,
+    corrected_table_rules: int,
+) -> None:
+    """`spans`는 ruby span **개수**다. 읽기 문자열을 싣지 않는다."""
+    logger.info(
+        RUBY_COMPUTED,
+        extra={
+            "sentence_id": sentence_id,
+            "algorithm_version": algorithm_version,
+            "spans": spans,
+            "omitted_tappable_boundary": omitted_tappable_boundary,
+            "omitted_numeric": omitted_numeric,
+            "omitted_no_reading": omitted_no_reading,
+            "corrected_explanation_tokens": corrected_explanation_tokens,
+            "corrected_table_rules": corrected_table_rules,
+        },
+    )
+
+
+def log_ruby_failed(*, sentence_id: int, error: BaseException) -> None:
+    """계산 실패는 문장 채택을 막지 않는다. 그래서 이 로그가 실패를 드러내는 유일한 자리다."""
+    logger.warning(RUBY_FAILED, extra={"sentence_id": sentence_id, "error": describe_error(error)})
+
+
+def log_ruby_mismatch(*, event: str, sentence_id: int, sentence_item_id: int) -> None:
+    """`event`는 `RUBY_READING_MISMATCH` 또는 `RUBY_EXPLANATION_OVERRIDE`다."""
+    logger.info(event, extra={"sentence_id": sentence_id, "sentence_item_id": sentence_item_id})

@@ -65,7 +65,17 @@ BACKEND_ROOT = REPO_ROOT / "backend"
 # 별도 프로세스가 요청까지 밟은 뒤 "적재되면 안 되는 것"으로 세는 이름. 접두어
 # `app.llm`이 구현체 모듈(`app.llm.openai_provider`)과 seam(`app.llm.provider`) 둘 다를
 # 덮는다 --- `12_TEST_PLAN.md`는 "실제 구현체 모듈과 provider SDK"를 함께 요구한다.
-FORBIDDEN_IN_API_PROCESS = ("app.llm", "openai", "anthropic")
+FORBIDDEN_IN_API_PROCESS = (
+    "app.llm",
+    "openai",
+    "anthropic",
+    # MVP-02 불변식 15 (ADR-021 G14 런타임): 형태소 분석기와 그 어댑터. API 이미지에는 설치되지도
+    # 않는다. 전이 import(`api/` -> `services/seed_loader.py` -> `app.furigana`)는 정적 guard가
+    # 못 잡으므로 여기서 잡는다.
+    "app.furigana",
+    "sudachipy",
+    "sudachidict_core",
+)
 
 # 별도 프로세스에서 돌리는 탐침. 부모의 monkeypatch도 이미 적재된 모듈도 없는
 # 상태에서 API를 띄우고 요청을 보낸 뒤 `sys.modules`를 보고한다. in-process 검사로는
@@ -86,16 +96,19 @@ with TestClient(app, base_url="https://testserver", headers={"Origin": origin}) 
     session_id = started.json()["session"]["session_id"]
     following = client.post("/api/study/session/%d/next" % session_id)
 
+forbidden = json.loads(sys.argv[4])
 loaded = sorted(
     name
     for name in sys.modules
-    if name in ("openai", "anthropic") or name == "app.llm" or name.startswith("app.llm.")
+    if any(name == prefix or name.startswith(prefix + ".") for prefix in forbidden)
 )
+presentation = following.json()["presentation"]
 sys.stdout.write(
     json.dumps(
         {
             "statuses": [login.status_code, started.status_code, following.status_code],
             "loaded": loaded,
+            "render_segments": presentation and presentation["render_segments"],
         }
     )
 )
@@ -395,13 +408,25 @@ def test_a_fresh_api_process_loads_neither_the_provider_module_nor_the_sdk(
     with committed_db() as setup:
         user = factories.make_user(setup)
         user.password_hash = hash_password(STUDY_PASSWORD)
+        # `/next`가 저장된 ruby를 실제로 잘라 싣는 경로까지 밟게 한다(MVP-02). 값은 분석기 없이
+        # 손으로 넣는다 --- 부모 프로세스가 분석기를 불렀는지와 무관하게 자식이 요청을 밟는다.
+        item = factories.make_learning_item(setup)
+        sentence = factories.make_ready_sentence(setup, [item], surfaces=["任せる"])
+        sentence.ruby_json = {"spans": [[0, 1, "まか"]]}
         setup.commit()
         login_id = user.login_id
 
     script = tmp_path / "probe_api_process.py"
     script.write_text(_PROBE, encoding="utf-8")
     completed = subprocess.run(  # noqa: S603  (인자를 우리가 만든다. 셸을 거치지 않는다)
-        [sys.executable, str(script), STUDY_ORIGIN, login_id, STUDY_PASSWORD],
+        [
+            sys.executable,
+            str(script),
+            STUDY_ORIGIN,
+            login_id,
+            STUDY_PASSWORD,
+            json.dumps(FORBIDDEN_IN_API_PROCESS),
+        ],
         capture_output=True,
         text=True,
         timeout=180,
@@ -420,6 +445,13 @@ def test_a_fresh_api_process_loads_neither_the_provider_module_nor_the_sdk(
     # 요청이 실제로 끝까지 갔는지 먼저 본다. 부팅만 하고 끝난 프로세스는 아무것도
     # 증명하지 않는다.
     assert report["statuses"] == [200, 200, 200], completed.stdout
-    assert report["loaded"] == [], f"API 프로세스가 provider 모듈을 적재했다: {report['loaded']}"
-    for name in FORBIDDEN_IN_API_PROCESS:
-        assert not any(loaded.startswith(name) for loaded in report["loaded"])
+    # 저장된 ruby가 있는 문장을 실제로 제시했다. ruby를 자르는 경로를 밟지 않은 탐침은 분석기
+    # 미적재를 증명하지 않는다.
+    assert report["render_segments"] == [
+        {
+            "text": "任せる",
+            "sentence_item_id": report["render_segments"][0]["sentence_item_id"],
+            "ruby": [{"text": "任", "reading": "まか"}, {"text": "せる", "reading": None}],
+        }
+    ], completed.stdout
+    assert report["loaded"] == [], f"API 프로세스가 금지 모듈을 적재했다: {report['loaded']}"

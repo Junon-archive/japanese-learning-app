@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Never
 
 import pytest
 import sqlalchemy as sa
@@ -853,6 +853,44 @@ def test_the_entrypoint_fails_closed(
     module = _load_run_worker()
     with pytest.raises(ProviderConfigError):
         module.main()
+
+
+def test_the_entrypoint_fails_closed_when_the_analyzer_cannot_load(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """분석기 부재는 배포 결함이다. 문장별 NULL로 흡수하지 않고 worker가 뜨지 않는다(ADR-021)."""
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_API_KEY", "test-key-not-a-secret")
+    module = _load_run_worker()
+
+    def missing() -> Never:
+        raise ModuleNotFoundError("No module named 'sudachidict_core'")
+
+    def must_not_start(**kwargs: object) -> Never:
+        raise AssertionError("분석기 없이 worker loop가 시작됐다")
+
+    monkeypatch.setattr(module, "load_analyzer", missing)
+    monkeypatch.setattr(module, "run_worker", must_not_start)
+
+    with pytest.raises(ModuleNotFoundError, match="sudachidict_core"):
+        module.main()
+
+
+def test_the_entrypoint_loads_the_analyzer_before_the_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_API_KEY", "test-key-not-a-secret")
+    module = _load_run_worker()
+    calls: list[str] = []
+
+    monkeypatch.setattr(module, "load_analyzer", lambda: calls.append("load_analyzer"))
+    monkeypatch.setattr(module, "run_worker", lambda **kwargs: calls.append("run_worker"))
+    # 테스트 프로세스의 signal handler를 바꾸지 않는다.
+    monkeypatch.setattr(module, "install_signal_handlers", lambda shutdown: None)
+
+    assert module.main() == 0
+    assert calls == ["load_analyzer", "run_worker"]
 
 
 def test_the_entrypoint_renders_structured_fields() -> None:

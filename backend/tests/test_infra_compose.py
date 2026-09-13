@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from typing import Any
 
 import yaml
@@ -245,3 +246,63 @@ def test_policy_mount_path_is_required() -> None:
         (mount,) = _policy_mounts(name)
         assert mount["source"].startswith("${NC_CONFIG_PATH:?"), (name, mount["source"])
         assert mount["target"].startswith("${NC_CONFIG_PATH:?"), (name, mount["target"])
+
+
+# --------------------------------------------------------------------------
+# 후리가나 분석기의 이미지 배치 (ADR-021 결정 6, 불변식 15)
+#
+# `default-groups`에 furigana가 있으면 `--no-dev`로는 분석기가 빠지지 않는다. 두 Dockerfile의
+# sync 명령과 group 위치를 함께 고정한다. 하나만 바뀌면 API 이미지에 사전 212M가 조용히 들어가거나
+# worker가 분석기 없이 빌드된다(worker는 부팅에서 실패한다).
+# --------------------------------------------------------------------------
+
+PYPROJECT_FILE = REPO_ROOT / "pyproject.toml"
+ANALYZER_PACKAGES = ("sudachipy", "sudachidict-core")
+
+
+def _pyproject() -> dict[str, Any]:
+    return tomllib.loads(PYPROJECT_FILE.read_text(encoding="utf-8"))
+
+
+def _uv_sync_lines(dockerfile_name: str) -> list[str]:
+    text = (REPO_ROOT / "infra" / dockerfile_name).read_text(encoding="utf-8")
+    return [line.strip() for line in text.splitlines() if "uv sync" in line and "RUN" in line]
+
+
+def _requirement_name(requirement: str) -> str:
+    match = re.match(r"[A-Za-z0-9._-]+", requirement)
+    assert match, requirement
+    return match.group(0).lower().replace("_", "-")
+
+
+def test_api_image_syncs_without_default_groups() -> None:
+    assert _uv_sync_lines("Dockerfile.backend") == [
+        "RUN uv sync --frozen --no-default-groups --no-build"
+    ]
+
+
+def test_worker_image_syncs_only_the_furigana_group() -> None:
+    assert _uv_sync_lines("Dockerfile.worker") == [
+        "RUN uv sync --frozen --no-default-groups --group furigana --no-build"
+    ]
+
+
+def test_analyzer_is_not_a_main_dependency() -> None:
+    main = {_requirement_name(req) for req in _pyproject()["project"]["dependencies"]}
+    for package in ANALYZER_PACKAGES:
+        assert package not in main, package
+
+
+def test_analyzer_lives_only_in_the_pinned_furigana_group() -> None:
+    groups: dict[str, list[str]] = _pyproject()["dependency-groups"]
+    assert sorted(groups["furigana"]) == ["sudachidict-core==20260723", "sudachipy==0.6.11"]
+    for name, requirements in groups.items():
+        if name == "furigana":
+            continue
+        names = {_requirement_name(req) for req in requirements if isinstance(req, str)}
+        for package in ANALYZER_PACKAGES:
+            assert package not in names, (name, package)
+
+
+def test_host_default_groups_include_furigana() -> None:
+    assert _pyproject()["tool"]["uv"]["default-groups"] == ["dev", "furigana"]

@@ -19,7 +19,12 @@ fail-closed 부팅 검사는 셋이고 **예외를 잡지 않는다.** 조용히
 LLM_PROVIDER 미설정 / 허용값(openai) 아님        -> ProviderConfigError
 LLM_PROVIDER = openai 인데 LLM_API_KEY 없음      -> ProviderConfigError
 task 3종 중 active prompt_versions 행이 없는 것  -> WorkerStartupError
+후리가나 분석기·사전을 적재하지 못함            -> ImportError 등 (ADR-021 결정 4)
 ```
+
+분석기 부재를 문장별 `ruby_json = NULL`로 흡수하지 않는다. 그것은 배포 결함이고, 흡수하면 worker가
+후리가나 없는 문장만 쌓아도 아무도 모른다. 문장 하나의 계산 실패는 `jobs/persistence.py`가 NULL로
+두고 `ruby.failed`를 남긴다.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.config import get_config  # noqa: E402
 from app.db import new_session  # noqa: E402
+from app.furigana import load_analyzer  # noqa: E402
 
 # worker loop는 runner를 **인자로** 받는다(provider와 같은 주입 지점). 그래서 그 모듈을
 # 아는 것은 이 진입점 하나이고, `app/jobs/worker.py`는 runner를 import하지 않는다.
@@ -89,6 +95,8 @@ def main() -> int:
     api_key = os.environ.get("LLM_API_KEY") or None
     # 값이 없거나 openai가 아니거나 키가 없으면 여기서 예외로 끝난다. 기본값은 없다.
     provider = build_provider(provider_name, api_key=api_key)
+    # 사전을 부팅에서 한 번 적재한다. 실패하면 예외 그대로 끝난다(fail-closed).
+    load_analyzer()
 
     cfg = get_config()
     warn_if_cost_guard_disabled(cfg, api_key_configured=api_key is not None)

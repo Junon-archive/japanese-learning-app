@@ -15,6 +15,10 @@
 -   재적재는 지원하지 않는다. `origin = seed` 행이 이미 있으면 거부한다.
     정상 절차는 `make db-reset && make seed`다.
 -   검증 실패 시 DB에 아무것도 남기지 않는다. 적재는 한 트랜잭션이다.
+-   (MVP-02) 문장마다 후리가나를 계산해 같은 트랜잭션에서 `sentences.ruby_json`에 넣는다
+    (ADR-021 결정 4, 04_DB_SPEC.md의 Seed Data). **문장 하나의 계산이 실패하면 그 문장만
+    `ruby_json = NULL`로 적재하고 계속한다.** 분석기 자체를 적재하지 못하면 이 모듈의 import가
+    실패하고, CLI는 시작에서 `load_analyzer()`로 먼저 실패한다(fail-closed).
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ import sqlalchemy as sa
 import yaml
 from sqlalchemy.orm import Session
 
+from app.furigana import RubyItem, RubySummary, compute_ruby
 from app.models.content import (
     LearningItem,
     Sentence,
@@ -65,6 +70,8 @@ class SeedSummary:
     sentences: int
     spans: int
     explanations: int
+    # 후리가나 계산 누계. CLI가 `format_summary_lines`로 출력한다(11_OBSERVABILITY.md).
+    ruby: RubySummary
 
 
 @dataclass(frozen=True)
@@ -369,6 +376,7 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
 
     spans = 0
     explanations = 0
+    ruby = RubySummary()
 
     # 검증은 위에서 끝났지만 적재 중 DB 제약 위반이 나도 부분 적재가 남지 않게 한다.
     with session.begin_nested():
@@ -400,6 +408,7 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
                 source_id=sentence.seed_id,
                 normalized_hash=normalized_sentence_hash(sentence.japanese),
                 status=SentenceStatus.VALIDATED,
+                ruby_json=_compute_ruby_json(sentence, ruby, now=now),
                 created_at=now,
             )
             session.add(sentence_row)
@@ -445,5 +454,36 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
         session.flush()
 
     return SeedSummary(
-        items=len(items), sentences=len(sentences), spans=spans, explanations=explanations
+        items=len(items),
+        sentences=len(sentences),
+        spans=spans,
+        explanations=explanations,
+        ruby=ruby,
     )
+
+
+def _compute_ruby_json(
+    sentence: _Sentence, summary: RubySummary, *, now: datetime
+) -> dict[str, Any] | None:
+    """tappable item의 span과 `explanation.reading`으로 계산한다. 실패하면 None(= 미계산).
+
+    예외를 여기서 삼키는 이유: 후리가나는 표시 보조이고 계산 실패가 적재를 막지 않는다
+    (10_ERROR_HANDLING.md의 `후리가나 계산 실패`). backfill이 NULL 행을 다시 시도한다.
+    불일치 보고의 식별자는 seed의 `seed_id`와 `item_seed_id`다(아직 DB id가 없다).
+    """
+    items = [
+        RubyItem(
+            sentence_item_id=item.item_seed_id,
+            spans=item.spans,
+            explanation_reading=item.explanation.reading,
+        )
+        for item in sentence.items
+        if item.is_tappable
+    ]
+    try:
+        computation = compute_ruby(sentence.japanese, items, now=now)
+    except Exception:
+        summary.add_failure()
+        return None
+    summary.add(sentence.seed_id, computation)
+    return computation.ruby_json
