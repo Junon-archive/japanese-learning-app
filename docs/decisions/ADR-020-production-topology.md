@@ -1,6 +1,6 @@
 # ADR-020 --- 운영 토폴로지: 단일 호스트 compose, 호스트 운영 CLI, 기존 터널
 
-Status: Accepted (결정 6 개정 2026-09-13)
+Status: Accepted (결정 6 개정 2026-09-13, 결정 5 확인 사실 개정 2026-09-14)
 
 Decision: MVP 운영은 **이 머신 한 대**에서 한다.
 PostgreSQL·API·worker는 `infra/docker-compose.yml`로 띄우고, API는 이 호스트에
@@ -388,8 +388,9 @@ cd frontend \
 
 ### 설정 파일로 옮기는 조건
 
-config 없는 `wrangler deploy`가 배포할 때마다 `workers.dev`를 다시 켜는지는 wrangler 버전에
-달려 있고 **이 환경에서 확인하지 않았다**. 첫 배포 뒤 대시보드에서 확인한다. 다시 켜진다면
+(개정 2026-09-14) 2026-09-14 운영 배포에서 wrangler 4.131.1 설정 파일 없는 deploy가 **매번 `workers_dev`와
+Preview URLs를 다시 켜는 것을 확인했다.** 결정 5의 전환 조건에 해당하나 전환(설정 파일)은 미뤘고
+`updates/backlog.md`에 대기로 있다. 그동안 배포마다 대시보드에서 끈다(`infra/DEPLOY.md` 6.3). 전환할 때는
 `frontend/wrangler.jsonc`를 두고 `workers_dev: false`와 `preview_urls: false`만 적는다. 도메인과
 `routes`는 적지 않는다.
 
@@ -776,5 +777,7 @@ cron               사용자 crontab 한 줄, 로그 data/backup.log
     `APP_ENV=production`을 한 줄로 export하는 운영 규칙이 그 간극을 메운다.
 -   결정 7의 백업 선행 강제는 절차(`&&` 체인)이지 코드가 아니다.
 -   cron 백업의 실패는 `data/backup.log`에만 남는다.
--   config 없는 `wrangler deploy`가 `workers.dev`를 다시 켜는지 확인하지 않았다(결정 5의 전환 조건).
+-   (개정 2026-09-14) 2026-09-14 운영 배포에서 wrangler 4.131.1 설정 파일 없는 deploy가 매번 `workers_dev`와
+    Preview URLs를 다시 켜는 것을 확인했다. 결정 5의 전환 조건에 해당하나 전환(설정 파일)은 미뤘고 backlog에
+    대기로 있다. 그동안 배포마다 대시보드에서 끈다(`infra/DEPLOY.md` 6.3).
 -   도메인 자리표시자는 저장소를 통한 노출만 막는다. API 호스트는 공개 번들에 있다(결정 6).
