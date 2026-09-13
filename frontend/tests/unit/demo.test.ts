@@ -18,7 +18,7 @@ import { mount as mountDemo } from '../../src/demo/demo'
 import { DEMO_SENTENCES } from '../../src/demo/fixture'
 import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
-import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
+import { byClass, createFakeElement, fakeDocument, flatText, textWithoutRt } from './fake-dom'
 
 const fetchMock = vi.fn(() => {
   throw new Error('demo must not make network requests')
@@ -63,8 +63,9 @@ function mount(): void {
   })
 }
 
+/** rt(후리가나 읽기)를 뺀 화면 글자. 문장 텍스트는 읽기를 빼고 비교한다(03_UI_UX_SPEC.md). */
 function text(): string {
-  return flatText(root)
+  return textWithoutRt(root)
 }
 
 function click(className: string, index = 0): void {
