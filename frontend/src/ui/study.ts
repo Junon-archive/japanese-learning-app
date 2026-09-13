@@ -44,6 +44,7 @@ import type { Presentation, StudySession } from '../types'
 import type { InteractionFailure, InteractionOps, InteractionsHandle } from './interactions'
 import { createInteractions } from './interactions'
 import { errorMessage } from './api-failure'
+import { renderFuriganaToggle } from './furigana'
 import { renderLogoutButton } from './logout'
 import { MESSAGES, renderNotice, showToast } from './notice'
 import { renderProgress, sessionProgress } from './progress'
@@ -75,7 +76,7 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
   progressSlot.className = 'progress-slot'
 
   // 상단바 메뉴. MVP-01에서 화면 안에 있던 `학습 기록`과 `로그아웃`을 옮긴 것이다(03_UI_UX_SPEC.md의
-  // `상단바`). 메뉴를 늘리지 않는다. 후리가나 토글은 이 배열에 더해진다.
+  // `상단바`). 메뉴를 늘리지 않는다. 후리가나 토글은 문서 class만 바꾸고 문장을 다시 그리지 않는다.
   const historyButton = document.createElement('button')
   historyButton.type = 'button'
   historyButton.className = 'topbar-button history-link'
@@ -90,7 +91,10 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     },
   })
 
-  const topBar = renderTopBar({ onHome: actions.onHome, actions: [historyButton, logoutButton] })
+  const topBar = renderTopBar({
+    onHome: actions.onHome,
+    actions: [historyButton, logoutButton, renderFuriganaToggle()],
+  })
 
   // 화면 제목. 보이는 제목을 두지 않고 스크린 리더와 포커스 이동에만 쓴다.
   const title = document.createElement('h1')

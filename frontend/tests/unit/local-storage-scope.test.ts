@@ -39,7 +39,7 @@ const SLOT_OWNER: Record<StoreKey, (path: string) => boolean> = {
  * 1회다. 명세의 최종 규칙은 "세 key 모두 정확히 1회"다. Wave 3 레인이 자기 slot을 만들면서 자기 key를
  * 이 목록에 넣어 정확히 1회로 올린다(furigana-fe -> 'nc.furigana.v1', demo -> 'nc.demo.v1').
  */
-const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1']
+const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1', 'nc.furigana.v1']
 
 /** local-store.ts가 export해도 되는 이름 전부. 임의 key·임의 값을 쓰는 함수는 없다. */
 const STORE_EXPORTS = ['LOCAL_STORE_KEYS', 'LocalSlot', 'LocalStoreKey', 'localSlot']

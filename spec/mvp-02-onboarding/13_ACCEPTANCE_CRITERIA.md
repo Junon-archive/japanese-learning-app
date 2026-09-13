@@ -130,8 +130,9 @@
     같은 범위에서 고른 로마자 4지선다다.
     확인: `kana-quiz.test.ts`, `test_kana_browser.py`.
 33. 라운드가 `03_UI_UX_SPEC.md`의 `가나 학습`의 `라운드` 문항 수를 넘지 않고, 틀린 문항을 라운드 끝에
-    한 번 더 묻는다. 결과에 바로 맞힌 수가 나온다. SRS/FSRS를 쓰지 않는다.
-    확인: `kana-quiz.test.ts`.
+    한 번 더 묻는다. 결과에 바로 맞힌 수가 나온다. SRS/FSRS를 쓰지 않는다. 다시 물은 문항을 또 틀리면
+    "한 번 더 나와요" 안내를 내지 않는다.
+    확인: `kana-quiz.test.ts`, `kana-screen.test.ts`.
 34. 진도(글자·단어별 맞음/틀림 수, 마지막 학습 시각)가 `nc.kana.v1`에 남고, 라운드 끝에 다시 묻는 문항의
     응답도 센다. 형식이 맞지 않으면 조용히 초기화되며, 저장을 쓸 수 없어도 정상 동작한다. 진도 초기화
     버튼이 있고 인라인 확인을 거친다. (ADR-022)
@@ -143,7 +144,8 @@
 
 36. demo fixture는 `seed/`에서 스크립트로만 만들고, 커밋된 fixture가 재생성 결과와 같다. 선택 규칙과
     상한을 따르며, 제외한 문장 목록과 덮지 못한 item 목록을 출력한다. 생성은 `scripts/build_demo_fixture.py`,
-    생성 파일은 `frontend/src/demo/` 아래다.
+    생성 파일은 `frontend/src/demo/` 아래다. tappable 수 상한은 `config/default.yaml`에서 읽고, ruby 계산이 실패한
+    문장은 ruby 없이 포함하며 보고한다.
     확인: `test_demo_fixture.py`, `build_demo_fixture.py --check`, 변이 검증 20, 종료 보고의 fixture 통계.
 37. fixture의 ruby가 분석기 출력과 같고 형식이 `render_segments[].ruby`와 같다. (ADR-021)
     확인: `test_demo_fixture.py`의 ruby 일치.
@@ -154,14 +156,16 @@
     `본 문장 수 / 전체 문장 수`다. 신고 UI는 요청 없이 "체험에서는 신고가 저장되지 않아요."를 보여준다.
     확인: `demo.test.ts`, `test_demo_e2e_browser.py`.
 40. 다시 보기와 probe가 `03_UI_UX_SPEC.md`의 demo 전용 상수대로 동작하고(자기평가와 probe의
-    "몰랐음/애매함" 모두 다시 보기를 만든다), 두 상수가 코드의 한 모듈에만 있다.
+    "몰랐음/애매함" 모두 다시 보기를 만든다), 두 상수가 코드의 한 모듈에만 있다. "표현"은 learning item이고
+    probe는 같은 표현을 한 번만 묻는다.
     확인: `demo.test.ts`, `demo-progress.test.ts`.
-41. 진도(fixture 식별자, 현재 위치, 표현별 자기평가, 다시 보기 대기열, 본 문장 수)가 `nc.demo.v1`에 남아
+41. 진도(fixture 식별자, 현재 위치, 표현별 자기평가, 다시 보기 대기열, 본 문장 수, probe로 물은 표현)가 `nc.demo.v1`에 남아
     다시 열면 이어지고, 형식이나 fixture 식별자가 맞지 않으면 조용히 처음부터이며, 저장을 쓸 수 없으면
     메모리로 정상 동작한다. 진도 초기화 버튼이 있고 인라인 확인을 거친다. 진도를 서버로 보내지 않는다.
     (ADR-022)
     확인: `demo-progress.test.ts`, `test_demo_e2e_browser.py`, `test_frontend_invariants.py`의 저장 차단.
-42. 모든 문장을 보면 완료 화면이 나오고 `글자 배우기`(→ `#/kana`)와 `처음부터 다시`를 안내한다.
+42. 모든 문장을 보면 완료 화면이 나오고 `글자 배우기`(→ `#/kana`)와 `처음부터 다시`를 안내한다. 새 문장이 끝났을 때
+    남은 다시 보기는 곧바로 대기열 순서대로 보여준 뒤 완료한다.
     확인: `demo.test.ts`, `test_demo_e2e_browser.py`.
 43. 화면에 체험 안내(기록은 이 브라우저에만 남는다)가 있다.
     확인: `demo.test.ts`의 문구 단언.

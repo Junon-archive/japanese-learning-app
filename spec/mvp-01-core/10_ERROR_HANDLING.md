@@ -119,6 +119,8 @@ MVP-02에서 이 범위가 **공개 화면 셋(선택 홈, Demo, 가나 학습)*
     이미지에 없는 것은 **배포 결함**이고, 그것을 문장마다 NULL로 흡수하면 worker가 오랫동안 후리가나 없는
     문장만 쌓아도 드러나지 않는다. worker가 뜨지 않는 동안 학습 세션은 Ready Pool로 계속된다
     (`08_LLM_SPEC.md`의 `검증 뒤 후리가나(ruby) 계산 (MVP-02 확정)`).
+-   **demo fixture 생성에서 문장 하나의 계산 예외**는 그 문장을 ruby `[]`로 포함하고 `ruby_failed` 줄로 보고한 뒤
+    exit 0으로 끝난다(`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`, Wave 3 보완 결정, 2026-09-13).
 -   **저장값이 표시 시점 검증을 통과하지 못하면** API는 그 문장의 모든 segment에 빈 ruby를 싣고 로그
     `ruby.invalid_stored`를 남긴다. 500을 내지 않는다(`05_API_SPEC.md`의 `render_segments[].ruby` R6).
 -   되돌림은 `UPDATE sentences SET ruby_json = NULL`이다(`04_DB_SPEC.md`의

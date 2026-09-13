@@ -35,8 +35,8 @@ const PRESENTATION: Presentation = {
   sentence_id: 3,
   japanese: '気が乗らない。',
   render_segments: [
-    { text: '気が乗らない', sentence_item_id: 21 },
-    { text: '。', sentence_item_id: null },
+    { text: '気が乗らない', sentence_item_id: 21, ruby: [] },
+    { text: '。', sentence_item_id: null, ruby: [] },
   ],
   presentation_role: 'new',
   review_reason: null,

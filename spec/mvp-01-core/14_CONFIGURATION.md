@@ -160,7 +160,8 @@ backlog 모드의 비율 키(`backlog_review_ratio`, `backlog_new_ratio`,
 context다(`08_LLM_SPEC.md`의 `요청 context`). 강제되는 값은
 `max_new_items_per_sentence` 하나이며 그것을 검사하는 곳은 생성 validation
 **5번과 10번** 그리고 materialization의 target 부착 규칙이다
-(`06_LEARNING_ENGINE.md`). 5번은 문장의 target 전부를, 10번은 그중 신규 item만
+(`06_LEARNING_ENGINE.md`). demo fixture 생성 스크립트도 이 키를 `config/default.yaml`에서 읽어 문장당
+tappable 수 상한으로 쓴다(`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`, Wave 3 보완 결정, 2026-09-13). 5번은 문장의 target 전부를, 10번은 그중 신규 item만
 세며 MVP에서는 두 상한이 이 키 하나에서 오므로 10번이 구조적으로 발화하지
 않는다(`08_LLM_SPEC.md`의 `target 수 상한의 출처와 검사 10의 지위`).
 선호값을 어겼다는 이유로 생성된 문장을 버리지 않는다 --- 버리면 비용을 치른
