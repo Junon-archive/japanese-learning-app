@@ -4,6 +4,7 @@
  * ``` text
  * ''  '#/'          선택 홈     정적 import
  * '#/demo'          Demo        동적 import
+ * '#/kana'          가나 학습   동적 import. '#/kana/<하위>'도 받는다(하위 경로 이름은 kana/screen.ts가 정한다)
  * 그 밖의 hash       선택 홈     history.replaceState로 URL을 '#/'로 바꾼다
  * (hash 없음)       로그인 영역 main.ts의 로그인 진입만 들어간다. 여기서는 선택 홈이다
  * ```
@@ -54,7 +55,12 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
     loadFailure: MESSAGES.demoLoadFailed,
     acceptsSubpath: false,
   },
-  // Wave 3 kana-ui가 이 자리에 '#/kana' 한 줄을 더한다(acceptsSubpath: true).
+  {
+    prefix: '#/kana',
+    load: () => import('./kana/screen'),
+    loadFailure: MESSAGES.kanaLoadFailed,
+    acceptsSubpath: true,
+  },
 ]
 
 export type ResolvedHash =
