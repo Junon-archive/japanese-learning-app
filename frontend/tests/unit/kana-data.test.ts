@@ -4,7 +4,8 @@
  * 단어의 로마자·한글은 사람이 적은 값이다. 글자 표와 `03_UI_UX_SPEC.md`의 표기 규칙으로 이
  * 파일 안에서 따로 계산해 대조한다. 규칙을 바꾸면 데이터와 이 계산이 함께 바뀌어야 한다.
  */
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
@@ -146,6 +147,70 @@ describe('kana data quality', () => {
     expect(source).not.toMatch(/import\.meta\.glob/)
     expect(source).not.toMatch(/\bimport\s*\(/)
   })
+
+  it('no module under src/kana uses glob import', () => {
+    const dir = fileURLToPath(new URL('../../src/kana/', import.meta.url))
+    const files = readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((name) => name.endsWith('.ts'))
+    expect(files).toContain('data.ts')
+    for (const name of files) {
+      expect(readFileSync(join(dir, name), 'utf8'), name).not.toMatch(/import\.meta\.glob/)
+    }
+  })
+})
+
+describe('character tables match 03_UI_UX_SPEC.md', () => {
+  // `정답 표기`의 글자 표를 그대로 옮겼다. 가타카나는 대응하는 히라가나와 같은 로마자·한글을 쓴다
+  // (그 대응은 위 `katakana tables mirror hiragana`가 본다).
+  const SPEC_TABLES: Record<(typeof KANA_CHAR_RANGES)[number], string> = {
+    seion: `
+        あ a 아    い i 이    う u 우    え e 에    お o 오
+        か ka 카   き ki 키   く ku 쿠   け ke 케   こ ko 코
+        さ sa 사   し shi 시  す su 스   せ se 세   そ so 소
+        た ta 타   ち chi 치  つ tsu 츠  て te 테   と to 토
+        な na 나   に ni 니   ぬ nu 누   ね ne 네   の no 노
+        は ha 하   ひ hi 히   ふ fu 후   へ he 헤   ほ ho 호
+        ま ma 마   み mi 미   む mu 무   め me 메   も mo 모
+        や ya 야   ゆ yu 유   よ yo 요
+        ら ra 라   り ri 리   る ru 루   れ re 레   ろ ro 로
+        わ wa 와   を o 오
+        ん n 응`,
+    dakuon: `
+        が ga 가   ぎ gi 기   ぐ gu 구   げ ge 게   ご go 고
+        ざ za 자   じ ji 지   ず zu 즈   ぜ ze 제   ぞ zo 조
+        だ da 다   ぢ ji 지   づ zu 즈   で de 데   ど do 도
+        ば ba 바   び bi 비   ぶ bu 부   べ be 베   ぼ bo 보`,
+    handakuon: `
+        ぱ pa 파   ぴ pi 피   ぷ pu 푸   ぺ pe 페   ぽ po 포`,
+    yoon: `
+        きゃ kya 캬  きゅ kyu 큐  きょ kyo 쿄
+        しゃ sha 샤  しゅ shu 슈  しょ sho 쇼
+        ちゃ cha 차  ちゅ chu 추  ちょ cho 초
+        にゃ nya 냐  にゅ nyu 뉴  にょ nyo 뇨
+        ひゃ hya 햐  ひゅ hyu 휴  ひょ hyo 효
+        みゃ mya 먀  みゅ myu 뮤  みょ myo 묘
+        りゃ rya 랴  りゅ ryu 류  りょ ryo 료
+        ぎゃ gya 갸  ぎゅ gyu 규  ぎょ gyo 교
+        じゃ ja 자   じゅ ju 주   じょ jo 조
+        びゃ bya 뱌  びゅ byu 뷰  びょ byo 뵤
+        ぴゃ pya 퍄  ぴゅ pyu 퓨  ぴょ pyo 표`,
+  }
+
+  function parseSpec(block: string): { text: string; romaji: string; hangul: string }[] {
+    return [...block.matchAll(/(\S+) ([a-z]+) (\S+)/gu)].map(([, text, romaji, hangul]) => ({
+      text: text!,
+      romaji: romaji!,
+      hangul: hangul!,
+    }))
+  }
+
+  for (const range of KANA_CHAR_RANGES) {
+    it(`hiragana ${range} has the spec text, romaji and hangul for every character in order`, () => {
+      const expected = parseSpec(SPEC_TABLES[range])
+      expect(expected.length).toBeGreaterThan(0)
+      const actual = KANA_ITEMS.hiragana[range].map(({ text, romaji, hangul }) => ({ text, romaji, hangul }))
+      expect(actual).toEqual(expected)
+    })
+  }
 })
 
 describe('romaji rule examples from 03_UI_UX_SPEC.md', () => {

@@ -123,6 +123,42 @@ describe('localSlot', () => {
     expect(slot.read()).toBeUndefined()
   })
 
+  it('returns the written value on the same page when only setItem fails (quota)', async () => {
+    // 읽기는 되고 쓰기만 막힌 경우. 저장소의 옛 값이 아니라 방금 쓴 값이 기준이다.
+    const storage = memoryStorage({ 'nc.furigana.v1': '{"on":true}' })
+    storage.setItem.mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+    vi.stubGlobal('localStorage', storage)
+    const { localSlot } = await freshModule()
+    const slot = localSlot('nc.furigana.v1', isFlag)
+
+    expect(() => slot.write({ on: false })).not.toThrow()
+    expect(slot.read()).toEqual({ on: false })
+    expect(storage.data.get('nc.furigana.v1')).toBe('{"on":true}')
+  })
+
+  it('fails silently without console output', async () => {
+    const consoleSpies = (['error', 'warn', 'log', 'info'] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation(() => {}),
+    )
+    try {
+      vi.stubGlobal('localStorage', throwingStorage())
+      const { localSlot } = await freshModule()
+      const slot = localSlot('nc.furigana.v1', isFlag)
+      slot.read()
+      slot.write({ on: true })
+      slot.remove()
+
+      vi.stubGlobal('localStorage', memoryStorage({ 'nc.kana.v1': '{not json' }))
+      localSlot('nc.kana.v1', isFlag).read()
+
+      for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled()
+    } finally {
+      for (const spy of consoleSpies) spy.mockRestore()
+    }
+  })
+
   it('never throws when the localStorage global itself is missing', async () => {
     // node에는 localStorage 전역이 없다. 접근 자체가 ReferenceError다.
     expect('localStorage' in globalThis).toBe(false)
