@@ -850,10 +850,10 @@ def _operate_demo_without_storage(page: Page) -> None:
 def test_public_screens_work_when_local_storage_throws(
     frontend: Frontend, browser: Browser
 ) -> None:
-    """localStorage 접근이 던지는 페이지에서 선택 홈과 Demo가 정상 동작하고 잡히지 않은 오류가 없다.
+    """localStorage 접근이 던지는 페이지에서 선택 홈·가나 학습·Demo가 정상 동작하고 잡히지 않은 오류가 없다.
 
-    Demo는 후리가나 토글·자기평가·다음 문장·진도 초기화까지 메모리로 동작한다. 가나 학습은 그 화면을 더하는
-    레인이 여기에 조작을 더한다.
+    가나 학습은 보고 고르기 한 라운드를 결과 화면까지 풀고 글자 표로 돌아온다. Demo는 후리가나 토글·자기평가·
+    다음 문장·진도 초기화까지 메모리로 동작한다.
     """
     context = browser.new_context()
     try:
