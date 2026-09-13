@@ -16,6 +16,9 @@
 `05_LEARNING_SYSTEM_VISION`, `06_LLM_ENGINEERING_PRINCIPLES`,
 `future/*`는 미래 의도를 보존하지만 MVP 구현 범위를 넓히지 않는다.
 
+`updates/`는 변경 요청이지 명세가 아니다. 요청은 spec-sync가 `spec/`에
+반영한 뒤에만 구현한다.
+
 **Global/Future 문서에 숫자나 아이디어가 존재한다는 이유만으로 구현하지
 않는다.** MVP 구현 source of truth는 `spec/mvp-01-core/*`다.
 
