@@ -183,6 +183,12 @@ describe('failure wording', () => {
     expect(MESSAGES.startNewSession).toBe('새로 시작하기')
     // 보안 문구: 사유와 무관한 한 문구. 어느 쪽이 틀렸는지 암시하지 않는다.
     expect(MESSAGES.loginFailed).toBe('아이디나 비밀번호를 다시 확인해 주세요.')
+    // 로그인 진입과 공개 route 실패(03_UI_UX_SPEC.md의 `화면 문구 표`, `상단바와 선택 홈`·`Demo`).
+    expect(MESSAGES.loginCheckFailed).toBe(
+      '지금은 로그인 상태를 확인할 수 없어요. 체험과 글자 배우기는 그대로 쓸 수 있어요.',
+    )
+    expect(MESSAGES.loginAreaLoadFailed).toBe('로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요.')
+    expect(MESSAGES.demoLoadFailed).toBe('체험용 문장을 불러오지 못했어요. 새로고침해 주세요.')
     for (const message of Object.values(MESSAGES)) {
       expect(message).not.toMatch(/서버|세션|API|요청이 거부|습니다/)
     }

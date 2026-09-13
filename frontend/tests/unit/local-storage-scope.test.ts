@@ -185,10 +185,10 @@ function storageFragments(sources: readonly Source[]): string[] {
   return violations
 }
 
-/** `sessionStorage`, `indexedDB`, `caches`, `document.cookie`, `window.name`, `navigator.storage`가 없다. */
+/** `sessionStorage`, `indexedDB`, `caches`, `cookieStore`, `document.cookie`, `window.name`, `navigator.storage`가 없다. */
 function forbiddenStores(sources: readonly Source[]): string[] {
   const violations: string[] = []
-  const forbiddenIdentifiers = new Set(['sessionStorage', 'indexedDB', 'caches'])
+  const forbiddenIdentifiers = new Set(['sessionStorage', 'indexedDB', 'caches', 'cookieStore'])
   const forbiddenMembers: [string, ReadonlySet<string>][] = [
     ['cookie', new Set(['document'])],
     ['name', new Set(['window', 'self', 'globalThis'])],
@@ -511,6 +511,8 @@ describe('positive controls', () => {
     ['window.name', 'window.name = "x"'],
     ['self.name', 'const n = self.name'],
     ['navigator.storage', 'navigator.storage.persist()'],
+    ['cookieStore', "cookieStore.set('a', 'b')"],
+    ['window.cookieStore', "void window.cookieStore.get('a')"],
   ])('forbidden browser store: %s', (_name, text) => {
     expect(forbiddenStores(synthetic({ 'kana/quiz.ts': text })).length).toBeGreaterThan(0)
   })

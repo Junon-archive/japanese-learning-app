@@ -82,7 +82,10 @@ function strayMainDynamicImports(project: Project): string[] {
 // (d) 금지 목록 판정
 // ---------------------------------------------------------------------------------------------
 
-const GLOBAL_OBJECTS = new Set(['window', 'globalThis', 'self'])
+/** 전역 객체를 가리키는 이름. `window.window`, `top.fetch`, `document.defaultView.fetch`처럼 이어도 전역이다. */
+const GLOBAL_OBJECTS = new Set(['window', 'globalThis', 'self', 'top', 'parent', 'frames'])
+/** 동적 값을 넣으면 위반인 URL 속성 대입(`iframe.src =`, `form.action =`, `object.data =` 등). 리터럴은 허용. */
+const URL_PROPERTIES = new Set(['src', 'action', 'formAction', 'data'])
 const NETWORK_GLOBALS = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'])
 const CODE_GLOBALS = new Set(['eval', 'Function', 'require'])
 const WORKER_GLOBALS = new Set(['Worker', 'SharedWorker'])
@@ -111,7 +114,25 @@ function inTypePosition(node: ts.Node): boolean {
   return false
 }
 
-/** 전역 `name`을 가리키는 식이면 그 이름: `name`, `window.name`, `globalThis['name']`. */
+function unwrapExpression(node: ts.Expression): ts.Expression {
+  let current = node
+  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isNonNullExpression(current)) {
+    current = current.expression
+  }
+  return current
+}
+
+/** 전역 객체 식인가: `window`, `window.window`, `top`, `globalThis.parent`, `document.defaultView`. */
+function isGlobalObject(node: ts.Expression): boolean {
+  const current = unwrapExpression(node)
+  if (ts.isIdentifier(current)) return GLOBAL_OBJECTS.has(current.text)
+  if (!(ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current))) return false
+  const name = memberName(current)
+  if (name === 'defaultView') return isDocument(current.expression) || isGlobalObject(current.expression)
+  return name !== undefined && GLOBAL_OBJECTS.has(name) && isGlobalObject(current.expression)
+}
+
+/** 전역 `name`을 가리키는 식이면 그 이름: `name`, `window.name`, `globalThis['name']`, `window.window.name`. */
 function globalName(node: ts.Node): string | undefined {
   if (ts.isIdentifier(node)) {
     const parent = node.parent
@@ -126,11 +147,7 @@ function globalName(node: ts.Node): string | undefined {
     if (inTypePosition(node)) return undefined
     return node.text
   }
-  if (
-    (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
-    ts.isIdentifier(node.expression) &&
-    GLOBAL_OBJECTS.has(node.expression.text)
-  ) {
+  if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && isGlobalObject(node.expression)) {
     return memberName(node)
   }
   return undefined
@@ -216,17 +233,26 @@ function forbiddenUses(project: Project, file: string): Finding[] {
       if (calleeGlobal !== undefined && TIMER_GLOBALS.has(calleeGlobal) && !isFunctionValue(first, checker)) {
         report(node, 'timer with a non-function argument')
       }
-      if (calleeMember === 'createElement') {
-        const literal = first !== undefined && ts.isStringLiteralLike(first)
-        if (!literal || first.text.trim().toLowerCase() === 'script') report(node, 'createElement')
+      if (calleeMember === 'createElement' || calleeMember === 'createElementNS') {
+        // createElementNS(namespace, tag): 태그는 두 번째 인자다. SVG의 <script>도 실행된다.
+        const tag = calleeMember === 'createElement' ? first : second
+        const literal = tag !== undefined && ts.isStringLiteralLike(tag)
+        if (!literal || tag.text.trim().toLowerCase() === 'script') report(node, 'createElement')
       }
-      if (calleeMember === 'setAttribute') {
-        if (first === undefined || !ts.isStringLiteralLike(first)) {
+      if (calleeMember === 'setAttribute' || calleeMember === 'setAttributeNS') {
+        // setAttributeNS(namespace, name, value): 이름·값이 한 칸씩 뒤다. `xlink:href`는 접두사를 떼고 본다.
+        const offset = calleeMember === 'setAttribute' ? 0 : 1
+        const nameArgument = node.arguments[offset]
+        const valueArgument = node.arguments[offset + 1]
+        if (nameArgument === undefined || !ts.isStringLiteralLike(nameArgument)) {
           report(node, 'setAttribute with a dynamic name')
         } else {
-          const name = first.text.trim().toLowerCase()
+          const name = nameArgument.text.trim().toLowerCase().split(':').pop() ?? ''
           if (name.startsWith('on') || name === 'srcdoc') report(node, 'setAttribute on*/srcdoc')
-          if ((name === 'href' || name === 'src') && (second === undefined || !ts.isStringLiteralLike(second))) {
+          if (
+            (name === 'href' || name === 'src') &&
+            (valueArgument === undefined || !ts.isStringLiteralLike(valueArgument))
+          ) {
             report(node, 'setAttribute href/src with a dynamic value')
           }
         }
@@ -252,6 +278,14 @@ function forbiddenUses(project: Project, file: string): Finding[] {
       const navigates = memberName(target) === 'href' || isLocation(target)
       const fixed = node.operatorToken.kind === ts.SyntaxKind.EqualsToken && isRouteConstant(node.right, project, checker)
       if (navigates && !fixed) report(node, 'navigation to a non-route value')
+      const urlProperty = memberName(target)
+      if (
+        urlProperty !== undefined &&
+        URL_PROPERTIES.has(urlProperty) &&
+        !(node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isStringLiteralLike(node.right))
+      ) {
+        report(node, 'URL property with a dynamic value')
+      }
     }
 
     ts.forEachChild(node, visit)
@@ -470,6 +504,32 @@ describe('positive controls: forbidden uses on synthetic sources', () => {
     ['location.replace(v)', 'window.location.replace(v)', 'navigation to a non-route value'],
     ['window.open(v)', 'window.open(v)', 'navigation to a non-route value'],
     ['a.href = v', "document.createElement('a').href = v", 'navigation to a non-route value'],
+    ['createElementNS(ns, tag)', "document.createElementNS('http://www.w3.org/2000/svg', tag)", 'createElement'],
+    [
+      "createElementNS(ns, 'script')",
+      "document.createElementNS('http://www.w3.org/2000/svg', 'script')",
+      'createElement',
+    ],
+    ["setAttributeNS(ns, 'onload', literal)", "el.setAttributeNS(null, 'onload', 'x()')", 'setAttribute on*/srcdoc'],
+    ["setAttributeNS(ns, 'srcdoc', literal)", "el.setAttributeNS(null, 'srcdoc', '<p>x</p>')", 'setAttribute on*/srcdoc'],
+    [
+      "setAttributeNS(xlink, 'xlink:href', v)",
+      "el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', v)",
+      'setAttribute href/src with a dynamic value',
+    ],
+    ["setAttributeNS(ns, 'src', v)", "el.setAttributeNS(null, 'src', v)", 'setAttribute href/src with a dynamic value'],
+    ['setAttributeNS(ns, name, v)', 'el.setAttributeNS(null, v, v)', 'setAttribute with a dynamic name'],
+    ['iframe.src = v', "document.createElement('iframe').src = v", 'URL property with a dynamic value'],
+    ['img.src = v', "document.createElement('img').src = v", 'URL property with a dynamic value'],
+    ['form.action = v', "document.createElement('form').action = v", 'URL property with a dynamic value'],
+    ['button.formAction = v', "document.createElement('button').formAction = v", 'URL property with a dynamic value'],
+    ['object.data = v', "document.createElement('object').data = v", 'URL property with a dynamic value'],
+    ['window.window.fetch', "void window.window.fetch('x')", 'network API outside api.ts'],
+    ['top.fetch', "void top.fetch('x')", 'network API outside api.ts'],
+    ['parent.eval', 'parent.eval(code)', 'eval'],
+    ['frames.WebSocket', "export const x = new frames.WebSocket('ws://x')", 'network API outside api.ts'],
+    ['document.defaultView.fetch', "void document.defaultView?.fetch('x')", 'network API outside api.ts'],
+    ['globalThis.self.setTimeout(code)', 'globalThis.self.setTimeout(code)', 'timer with a non-function argument'],
   ]
 
   const ALLOWED: [string, string][] = [
@@ -483,6 +543,10 @@ describe('positive controls: forbidden uses on synthetic sources', () => {
     ['a stylesheet import', "import '../styles.css'"],
     ['an explicit .ts specifier', "import '../ids.ts'"],
     ['a string method named replace', "export const s = v.replace('a', 'b')"],
+    ['a literal element namespace tag', "document.createElementNS('http://www.w3.org/2000/svg', 'svg')"],
+    ['a literal URL property', "document.createElement('img').src = '/icons/icon-192.png'"],
+    ['a plain setAttributeNS', "el.setAttributeNS(null, 'viewBox', v)"],
+    ['a local object named data', 'const box = { data: 1 }\nbox.data === 1'],
   ]
 
   const overlay: Record<string, string> = {}

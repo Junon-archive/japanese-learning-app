@@ -306,6 +306,69 @@ describe('login entry result', () => {
     expect(screenClass()).toContain('login')
   })
 
+  it('restarts the whole entry from the 로그인 on the connection failure screen', async () => {
+    vi.useFakeTimers()
+    await boot('#/demo')
+    answerMe(async () => json(503, { detail: 'unavailable' }))
+    loginButton().click()
+    await settle()
+
+    const failure = root.children[0]!
+    const staleRetry = buttons(byClass(failure, 'notice')[0]!)[0]!
+    expect(staleRetry.textContent).toBe(MESSAGES.retry)
+    const firstEntry = calls().length
+    expect(browser.replaceStateCalls).toHaveLength(1)
+    // 실패 화면에 hash가 다시 생긴 상태를 hashchange 없이 만든다. 재진입이 hash를 다시 지우는지 보려는 것이다.
+    history.replaceState(null, '', '/#/demo')
+    const replacedBefore = browser.replaceStateCalls.length
+
+    answerMe(async () => json(401, { detail: 'Not authenticated' }))
+    loginButton().click()
+    await settle()
+
+    // 처음부터: 새 화면, hash 지움, fetchMe 한 번.
+    expect(root.children[0]).not.toBe(failure)
+    expect(screenClass()).toContain('login')
+    expect(browser.replaceStateCalls.slice(replacedBefore)).toEqual([[null, '', '/']])
+    expect(location.hash).toBe('')
+    expect(calls().slice(firstEntry)).toEqual(['GET /api/auth/me'])
+
+    // 이전 실패 화면은 abort됐다. 떼어진 화면의 `다시 시도하기`는 fetchMe를 부르지 않는다.
+    staleRetry.click()
+    await settle()
+    expect(calls().slice(firstEntry)).toEqual(['GET /api/auth/me'])
+    expect(screenClass()).toContain('login')
+  })
+
+  it('retries the dynamic import from the 로그인 on the load failure screen', async () => {
+    let loads = 0
+    vi.doMock('../../src/private', async () => {
+      loads += 1
+      if (loads === 1) throw new Error('chunk load failed')
+      return await vi.importActual('../../src/private')
+    })
+    await boot('#/demo')
+
+    loginButton().click()
+    await settle()
+    const failure = root.children[0]!
+    expect(flatText(byClass(failure, 'notice')[0]!)).toContain(MESSAGES.loginAreaLoadFailed)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(loads).toBe(1)
+    history.replaceState(null, '', '/#/demo')
+    const replacedBefore = browser.replaceStateCalls.length
+
+    answerMe(async () => json(401, { detail: 'Not authenticated' }))
+    loginButton().click()
+    await settle()
+
+    expect(loads).toBe(2)
+    expect(root.children[0]).not.toBe(failure)
+    expect(screenClass()).toContain('login')
+    expect(browser.replaceStateCalls.slice(replacedBefore)).toEqual([[null, '', '/']])
+    expect(calls()).toEqual(['GET /api/auth/me'])
+  })
+
   it('leaves only a buttonless notice when the login area fails to load', async () => {
     vi.doMock('../../src/private', () => {
       throw new Error('chunk load failed')
@@ -474,7 +537,9 @@ describe('url values', () => {
  *
  * ``` text
  * 선언          function openLogin, 매개변수, 구조 분해 { openLogin }, 타입의 속성 이름
- * 값 전달       객체 리터럴의 속성 값 { onLogin: openLogin }, { openLogin }, { onLogin: ctx.openLogin }
+ * 값 전달       계획된 전달처의 객체 리터럴에서 **같은 이름의 속성**으로만 (PLANNED_DESTINATIONS)
+ *                 renderTopBar({ onLogin: openLogin }), renderTopBar({ onLogin: ctx.openLogin })
+ *                 startRouter({ openLogin }), enterPrivate({ openLogin }), routes.ts context()의 반환 { openLogin }
  * 존재 확인     onLogin !== undefined
  * 호출          ui/topbar.ts의 로그인 버튼(className에 topbar-login) addEventListener('click', 콜백) 바로 안
  * ```
@@ -483,6 +548,21 @@ describe('url values', () => {
  * 이름 기반이므로 다른 이름으로 옮겨 담는 의도적인 우회는 막지 못한다 --- 옮겨 담는 형태 자체를 위반으로 낸다.
  */
 const LOGIN_NAMES = new Set(['openLogin', 'onLogin'])
+
+/**
+ * 로그인 진입 함수가 값으로 건너가도 되는 곳과 그 속성 이름. 여기 없는 객체 리터럴에 담기면 위반이다 ---
+ * `renderNotice(..., { onClick: openLogin })`나 `{ handleEvent: openLogin }`은 click 리스너 밖에서 부르는 길을 연다.
+ */
+const PLANNED_DESTINATIONS: Readonly<Record<string, string>> = {
+  /** 상단바가 로그인 버튼 click 리스너에서만 부른다. */
+  renderTopBar: 'onLogin',
+  /** main.ts -> 라우터. 공개 화면 ctx로 넘긴다. */
+  startRouter: 'openLogin',
+  /** main.ts -> 로그인 영역. 실패 화면 상단바에 넘긴다. */
+  enterPrivate: 'openLogin',
+}
+/** routes.ts에서 공개 화면 ctx(`PublicScreenContext`)를 만드는 함수. 반환 객체의 `openLogin`. */
+const ROUTE_CONTEXT = { file: 'routes.ts', functionName: 'context', key: 'openLogin' }
 const TOPBAR = 'ui/topbar.ts'
 
 type LoginReference = { file: string; line: number; kind: 'call' | 'misuse'; text: string; inLoginClick: boolean }
@@ -537,7 +617,36 @@ function isLoginClickListener(call: ts.CallExpression, file: string, source: ts.
   return isLoginButton
 }
 
-/** 허용되지 않는 참조와 모든 호출. 선언·값 전달·존재 확인은 내지 않는다. */
+function propertyKey(property: ts.ObjectLiteralElementLike): string | undefined {
+  return property.name !== undefined && ts.isIdentifier(property.name) ? property.name.text : undefined
+}
+
+/** 이 객체 리터럴 속성이 계획된 전달처에 같은 이름으로 건네는 것인가. */
+function isPlannedPass(property: ts.ObjectLiteralElementLike, file: string): boolean {
+  const key = propertyKey(property)
+  const literal = property.parent
+  if (key === undefined || !ts.isObjectLiteralExpression(literal)) return false
+  const owner = literal.parent
+
+  if (ts.isCallExpression(owner) && owner.arguments.some((argument) => argument === literal)) {
+    const callee = owner.expression
+    const name = ts.isIdentifier(callee)
+      ? callee.text
+      : ts.isPropertyAccessExpression(callee)
+        ? callee.name.text
+        : undefined
+    return name !== undefined && PLANNED_DESTINATIONS[name] === key
+  }
+
+  if (file === ROUTE_CONTEXT.file && key === ROUTE_CONTEXT.key && ts.isReturnStatement(owner)) {
+    let fn: ts.Node | undefined = owner.parent
+    while (fn !== undefined && !ts.isFunctionLike(fn)) fn = fn.parent
+    return fn !== undefined && ts.isFunctionDeclaration(fn) && fn.name?.text === ROUTE_CONTEXT.functionName
+  }
+  return false
+}
+
+/** 허용되지 않는 참조와 모든 호출. 선언·계획된 값 전달·존재 확인은 내지 않는다. */
 function loginReferences(project: Project): LoginReference[] {
   const found: LoginReference[] = []
 
@@ -570,10 +679,10 @@ function loginReferences(project: Project): LoginReference[] {
           (holder.propertyName === undefined ||
             (ts.isIdentifier(holder.propertyName) && holder.propertyName.text === node.text)))
       const passedAsValue =
-        (ts.isPropertyAssignment(holder) &&
-          (holder.name === reference || holder.initializer === reference) &&
-          ts.isObjectLiteralExpression(holder.parent)) ||
-        (ts.isShorthandPropertyAssignment(holder) && ts.isObjectLiteralExpression(holder.parent))
+        ((ts.isPropertyAssignment(holder) &&
+          (holder.name === reference || holder.initializer === reference)) ||
+          ts.isShorthandPropertyAssignment(holder)) &&
+        isPlannedPass(holder, file)
       const presenceCheck =
         ts.isBinaryExpression(holder) &&
         [
@@ -627,6 +736,35 @@ describe('openLogin call site (AST)', () => {
   const TOPBAR_SOURCE = (): string => createProject().read(TOPBAR)
 
   const MISPLACED: [string, Record<string, string>, 'call' | 'misuse'][] = [
+    [
+      'passing openLogin to the top bar under another name',
+      {
+        'home/probe.ts':
+          "import { renderTopBar } from '../ui/topbar'\nexport function mount(ctx: { openLogin: () => void }) {\n  return renderTopBar({ onHome: ctx.openLogin, actions: [] })\n}\n",
+      },
+      'misuse',
+    ],
+    [
+      'passing openLogin as a notice action',
+      {
+        'home/probe.ts':
+          "import { renderNotice } from '../ui/notice'\nexport function mount(ctx: { openLogin: () => void }) {\n  return renderNotice('x', 'error', { label: 'x', onClick: ctx.openLogin })\n}\n",
+      },
+      'misuse',
+    ],
+    [
+      'passing openLogin as an event listener object',
+      {
+        'probe.ts':
+          "declare const openLogin: () => void\nwindow.addEventListener('hashchange', { handleEvent: openLogin })\n",
+      },
+      'misuse',
+    ],
+    [
+      'keeping openLogin in an unplanned object',
+      { 'demo/probe.ts': 'export function keep(openLogin: () => void) {\n  return { openLogin }\n}\n' },
+      'misuse',
+    ],
     [
       'a public module calling ctx.openLogin()',
       { 'kana/probe.ts': 'export function mount(ctx: { openLogin: () => void }): void {\n  ctx.openLogin()\n}\n' },

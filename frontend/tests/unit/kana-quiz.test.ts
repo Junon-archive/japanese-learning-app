@@ -40,9 +40,13 @@ function play(round: KanaRound, isCorrect: (text: string, retry: boolean) => boo
 }
 
 describe('constants', () => {
-  it('match 03_UI_UX_SPEC.md', () => {
-    expect(KANA_ROUND_MAX_QUESTIONS).toBe(10)
-    expect(KANA_CHOICE_COUNT).toBe(4)
+  // 값의 canonical은 03_UI_UX_SPEC.md다. 수치를 테스트에 복사하지 않고(12_TEST_PLAN.md) 아래 테스트는 이
+  // 상수를 참조한다. 여기서는 그 참조가 뜻을 가질 모양인지만 본다.
+  it('are positive integers that make a round and a choice set', () => {
+    expect(Number.isInteger(KANA_ROUND_MAX_QUESTIONS)).toBe(true)
+    expect(KANA_ROUND_MAX_QUESTIONS).toBeGreaterThan(0)
+    expect(Number.isInteger(KANA_CHOICE_COUNT)).toBe(true)
+    expect(KANA_CHOICE_COUNT).toBeGreaterThan(1)
   })
 })
 
