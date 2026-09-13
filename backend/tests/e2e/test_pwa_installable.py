@@ -13,11 +13,15 @@ from __future__ import annotations
 
 import json
 import struct
+from datetime import timedelta
 from typing import Any
 
 import pytest
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright
+from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright
 
+from app.config import get_config
+from app.models import StudySession
+from tests.conftest import override_config
 from tests.e2e import study_flow as flow
 from tests.e2e.conftest import E2EStack, Frontend
 
@@ -35,6 +39,15 @@ INSTALLABLE_DISPLAYS = frozenset({"standalone", "fullscreen", "minimal-ui"})
 
 # 브라우저가 manifest를 읽고 installability를 판정할 시간. 정책값이 아니다.
 _SETTLE_MS = 3000
+
+# 모바일 스모크가 주입하는 세션 길이. 기본값과 **다르게** 둔다 --- 기본값을 쓰면 config를
+# 읽지 않는 구현도 통과한다. 짧게 두는 이유는 시계를 한 번만 옮겨 목표에 닿기 위해서이고,
+# 기대값(목표 초, idle gap 상한)은 전부 이 값에서 유도한다.
+PHONE_SESSION_MINUTES = 1
+
+# `오늘 학습 완료` 버튼 문구. `frontend/src/ui/session-end.ts`와 같아야 한다 --- 사용자가
+# 실제로 누르는 것이 이 글자다.
+FINISH_LABEL = "오늘 학습 완료"
 
 # **API를 부르지 않는 경로로 들어간다.** 설치 가능성은 정적 산출물의 성질이고, 이
 # 파일은 backend fixture를 요구하지 않는다. 루트(`/`)로 들어가면 boot이
@@ -58,6 +71,23 @@ def _manifest(page: Page, context: BrowserContext) -> dict[str, Any]:
     parsed = json.loads(raw)
     assert isinstance(parsed, dict)
     return parsed
+
+
+def _undersized(locator: Locator, selector: str) -> list[str]:
+    """화면에 있는 그 selector의 요소 중 탭 타깃 최소 크기에 못 미치는 것."""
+    found: list[str] = []
+    assert locator.count() > 0, f"{selector}가 화면에 없다"
+    for index in range(locator.count()):
+        box = locator.nth(index).bounding_box()
+        assert box is not None, f"{selector}[{index}]가 화면에 없다"
+        if box["width"] < MIN_TAP_TARGET_PX or box["height"] < MIN_TAP_TARGET_PX:
+            found.append(f"{selector}[{index}]={box['width']}x{box['height']}")
+    return found
+
+
+def _finished_session(stack: E2EStack, learner: flow.Learner) -> StudySession | None:
+    session = flow.study_session(stack, learner)
+    return session if session.ended_at is not None else None
 
 
 def _png_size(payload: bytes) -> tuple[int, int]:
@@ -178,34 +208,45 @@ def test_the_install_prompt_event_fires(
 def test_the_study_screen_works_on_a_phone_viewport(
     e2e_stack: E2EStack, browser: Browser, playwright_driver: Playwright
 ) -> None:
-    """iPhone descriptor로 학습 화면을 밟고 주 동작의 탭 타깃 크기를 본다.
+    """iPhone descriptor로 학습 화면을 시작부터 **세션 종료까지** 밟고 탭 타깃 크기를 본다.
 
     03_UI_UX_SPEC.md는 모바일 우선이다. 데스크톱에서만 눌리는 화면은 그 요구를
-    만족하지 않고, 크기 미달은 기능 테스트로는 절대 드러나지 않는다.
+    만족하지 않고, 크기 미달은 기능 테스트로는 절대 드러나지 않는다. 종료 버튼도 같다 ---
+    폰에서 `오늘 학습 완료`를 누를 수 없으면 세션은 idle timeout으로만 닫힌다.
+
+    목표 도달을 실제로 기다리지 않는다. 짧은 세션을 주입하고 `stack.clock`을 목표만큼
+    한 번 옮긴다. 그 한 번의 gap이 전부 active time이 되도록 idle gap 상한도 같은 값에서
+    유도해 주입한다(`study_session.touch()`는 상한을 넘는 gap에 0을 더한다).
     """
+    stack = e2e_stack
+    goal = timedelta(minutes=PHONE_SESSION_MINUTES)
+    stack.use_config(
+        override_config(
+            get_config(),
+            learning={"default_session_minutes": PHONE_SESSION_MINUTES},
+            session={"active_time_idle_gap_seconds": int(goal.total_seconds())},
+        )
+    )
+
     device = playwright_driver.devices["iPhone 13"]
     context = browser.new_context(**device)
     try:
         page = context.new_page()
-        learner = flow.seed_and_create_user(e2e_stack)
-        flow.sign_in(page, e2e_stack, learner)
+        learner = flow.seed_and_create_user(stack)
+        flow.sign_in(page, stack, learner)
 
         # 문장과 주 동작이 화면에 있다.
         assert flow.tokens(page).count() > 0
-        opened = flow.open_presentation(e2e_stack, learner)
+        opened = flow.open_presentation(stack, learner)
         assert opened is not None
+        assert flow.study_session(stack, learner).target_minutes == PHONE_SESSION_MINUTES
 
         # 설명 패널까지 열어 self-report 버튼도 측정 대상에 넣는다.
         flow.tap(page, 0)
 
         undersized: list[str] = []
         for selector in ("button.next", ".explain .self-report", ".reveal-translation"):
-            locator = page.locator(selector)
-            for index in range(locator.count()):
-                box = locator.nth(index).bounding_box()
-                assert box is not None, f"{selector}[{index}]가 화면에 없다"
-                if box["width"] < MIN_TAP_TARGET_PX or box["height"] < MIN_TAP_TARGET_PX:
-                    undersized.append(f"{selector}[{index}]={box['width']}x{box['height']}")
+            undersized += _undersized(page.locator(selector), selector)
         assert undersized == [], f"탭 타깃이 {MIN_TAP_TARGET_PX}px 미만이다: {undersized}"
 
         # 가로 스크롤이 생기지 않는다. 모바일에서 문장이 잘리는 가장 흔한 형태다.
@@ -213,5 +254,38 @@ def test_the_study_screen_works_on_a_phone_viewport(
             "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"
         )
         assert overflow <= 0, f"가로 overflow {overflow}px"
+
+        # 목표 도달 전에는 종료 선택지가 없다. 처음부터 떠 있는 버튼이면 아래 단언이
+        # "도달해서 떴다"를 증명하지 못한다.
+        assert page.locator(".session-end").count() == 0
+
+        # 문장 완료(Next). 목표만큼 시계를 옮긴 뒤 누르므로 `/complete`가 목표를 채우고,
+        # 이어지는 `GET /session`이 도달을 화면에 알린다.
+        stack.clock.advance(goal)
+        flow.press_next(page, stack, learner)
+        completed = [row for row in flow.presentations(stack, learner) if row.completed_at]
+        assert [row.id for row in completed] == [opened.id]
+
+        reached = flow.study_session(stack, learner)
+        assert reached.active_seconds >= reached.target_minutes * 60, reached.active_seconds
+        # 도달은 종료가 아니다(05_API_SPEC.md). 누르기 전에는 열려 있어야 한다.
+        assert reached.ended_at is None
+
+        choice = page.locator(".session-end")
+        choice.wait_for(state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000)
+        end_buttons = _undersized(choice.locator("button"), ".session-end button")
+        assert end_buttons == [], f"종료 버튼이 {MIN_TAP_TARGET_PX}px 미만이다: {end_buttons}"
+
+        choice.locator("button", has_text=FINISH_LABEL).tap()
+        page.locator(".session-finished").wait_for(
+            state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000
+        )
+        # 끝난 화면에는 문장도 Next도 남지 않는다.
+        assert page.locator(".sentence").count() == 0
+        assert page.locator("button.next").count() == 0
+
+        finished = flow._poll(lambda: _finished_session(stack, learner), what="세션의 ended_at")
+        assert finished.id == reached.id
+        assert finished.ended_at is not None
     finally:
         context.close()

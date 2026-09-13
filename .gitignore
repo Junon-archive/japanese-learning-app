@@ -42,3 +42,9 @@ temp/
 
 # OS
 .DS_Store
+
+# cloudflared 실제 설정과 credentials (ADR-020 결정 4). 예시 config.example.yml은 추적한다.
+infra/cloudflared/*.json
+infra/cloudflared/cert.pem
+infra/cloudflared/config.yml
+infra/cloudflared/config.yaml

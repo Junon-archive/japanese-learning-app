@@ -1,0 +1,29 @@
+# cloudflared ingress 예시 조각 (docs/decisions/ADR-020-production-topology.md 결정 4).
+#
+# 이 파일 전체로 기존 터널 설정을 교체하지 마라. 기존 설정에는 같은 터널을 쓰는
+# 다른 서비스의 규칙이 있고, 교체하면 그 서비스들이 전부 끊긴다.
+#
+# 쓰는 법: 아래 `<API_HOST>` 규칙 하나를 기존 터널 설정의 ingress에서
+# catch-all(`service: http_status:404`) **바로 앞에** 추가한다. cloudflared는 위에서부터
+# 첫 매칭을 쓰므로 catch-all 뒤에 넣은 규칙은 매칭되지 않는다.
+# 추가한 뒤에는 `cloudflared tunnel --config <설정 파일> ingress validate`와
+# `ingress rule https://<API_HOST>/api/health`로 매칭을 확인한다.
+#
+# 이 파일에는 자리표시자만 쓴다. 실제 도메인, tunnel ID, credentials 경로를 적지 않는다.
+# 실제 설정 파일(config.yml)과 credentials(*.json, cert.pem)는 Git에서 제외된다.
+
+tunnel: <TUNNEL_NAME>
+credentials-file: <CREDENTIALS_FILE>
+
+ingress:
+  # 기존 서비스 규칙들은 여기(위쪽)에 그대로 둔다.
+
+  # API만 노출한다. frontend는 Workers Static Assets가 서빙한다.
+  # 호스트 이름이 아니라 IPv4 loopback 주소를 쓴다. 이름은 IPv6 loopback으로 풀릴 수
+  # 있는데 compose는 IPv4 loopback에만 publish한다(ADR-020 결정 4).
+  # PostgreSQL은 ingress에 절대 넣지 않는다.
+  - hostname: <API_HOST>
+    service: http://127.0.0.1:8000
+
+  # catch-all은 항상 마지막이다.
+  - service: http_status:404

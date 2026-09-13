@@ -54,19 +54,25 @@ make run                 # uvicorn, http://127.0.0.1:8000/api/health
 make frontend-build      # frontend/ 에서 npm ci && npm run build
 ```
 
-`lint` / `typecheck` / `test`는 **DB 없이 전부 통과한다.** 데이터베이스가
-필요한 테스트는 아직 없다.
+`lint` / `typecheck` / `test`는 **DB를 따로 준비하지 않아도 전부 돈다.**
+PostgreSQL이 필요한 테스트는 pgserver(ADR-002)로 `data/pgtest/`에 테스트 전용
+서버를 스스로 띄운다. 브라우저 E2E는 `make test`에 들어가지 않고 `make test-e2e`로
+따로 돈다.
 
 `/docs`, `/redoc`, `/openapi.json`은 `APP_ENV=development`일 때만 열린다.
 기본값에서는 404다.
 
-로컬 PostgreSQL:
+로컬 PostgreSQL은 `make db-up-local`(pgserver,
+`docs/decisions/ADR-002-local-dev-database.md`)을 쓴다. stdout에 DSN만 나온다.
 
--   docker가 있으면 `make db-up`이 `infra/docker-compose.yml`의
-    `postgres:16`을 띄운다. 루트 `.env`가 있어야 한다.
--   docker가 없는 개발 머신의 로컬 DB는
-    `docs/decisions/ADR-002-local-dev-database.md`(pgserver)를 따른다.
+``` bash
+export DATABASE_URL="$(make db-up-local)"
+make db-reset ARGS=--yes   # DROP -> CREATE -> alembic upgrade head. APP_ENV=production이면 거부한다
+make seed
+```
 
-`make db-reset`과 `make seed`는 아직 동작하지 않는다. Alembic migration과
-seed 적재가 들어오는 Wave 1에서 구현한다. 지금 실행하면 안내 메시지와 함께
-실패한다.
+`make db-up`(docker compose)은 로컬 개발용이 아니다. compose 파일이
+`NC_CONFIG_PATH`에 운영 정책 파일의 절대경로를 요구하므로, `.env.example`을 그대로
+복사한 `.env`로는 실패한다.
+
+운영 배포(compose, 터널, 프론트 배포, 백업, 업데이트)는 `infra/DEPLOY.md`를 따른다.

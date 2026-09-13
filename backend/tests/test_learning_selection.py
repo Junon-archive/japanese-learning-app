@@ -61,10 +61,12 @@ from app.models.enums import (
 from app.srs.review import record_explicit_review
 from tests import factories
 from tests.clock import MutableClock
+from tests.conftest import override_config
 
 REVIEW = PresentationRole.REVIEW
 NEW = PresentationRole.NEW
 EXPLORATION = PresentationRole.EXPLORATION
+ALL_ROLES = (REVIEW, NEW, EXPLORATION)
 
 FSRS_DUE = ReviewReason.FSRS_DUE
 REINFORCEMENT = ReviewReason.REINFORCEMENT
@@ -815,6 +817,40 @@ def test_an_item_below_the_minimum_exposures_gets_a_reinforcement_candidate(
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("headroom", [0, 1])
+def test_reinforcement_follows_the_injected_minimum_exposures(
+    db_session: Session, headroom: int
+) -> None:
+    """`minimum_meaningful_exposures`를 **주입해서** 경계 양쪽을 본다.
+
+    노출 수가 주입한 최소치와 같으면 reinforcement를 만들지 않고, 최소치가 하나
+    크면 만든다. 위의 두 테스트는 기본값으로만 돌아서, 최소치를 상수로 박은 구현도
+    통과했다(변이로 확인). 여기서는 노출 1건에 최소치를 1과 2로 넣으므로 어떤
+    상수를 박아도 두 경우 중 하나에서 실패한다.
+    """
+    exposures = 1
+    cfg = override_config(
+        get_config(), learning={"minimum_meaningful_exposures": exposures + headroom}
+    ).learning
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    sentence = _ready_sentence(db_session, [item])
+    _learning_state(db_session, user, item, anchor_sentence_id=sentence.id)
+    # due가 아니어야 reason이 최소 노출 판정 하나로만 갈린다.
+    _schedule(db_session, user, item, next_review_at=clock.now() + timedelta(days=30))
+    for _ in range(exposures):
+        _expose(db_session, user, item, clock.now())
+
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+
+    reasons = [
+        candidate.review_reason for candidate in _candidates_of(db_session, user, role=REVIEW)
+    ]
+    assert reasons == ([REINFORCEMENT] if headroom else [])
+
+
+@pytest.mark.integration
 def test_the_anchor_sentence_is_recorded_when_it_was_missing(db_session: Session) -> None:
     """anchor는 "최초 학습 문맥"이므로 한 번 정하면 기록한다."""
     clock = MutableClock()
@@ -1286,6 +1322,111 @@ def test_an_explicit_review_lifts_the_deferral(db_session: Session) -> None:
     selection = _select(db_session, user, study_session, _utc(state.next_review_at))
     assert selection is not None, "deferral이 풀렸는데도 due item을 고르지 못했다"
     assert selection.target_item_ids == (item.id,)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("headroom", [0, 1])
+def test_anchor_reuse_fallback_follows_the_injected_minimum_exposures(
+    db_session: Session, headroom: int
+) -> None:
+    """Pool Fallback 2(anchor reinforcement 재사용)도 주입한 최소 노출을 따른다.
+
+    `varied`는 아직 보지 않은 문장을 요구하는데 anchor 하나뿐이라 0단계
+    materialization은 아무것도 만들지 못한다. 남는 경로는 2단계뿐이고, 그 단계의
+    최소 노출 비교는 materialization과 **별도 코드**라 따로 본다(변이로 확인: 이
+    비교를 상수로 박아도 다른 테스트는 전부 통과했다).
+    """
+    exposures = 1
+    cfg = override_config(
+        get_config(), learning={"minimum_meaningful_exposures": exposures + headroom}
+    ).learning
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    item = factories.make_learning_item(db_session)
+    anchor = _ready_sentence(db_session, [item])
+    _learning_state(db_session, user, item, stage=ContextStage.VARIED, anchor_sentence_id=anchor.id)
+    _schedule(db_session, user, item, next_review_at=clock.now() + timedelta(days=30))
+    history = _study_session(db_session, user)
+    shown_on = _candidate(
+        db_session,
+        user,
+        anchor,
+        role=REVIEW,
+        reason=REINFORCEMENT,
+        targets=[item],
+        status=CandidateStatus.CONSUMED,
+    )
+    for _ in range(exposures):
+        shown = _presentation(
+            db_session, user, history, shown_on, role=REVIEW, reason=REINFORCEMENT
+        )
+        _exposure(db_session, user, item, shown, stage=ContextStage.ANCHOR, now=clock.now())
+    study_session = _study_session(db_session, user)
+
+    selection = select_next(
+        db_session, user=user, study_session_id=study_session.id, now=clock.now(), cfg=cfg
+    )
+
+    if not headroom:
+        assert selection is None
+        return
+    assert selection is not None
+    assert (selection.review_reason, selection.context_stage, selection.sentence_id) == (
+        REINFORCEMENT,
+        ContextStage.ANCHOR,
+        anchor.id,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("dominant", [REVIEW, NEW, EXPLORATION])
+def test_select_next_follows_the_injected_category_ratios(
+    db_session: Session, dominant: PresentationRole
+) -> None:
+    """세 pool이 모두 ready인 **같은 상태**에서 주입한 ratio가 첫 문장의 category를 정한다.
+
+    위의 Category Mix 테스트는 순수 함수에 기본값과 같은 70/20/10을 넣거나
+    `choose_ratios`를 기본 config로만 불러서, ratio를 상수로 박은 엔진도 통과했다
+    (변이로 확인). 여기서는 `select_next`를 통해 세 category를 각각 우세하게 주입하므로
+    어떤 고정 ratio도 세 경우 중 둘에서 실패한다. 세션 첫 문장이므로 deficit은 곧
+    ratio 순서다.
+    """
+    dominant_share, minor_share = 0.8, 0.1
+    shares = {role: dominant_share if role is dominant else minor_share for role in ALL_ROLES}
+    cfg = override_config(
+        get_config(),
+        learning={
+            "review_ratio": shares[REVIEW],
+            "new_ratio": shares[NEW],
+            "exploration_ratio": shares[EXPLORATION],
+        },
+    ).learning
+    clock = MutableClock()
+    user = factories.make_user(db_session)
+    reviewed = factories.make_learning_item(db_session)
+    anchor = _ready_sentence(db_session, [reviewed])
+    _learning_state(db_session, user, reviewed, anchor_sentence_id=anchor.id)
+    _schedule(db_session, user, reviewed, next_review_at=clock.now() - timedelta(days=1))
+    _expose(db_session, user, reviewed, clock.now())
+    promoted = factories.make_learning_item(db_session)
+    _ready_sentence(db_session, [promoted])
+    _learning_state(db_session, user, promoted, active=True)
+    untouched = factories.make_learning_item(db_session)
+    _ready_sentence(db_session, [untouched])
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    study_session = _study_session(db_session, user)
+
+    # 전제: 세 pool이 모두 있고 backlog 세트로 바뀌지 않았다. 둘 중 하나라도 깨지면
+    # 아래 단정은 ratio가 아니라 pool 유무나 backlog를 보게 된다.
+    assert {c.presentation_role for c in _candidates_of(db_session, user)} == set(ALL_ROLES)
+    assert count_backlog(db_session, user_id=user.id, now=clock.now()) < cfg.backlog_threshold
+
+    selection = select_next(
+        db_session, user=user, study_session_id=study_session.id, now=clock.now(), cfg=cfg
+    )
+
+    assert selection is not None
+    assert selection.presentation_role is dominant
 
 
 @pytest.mark.integration

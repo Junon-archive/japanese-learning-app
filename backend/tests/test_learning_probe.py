@@ -30,6 +30,7 @@ from app.models import User as UserModel
 from app.models.enums import CandidateStatus, EventType
 from tests import factories
 from tests.clock import MutableClock
+from tests.conftest import override_config
 
 pytestmark = pytest.mark.integration
 
@@ -200,8 +201,18 @@ def test_a_probe_appears_once_the_gap_is_satisfied(db_session: Session, config: 
     assert chosen.learning_item_id == item.id
 
 
-def test_the_next_probe_waits_for_the_gap_again(db_session: Session, config: AppConfig) -> None:
-    """조건 2의 둘째 갈래: 마지막 probe 이후 제시된 presentation 수 >= gap."""
+@pytest.mark.parametrize("gap_shift", [0, 1])
+def test_the_next_probe_waits_for_the_gap_again(
+    db_session: Session, config: AppConfig, gap_shift: int
+) -> None:
+    """조건 2의 둘째 갈래: 마지막 probe 이후 제시된 presentation 수 >= gap.
+
+    기본값이 아닌 gap도 **주입해서** 본다. 기본값으로만 돌면 이 갈래의 gap을 상수로
+    박은 구현이 전체 suite를 통과했다(변이로 확인) --- probe가 연속으로 몰리지
+    않는다는 합격 기준을 지키는 것이 바로 이 갈래다.
+    """
+    gap = config.learning.probe_min_gap_presentations + gap_shift
+    config = override_config(config, learning={"probe_min_gap_presentations": gap})
     clock = MutableClock()
     user, study_session, probed, item = _ready_session(db_session, config)
     _event(

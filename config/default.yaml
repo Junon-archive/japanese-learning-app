@@ -76,7 +76,9 @@ llm:
   # Public Demo는 static frontend fixture이므로 API/worker를 사용하지
   # 않는다. 이 flag는 구조적 분리에 더한 안전장치이며 true로 바꾸지 않는다.
   public_demo_generation_enabled: false
-  # null = limit disabled. production에서 필요 시 integer를 설정한다.
+  # null = limit disabled. production은 두 키 모두 integer를 설정한다
+  # (14_CONFIGURATION.md의 production override).
+  # 판정은 UTC 일 경계다 (09_BACKGROUND_JOBS.md의 usage 기록과 일 경계).
   daily_request_limit: null
   daily_token_limit: null
   # generation batch 1회가 요청하는 문장 수이자 대상 item 수 상한

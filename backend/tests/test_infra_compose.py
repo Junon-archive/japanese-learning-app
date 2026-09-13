@@ -53,6 +53,19 @@ def test_postgres_volume_points_at_repo_data_dir() -> None:
     ]
 
 
+def test_postgres_cluster_lives_below_the_bind_root() -> None:
+    """PGDATA는 bind 루트의 하위 디렉터리여야 한다.
+
+    `data/postgres/`에는 저장소가 추적하는 `.gitkeep`이 있다. PGDATA가 bind 루트
+    자체면 initdb가 "exists but is not empty"로 거부해 컨테이너가 무한 재시작한다.
+    게다가 entrypoint가 실패 전에 bind 루트와 `.gitkeep`을 999:700으로 바꿔서
+    호스트 사용자가 `ls`/`git status`도 못 하고 복구에 root가 필요해진다.
+    하위 디렉터리를 주면 initdb는 빈 `pgdata/`에만 쓰고 bind 루트는 건드리지 않는다.
+    """
+    postgres = _compose()["services"]["postgres"]
+    assert postgres["environment"].get("PGDATA") == "/var/lib/postgresql/data/pgdata"
+
+
 def test_dockerignore_excludes_secrets_and_data() -> None:
     # build context가 repo 루트이므로 .env와 DB/backup 파일이 image layer와
     # build cache에 들어가면 안 된다 (spec/04_SECURITY_AND_DATA.md).
@@ -187,3 +200,48 @@ def test_the_worker_image_starts_the_real_entrypoint() -> None:
     assert "not implemented" not in text
     # 진입점이 backend/ 밖에 있으므로 이미지에 함께 들어가야 한다.
     assert "COPY scripts ./scripts" in text
+
+
+# --------------------------------------------------------------------------
+# 학습 정책 override 파일 mount (ADR-020 결정 3)
+#
+# default.yaml의 두 한도가 null이라 mount가 빠지거나 한쪽 서비스에만 있으면 그 컨테이너는
+# 한도가 꺼진 채 조용히 돈다. 두 한도가 여전히 null인지는 test_config.py의
+# `test_null_llm_limits_load_as_none`이 지킨다.
+# --------------------------------------------------------------------------
+
+
+def _policy_mounts(service: str) -> list[dict[str, Any]]:
+    volumes = _compose()["services"][service].get("volumes", [])
+    return [
+        volume
+        for volume in volumes
+        if isinstance(volume, dict) and "NC_CONFIG_PATH" in str(volume.get("source"))
+    ]
+
+
+def test_backend_and_worker_mount_the_same_policy_file_read_only() -> None:
+    mounts = {name: _policy_mounts(name) for name in APP_SERVICES}
+    for name, found in mounts.items():
+        assert len(found) == 1, (name, found)
+        mount = found[0]
+        assert mount["type"] == "bind", name
+        assert mount["read_only"] is True, name
+        # 호스트와 컨테이너가 같은 절대경로여야 NC_CONFIG_PATH와 mount가 어긋나지 않는다.
+        assert mount["source"] == mount["target"], name
+    assert mounts["backend"] == mounts["worker"]
+
+
+def test_policy_mount_does_not_create_a_missing_host_path() -> None:
+    """파일이 없을 때 docker가 그 경로에 디렉터리를 만들면 안 된다."""
+    for name in APP_SERVICES:
+        (mount,) = _policy_mounts(name)
+        assert mount["bind"]["create_host_path"] is False, name
+
+
+def test_policy_mount_path_is_required() -> None:
+    """값이 없거나 비어 있으면 compose가 아무것도 띄우지 않아야 한다(`:?`)."""
+    for name in APP_SERVICES:
+        (mount,) = _policy_mounts(name)
+        assert mount["source"].startswith("${NC_CONFIG_PATH:?"), (name, mount["source"])
+        assert mount["target"].startswith("${NC_CONFIG_PATH:?"), (name, mount["target"])

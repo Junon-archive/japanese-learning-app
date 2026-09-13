@@ -2,7 +2,7 @@ UV ?= $(shell command -v uv || echo $(HOME)/.local/bin/uv)
 # --env-file을 명시하지 않으면 compose가 infra/.env를 찾는다. 루트 .env를 쓴다.
 COMPOSE ?= docker compose --env-file .env -f infra/docker-compose.yml
 
-.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset seed create-user prompts
+.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset db-migrate db-backup db-restore-check seed create-user prompts
 
 install:
 	$(UV) sync
@@ -73,6 +73,25 @@ db-up-local:
 # 예: make db-reset ARGS=--yes
 db-reset:
 	$(UV) run python scripts/db_reset.py $(ARGS)
+
+# 데이터를 보존하는 운영 migration (04_DB_SPEC.md). APP_ENV=production에서도 실행된다.
+# 대상 DSN 출력 -> 이미 head면 종료 -> 검증된 백업 -> alembic upgrade head.
+# 백업 생략 옵션과 downgrade는 없다(롤백 = 백업 복원). 백업부터 upgrade까지 API·worker를 멈춘다.
+# --pg-bin은 필수다(ADR-020 결정 2). 예: make db-migrate ARGS="--pg-bin <PG_BIN>"
+db-migrate:
+	$(UV) run python scripts/db_migrate.py $(ARGS)
+
+# pg_dump 백업 -> 새 백업 검증 -> rotation(기본 7개, data/backups/). 파일은 생성 시점부터 0600.
+# password는 argv에 넣지 않는다(DSN의 password는 PGPASSWORD, 없으면 ~/.pgpass).
+# 예: make db-backup ARGS="--pg-bin <PG_BIN>"
+db-backup:
+	$(UV) run python scripts/db_backup.py $(ARGS)
+
+# 백업을 별도 DB에 복원해 원본과 비교하고 login/history까지 확인한 뒤 복원 DB를 지운다.
+# 전제: dump부터 이 명령이 끝날 때까지 API·worker를 멈춘다(원본에 쓰기가 없어야 한다).
+# 예: make db-restore-check ARGS="--pg-bin <PG_BIN> --backup data/backups/<file> --login-id <id>"
+db-restore-check:
+	$(UV) run python scripts/db_restore_check.py $(ARGS)
 
 # password는 argv로 받지 않는다. TTY면 프롬프트, 비대화형이면 --password-stdin이다.
 # DATABASE_URL은 셸에서 export 한다 (애플리케이션은 .env를 직접 읽지 않는다).

@@ -11,6 +11,21 @@ x-app-env: &app-env
   AUTH_SESSION_TTL_DAYS: ${AUTH_SESSION_TTL_DAYS}
   NC_CONFIG_PATH: ${NC_CONFIG_PATH}
 
+# 학습 정책 override 파일 (ADR-020 결정 3, 14_CONFIGURATION.md의 production override).
+# 호스트와 컨테이너가 같은 절대경로라서 mount와 NC_CONFIG_PATH가 어긋날 수 없다.
+# `:?`는 값이 없거나 비어 있으면 compose가 아무것도 띄우지 않게 한다 --- 두 한도가
+# null인 default.yaml로 조용히 도는 대신 실패한다. interpolation은 파일 전체에
+# 적용되므로 postgres만 띄우는 명령(make db-up)도 이 값을 요구한다.
+# create_host_path: false는 파일이 없을 때 docker가 그 경로에 root 소유 디렉터리를
+# 만드는 대신 컨테이너 생성 오류로 끝나게 한다. 기본값에 기대지 않고 적는다.
+x-policy-mount: &policy-mount
+  type: bind
+  source: ${NC_CONFIG_PATH:?NC_CONFIG_PATH must be the absolute path of the policy file}
+  target: ${NC_CONFIG_PATH:?NC_CONFIG_PATH must be the absolute path of the policy file}
+  read_only: true
+  bind:
+    create_host_path: false
+
 services:
   postgres:
     image: postgres:16
@@ -19,6 +34,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # bind 루트에 .gitkeep이 있어 initdb가 거부한다. 하위 디렉터리에 클러스터를 둔다.
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       # PostgreSQL은 인터넷에 직접 노출하지 않는다 (spec/02, spec/04).
       - "127.0.0.1:5432:5432"
@@ -33,6 +50,8 @@ services:
     depends_on:
       - postgres
     environment: *app-env
+    volumes:
+      - *policy-mount
     ports:
       - "127.0.0.1:8000:8000"
 
@@ -43,6 +62,8 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
+    volumes:
+      - *policy-mount
     environment:
       <<: *app-env
       # provider 자격증명은 **worker에만** 준다. FastAPI는 provider client를 만들지

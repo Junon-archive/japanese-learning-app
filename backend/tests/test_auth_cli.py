@@ -156,6 +156,33 @@ def test_create_user_accepts_a_password_at_the_minimum(
     assert verify_password(user.password_hash, exactly_minimum) is True
 
 
+# `spec/04_SECURITY_AND_DATA.md`의 `Password 요구사항 (MVP 확정)`. 학습 정책의 실험값이
+# 아니라 보안 명세가 확정한 하한이므로 여기에 적는다. 위 두 테스트는 구현 상수에서 길이를
+# 읽어서, 상수를 명세보다 낮춘 구현도 통과했다(변이로 확인: 16 -> 8에서 전체 suite 초록).
+SPEC_PASSWORD_MIN_CODE_POINTS = 16
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("length", "created"),
+    [
+        pytest.param(SPEC_PASSWORD_MIN_CODE_POINTS - 1, False, id="below-the-spec-floor"),
+        pytest.param(SPEC_PASSWORD_MIN_CODE_POINTS, True, id="at-the-spec-floor"),
+    ],
+)
+def test_the_floor_is_the_one_the_spec_fixes(
+    cli: ModuleType,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    length: int,
+    created: bool,
+) -> None:
+    _feed_password(monkeypatch, "a" * length)
+
+    assert cli.main(["--login-id", "junon", "--password-stdin"]) == (0 if created else 2)
+    assert len(db_session.scalars(sa.select(User)).all()) == (1 if created else 0)
+
+
 @pytest.mark.integration
 def test_password_minimum_counts_code_points_not_bytes(
     cli: ModuleType, db_session: Session, monkeypatch: pytest.MonkeyPatch
