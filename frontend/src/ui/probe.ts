@@ -62,6 +62,11 @@ export function renderProbe(options: ProbeOptions): HTMLElement {
   box.className = 'probe'
   box.setAttribute('aria-label', '이해도 확인')
 
+  // 작게. probe가 세션의 중심 UI처럼 보이지 않게 한다.
+  const eyebrow = document.createElement('p')
+  eyebrow.className = 'probe-eyebrow'
+  eyebrow.textContent = '잠깐 확인해요'
+
   const prompt = document.createElement('p')
   prompt.className = 'probe-prompt'
   // 서버 문구 그대로다. 한국어 문장을 여기서 다시 쓰지 않는다.
@@ -72,7 +77,7 @@ export function renderProbe(options: ProbeOptions): HTMLElement {
   expression.lang = 'ja'
   expression.textContent = probe.expression
 
-  box.append(prompt, expression)
+  box.append(eyebrow, prompt, expression)
 
   if (options.answered !== null || options.alreadyRecorded) {
     const done = document.createElement('p')
@@ -107,9 +112,9 @@ export function renderProbe(options: ProbeOptions): HTMLElement {
   return box
 }
 
-/** 답한 값을 지어내지 않는다. 모르면 "이미 기록했습니다"로 끝낸다. */
+/** 답한 값을 지어내지 않는다. 모르면 "이미 기록했어요"로 끝낸다. */
 function answeredText(options: ProbeOptions): string {
-  if (options.answered === null) return '이미 기록했습니다.'
-  if (options.answered === 'skip') return '건너뛰었습니다.'
-  return `기록했습니다: ${probeOptionLabel(options.answered)}`
+  if (options.answered === null) return '이미 기록했어요.'
+  if (options.answered === 'skip') return '건너뛰었어요.'
+  return `기록했어요 · ${probeOptionLabel(options.answered)}`
 }

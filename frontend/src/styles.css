@@ -19,7 +19,44 @@
   --radius: 14px;
   --tap-target: 44px;
 
+  /*
+   * motion 토큰. 값은 03_UI_UX_SPEC.md의 `화면 전환과 시트`가 canonical이다.
+   * 튀어 오르는(overshoot) 곡선은 두지 않는다.
+   */
+  --motion-fast: 120ms; /* 누름 반응, 색·배경 변화, 토글 스위치 */
+  --motion-base: 240ms; /* 가림막 페이드, 패널 전환, 토스트, 번역 펼침 */
+  --motion-slow: 360ms; /* 화면 진입, 시트 올라오기 */
+  --ease-move: cubic-bezier(0.2, 0.9, 0.25, 1); /* 움직이는 것 */
+  --ease-standard: ease; /* 색·투명도·누름 반응 */
+
+  /* 이동량. reduced-motion에서 none이 되어 transform 계열 속성이 남지 않는다. */
+  --enter-translate: 0 10px; /* 화면 진입: 10px 아래에서 */
+  --sheet-translate: 0 100%; /* 시트: 화면 아래에서 */
+  --sheet-from-opacity: 1; /* 시트 본체는 기본에서 페이드하지 않는다 */
+  --toast-translate: 0 16px;
+  --expand-translate: 0 -6px; /* 번역 인라인 펼침 */
+  --press-scale: 0.98; /* 꽉 찬 너비 버튼 */
+  --press-scale-small: 0.97; /* 그 밖의 작은 버튼 */
+
   color-scheme: light;
+}
+
+/*
+ * reduced-motion: 이동을 없애고 짧은 fade만 남긴다. 토큰만 바꾼다(JS 분기 없음).
+ * 화면 진입·시트(가림막 포함)는 빠른 페이드, 누름 반응은 배경색 변화만.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-base: var(--motion-fast);
+    --motion-slow: var(--motion-fast);
+    --enter-translate: none;
+    --sheet-translate: none;
+    --sheet-from-opacity: 0;
+    --toast-translate: none;
+    --expand-translate: none;
+    --press-scale: none;
+    --press-scale-small: none;
+  }
 }
 
 * {

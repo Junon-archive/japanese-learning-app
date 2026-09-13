@@ -1,7 +1,7 @@
 {
   "name": "Nihongo Context",
   "short_name": "Nihongo",
-  "description": "문맥 안에서 일본어 표현을 익히는 짧은 학습 세션",
+  "description": "일본어 표현을 실제 문장 속에서 익히는 앱이에요.",
   "lang": "ko",
   "dir": "ltr",
   "start_url": "/",

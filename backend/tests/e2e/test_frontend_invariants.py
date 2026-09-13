@@ -10,6 +10,9 @@
 -   이탈에 `sendBeacon`을 달면 보지 않은 문장이 완료로 확정된다.
 -   빈 pool을 폴링하면 서버 `touch()`가 자리를 비운 시간을 학습 시간으로 누적한다.
 -   진행바에 정책값을 하드코딩하면 config를 바꾼 배포에서 화면이 거짓을 말한다.
+-   공개 화면이 API나 제3자에게 요청을 보내도 화면은 똑같이 뜬다(불변식 13·14).
+-   설명 시트를 다시 열 때마다 event를 보내면 raw history가 시트 여닫기 횟수를 센다.
+-   떠난 화면에 늦게 온 `/click` 응답으로 `explanation_revealed`를 보내면 보지 않은 설명이 "표시됐다"가 된다.
 
 정책값은 전부 `use_config()`로 주입하고 기대값을 그 주입값에서 유도한다
 (13_ACCEPTANCE_CRITERIA.md의 `수치 취급 원칙`).
@@ -17,14 +20,16 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Literal
 
 import pytest
 import sqlalchemy as sa
-from playwright.sync_api import Page, Route
+from playwright.sync_api import Browser, Page, Request, Route, expect
 
 from app.config import AppConfig, get_config
 from app.learning.mastery import OBSERVATION, ema
@@ -32,9 +37,11 @@ from app.models import ItemExposure, LearningEvent, ReviewState, Sentence
 from app.models.enums import EventType, ExplicitSignal
 from tests.conftest import override_config
 from tests.e2e import study_flow as flow
-from tests.e2e.conftest import E2EStack
+from tests.e2e.conftest import E2EStack, Frontend
 
-pytestmark = [pytest.mark.e2e, pytest.mark.integration]
+# DB를 쓰는 테스트에만 `integration`을 단다. 공개 화면 검사는 backend 없이 `frontend` fixture만 쓴다
+# (`test_marker_hygiene.py`).
+pytestmark = pytest.mark.e2e
 
 # 기본값과 **다른** 값을 주입한다. 기본값을 쓰면 config를 읽지 않는 구현도 통과한다.
 DEFERRAL_HOURS = 7
@@ -110,6 +117,7 @@ def _snapshot(state: ReviewState) -> dict[str, object]:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_completing_without_a_signal_defers_and_leaves_memory_state_alone(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -177,6 +185,7 @@ def test_completing_without_a_signal_defers_and_leaves_memory_state_alone(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_hammering_next_advances_exactly_one_presentation(e2e_stack: E2EStack, page: Page) -> None:
     """`다음 문장`을 3연타해도 진행은 1이고 exposure가 중복되지 않는다.
 
@@ -230,6 +239,7 @@ def test_hammering_next_advances_exactly_one_presentation(e2e_stack: E2EStack, p
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_a_retried_self_report_applies_evidence_once(e2e_stack: E2EStack, page: Page) -> None:
     """응답을 잃은 자가보고를 재시도해도 evidence가 한 번만 적용된다.
 
@@ -286,6 +296,7 @@ def test_a_retried_self_report_applies_evidence_once(e2e_stack: E2EStack, page: 
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_translation_exists_only_after_the_reveal_call_succeeds(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -364,6 +375,7 @@ def test_the_translation_exists_only_after_the_reveal_call_succeeds(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_leaving_the_page_mutates_nothing(e2e_stack: E2EStack, page: Page) -> None:
     """탭 숨김 / pagehide / 실제 이탈에서 요청이 하나도 나가지 않는다.
 
@@ -409,6 +421,7 @@ def test_leaving_the_page_mutates_nothing(e2e_stack: E2EStack, page: Page) -> No
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_an_empty_pool_does_not_poll_and_does_not_accrue_active_time(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -428,7 +441,7 @@ def test_an_empty_pool_does_not_poll_and_does_not_accrue_active_time(
     else:
         raise AssertionError("pool이 비워지지 않았다 --- 이 테스트의 전제가 성립하지 않는다")
 
-    page.locator(".notice", has_text="준비된 문장이 없습니다").wait_for(state="visible")
+    page.locator(".notice", has_text=flow.EMPTY_POOL_TEXT).wait_for(state="visible")
     before = flow.study_session(stack, learner)
 
     sent: list[str] = []
@@ -447,6 +460,7 @@ def test_an_empty_pool_does_not_poll_and_does_not_accrue_active_time(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_progress_bar_follows_the_configured_session_length(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -481,6 +495,7 @@ def test_the_progress_bar_follows_the_configured_session_length(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_server_rejects_a_second_evidence_for_the_same_exposure(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -549,3 +564,350 @@ def test_the_server_rejects_a_second_evidence_for_the_same_exposure(
             ).scalar_one()
         )
     assert exposures == 0, "완료하지 않은 제시에 exposure가 생겼다"
+
+
+# --------------------------------------------------------------------------
+# 공개 화면은 frontend origin 밖으로 요청을 내지 않는다 (불변식 13·14, 격리 검사 (f))
+# --------------------------------------------------------------------------
+
+# 공개 route. `#/kana`는 Wave 2에서 route 표에 없어 선택 홈(`#/`)으로 떨어진다. Wave 3 kana-ui가
+# 가나 학습 화면을 더하면 그 조작도 여기서 본다.
+PUBLIC_ROUTES = ("", "#/demo", "#/kana")
+HOME_HASH = "#/"
+DEMO_CARD_TITLE = "표현 학습 체험해 보기"
+KANA_CARD_TITLE = "글자부터 배우기"
+
+# 조작 뒤 늦게 나가는 요청(타이머, 토스트 등)이 드러날 때까지 기다리는 시간. 정책값이 아니다.
+_LATE_REQUEST_WINDOW_MS = 2000
+
+
+def _operate_demo(page: Page) -> None:
+    """demo에서 사용자가 하는 것: 탭, 시트 닫기, 번역, 다음 문장."""
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    flow.tap(page, 0)
+    flow.close_sheet(page)
+    page.locator(".reveal-translation").click()
+    page.locator(".translation").wait_for(state="visible")
+    page.locator("button.next").click()
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+
+
+def _operate_home(page: Page) -> None:
+    """선택 홈에서 두 카드를 누르고 돌아온다."""
+    page.locator(".screen.home").wait_for(state="visible")
+    page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
+    _operate_demo(page)
+    page.locator(".topbar .topbar-brand").click()
+    page.locator(".screen.home").wait_for(state="visible")
+    page.locator(".home-card", has_text=KANA_CARD_TITLE).click()
+    # Wave 2: 가나 학습 route가 아직 없어 선택 홈(`#/`)이다.
+    expect(page).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
+    page.locator(".screen.home").wait_for(state="visible")
+    page.go_back()
+    page.locator(".screen.home").wait_for(state="visible")
+
+
+@pytest.mark.parametrize("route", PUBLIC_ROUTES)
+def test_public_screens_send_nothing_outside_the_frontend_origin(
+    frontend: Frontend, page: Page, route: str
+) -> None:
+    """API origin에 아무도 listen하지 않는 구성에서 공개 화면을 열고 조작해도 요청이 0건이다.
+
+    API origin과 제3자 origin을 가리지 않는다. 막아 두고(`block=True`) 흐름이 끝까지 가므로
+    "요청이 필요 없다"까지 본다. 로그인은 누르지 않는다 --- 누를 때의 1건은 아래 테스트가 본다.
+    """
+    traffic = flow.watch_traffic(
+        page, frontend_url=frontend.url, api_url=frontend.api_url, block=True
+    )
+    page.goto(f"{frontend.url}/{route}")
+
+    if route == "#/demo":
+        _operate_demo(page)
+        page.locator(".topbar .topbar-brand").click()
+        _operate_home(page)
+    elif route == "#/kana":
+        # Wave 2의 #/kana는 선택 홈(#/)이다.
+        expect(page).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
+        page.locator(".screen.home").wait_for(state="visible")
+        _operate_home(page)
+    else:
+        _operate_home(page)
+
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    traffic.assert_none_outside()
+    assert traffic.api_calls == []
+
+
+@pytest.mark.integration
+def test_only_the_topbar_login_checks_the_login_state_once(e2e_stack: E2EStack, page: Page) -> None:
+    """공개 화면을 열 때는 요청이 없고, 상단바 `로그인`을 누르면 `GET /api/auth/me`가 정확히 1건이다.
+
+    backend가 떠 있어서 요청이 가면 답이 온다(쿠키가 없으므로 401 -> Login). 죽은 포트에서는
+    `api.ts`가 연결 실패를 유한 번 다시 보내므로 "1건"을 볼 수 없다.
+    """
+    traffic = flow.watch_traffic(
+        page, frontend_url=e2e_stack.frontend_url, api_url=e2e_stack.api_url, block=False
+    )
+    for route in PUBLIC_ROUTES:
+        page.goto(f"{e2e_stack.frontend_url}/{route}")
+        page.locator(".topbar .topbar-login").wait_for(state="visible")
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    assert traffic.api_calls == [], f"공개 화면이 열리면서 API를 불렀다: {traffic.api_calls}"
+
+    flow.press_topbar_login(page)
+    page.locator(".login-form").wait_for(
+        state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000
+    )
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    assert traffic.api_calls == ["GET /api/auth/me"]
+
+
+# --------------------------------------------------------------------------
+# reduced-motion: 화면 진입과 설명 시트에 이동이 없다 (03_UI_UX_SPEC.md의 `reduced-motion`)
+# --------------------------------------------------------------------------
+
+_MOTION_AT_START = """(selector) => {
+    const element = document.querySelector(selector);
+    if (element === null) return null;
+    const animations = element.getAnimations();
+    for (const animation of animations) {
+        animation.pause();
+        animation.currentTime = 0;
+    }
+    const style = getComputedStyle(element);
+    return {animations: animations.length, translate: style.translate, transform: style.transform};
+}"""
+
+
+def _motion_on_entry(
+    browser: Browser, frontend: Frontend, reduced_motion: Literal["reduce", "no-preference"]
+) -> dict[str, object]:
+    """선택 홈 -> demo 화면 진입과 설명 시트가 **시작 순간** 어디에 있는지.
+
+    애니메이션이 끝나면 `getAnimations()`에서 사라지므로 문서 타임라인을 멈춘다(CDP). 멈춘 뒤 새로
+    시작한 애니메이션은 시작 프레임에 머문다.
+    """
+    context = browser.new_context(reduced_motion=reduced_motion)
+    try:
+        page = context.new_page()
+        traffic = flow.watch_traffic(
+            page, frontend_url=frontend.url, api_url=frontend.api_url, block=True
+        )
+        page.goto(frontend.url)
+        page.locator(".screen.home").wait_for(state="visible")
+
+        cdp = context.new_cdp_session(page)
+        cdp.send("Animation.enable")
+        cdp.send("Animation.setPlaybackRate", {"playbackRate": 0})
+
+        page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
+        page.locator(".screen.demo .sentence .token").first.wait_for(state="attached")
+        screen = page.evaluate(_MOTION_AT_START, ".screen.demo")
+
+        page.locator(".screen.demo .sentence .token").first.dispatch_event("click")
+        page.locator(".sheet .explain").wait_for(state="attached")
+        sheet = page.evaluate(_MOTION_AT_START, ".sheet")
+
+        traffic.assert_none_outside()
+        return {"screen": screen, "sheet": sheet}
+    finally:
+        context.close()
+
+
+def test_reduced_motion_removes_movement_from_screen_entry_and_the_sheet(
+    frontend: Frontend, browser: Browser
+) -> None:
+    """`prefers-reduced-motion: reduce`이면 화면 진입과 시트의 시작 위치가 제자리다(translate/transform 없음).
+
+    양성 대조군: 같은 측정이 기본 설정에서는 이동을 본다. 그렇지 않으면 이 측정은 아무것도 보지 않는다.
+    """
+    normal = _motion_on_entry(browser, frontend, "no-preference")
+    reduced = _motion_on_entry(browser, frontend, "reduce")
+
+    for part in ("screen", "sheet"):
+        moving = normal[part]
+        assert isinstance(moving, dict), normal
+        assert moving["animations"] > 0, f"기본 설정에서 {part} 애니메이션이 없다: {normal}"
+        assert _displaced(moving), f"기본 설정에서 {part}이 움직이지 않는다: {normal}"
+
+        still = reduced[part]
+        assert isinstance(still, dict), reduced
+        assert not _displaced(still), f"reduced-motion인데 {part}이 이동한다: {reduced}"
+
+
+def _displaced(motion: dict[str, object]) -> bool:
+    """시작 순간 제자리에서 벗어나 있는가.
+
+    `translate: none`에서 시작하는 애니메이션의 계산값은 Chrome에서 `0px`다(보간을 위해 0으로 바꾼다).
+    그래서 문자열 `none`이 아니라 **이동량이 0인가**를 본다. transform은 `none`이거나 항등 행렬이어야 한다.
+    """
+    translate = str(motion["translate"])
+    moved = translate != "none" and any(
+        float(part.rstrip("px%")) != 0 for part in translate.split()
+    )
+    transform = str(motion["transform"])
+    return moved or transform not in ("none", "matrix(1, 0, 0, 1, 0, 0)")
+
+
+# --------------------------------------------------------------------------
+# localStorage 접근이 던져도 공개 화면이 동작한다 (불변식 18)
+# --------------------------------------------------------------------------
+
+_THROWING_STORAGE = """(() => {
+    const deny = () => { throw new DOMException('storage denied', 'SecurityError'); };
+    for (const target of [window, Window.prototype]) {
+        try {
+            Object.defineProperty(target, 'localStorage', {get: deny, configurable: true});
+        } catch (error) {
+            // 이미 설정 불가한 쪽은 넘어간다. 아래 양성 대조군이 실제로 던지는지 본다.
+        }
+    }
+})();"""
+
+
+def test_public_screens_work_when_local_storage_throws(
+    frontend: Frontend, browser: Browser
+) -> None:
+    """localStorage 접근이 던지는 페이지에서 선택 홈과 Demo가 정상 동작하고 잡히지 않은 오류가 없다.
+
+    가나 학습과 후리가나 토글은 Wave 3 레인이 그 화면을 더할 때 여기에 조작을 더한다.
+    """
+    context = browser.new_context()
+    try:
+        context.add_init_script(_THROWING_STORAGE)
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        traffic = flow.watch_traffic(
+            page, frontend_url=frontend.url, api_url=frontend.api_url, block=True
+        )
+
+        page.goto(frontend.url)
+        # 양성 대조군: 이 페이지에서는 정말로 던진다.
+        probe = "() => { try { void window.localStorage; return 'no-throw'; } catch (e) { return 'threw'; } }"
+        assert page.evaluate(probe) == "threw"
+
+        _operate_home(page)
+        page.goto(f"{frontend.url}/#/demo")
+        _operate_demo(page)
+
+        assert errors == [], f"잡히지 않은 오류: {errors}"
+        traffic.assert_none_outside()
+    finally:
+        context.close()
+
+
+# --------------------------------------------------------------------------
+# 설명 시트 재열기와 떠난 뒤 늦은 /click (05_API_SPEC.md의 `explanation_revealed를 언제 보내는가`)
+# --------------------------------------------------------------------------
+
+
+def _interaction_counts(
+    stack: E2EStack, presentation_id: int, item_id: int
+) -> dict[EventType, int]:
+    with flow.read_db(stack) as db:
+        rows = db.execute(
+            sa.select(LearningEvent.event_type, sa.func.count(LearningEvent.id))
+            .where(
+                LearningEvent.study_presentation_id == presentation_id,
+                LearningEvent.learning_item_id == item_id,
+                LearningEvent.event_type.in_(
+                    [EventType.ITEM_CLICKED, EventType.EXPLANATION_REVEALED]
+                ),
+            )
+            .group_by(LearningEvent.event_type)
+        ).all()
+    counts = {EventType.ITEM_CLICKED: 0, EventType.EXPLANATION_REVEALED: 0}
+    counts.update({row[0]: int(row[1]) for row in rows})
+    return counts
+
+
+def _watch_paths(page: Page, *suffixes: str) -> list[str]:
+    sent: list[str] = []
+
+    def record(request: Request) -> None:
+        if request.method == "POST" and request.url.endswith(suffixes):
+            sent.append(request.url.rsplit("/", 1)[1])
+
+    page.on("request", record)
+    return sent
+
+
+@pytest.mark.integration
+def test_reopening_an_explanation_sends_click_and_revealed_once(
+    e2e_stack: E2EStack, page: Page
+) -> None:
+    """시트를 닫고 같은 표현을 다시 탭해도 `/click`과 `explanation_revealed`는 presentation + item당 1회다."""
+    stack = e2e_stack
+    started = _start(stack, page, _cfg(minimum_meaningful_exposures=MINIMUM_EXPOSURES))
+    learner, focus_id = started.learner, started.focus_id
+
+    presentation = flow.advance_to_item(page, stack, learner, item_id=focus_id)
+    index = flow.token_index(stack, presentation, learning_item_id=focus_id)
+    sent = _watch_paths(page, "/click", "/explanation-revealed")
+
+    flow.tap(page, index)
+    flow._poll(
+        lambda: (
+            _interaction_counts(stack, presentation.id, focus_id)[EventType.EXPLANATION_REVEALED]
+            or None
+        ),
+        what="explanation_revealed",
+    )
+
+    for _ in range(2):
+        flow.close_sheet(page)
+        flow.tap(page, index)
+        expect_text = flow.open_sheet(page).locator(".explain .meaning").inner_text()
+        assert expect_text.strip() != "", "다시 연 시트에 설명이 없다"
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+
+    assert sent == ["click", "explanation-revealed"], sent
+    assert _interaction_counts(stack, presentation.id, focus_id) == {
+        EventType.ITEM_CLICKED: 1,
+        EventType.EXPLANATION_REVEALED: 1,
+    }
+
+
+@pytest.mark.integration
+def test_a_late_click_response_after_leaving_reveals_nothing(
+    e2e_stack: E2EStack, page: Page
+) -> None:
+    """`/click` 응답 전에 화면을 떠나면 늦게 온 응답으로 설명을 그리지 않고 `explanation_revealed`도 없다.
+
+    요청은 서버까지 보낸다(`route.fetch()`) --- 그래야 `item_clicked`만 남는 실제 상황이다. 응답은 앱
+    이름을 눌러 선택 홈으로 떠난 **뒤에** 브라우저에 건넨다.
+    """
+    stack = e2e_stack
+    started = _start(stack, page, _cfg(minimum_meaningful_exposures=MINIMUM_EXPOSURES))
+    learner, focus_id = started.learner, started.focus_id
+
+    presentation = flow.advance_to_item(page, stack, learner, item_id=focus_id)
+    index = flow.token_index(stack, presentation, learning_item_id=focus_id)
+    sent = _watch_paths(page, "/explanation-revealed")
+
+    held: list[Route] = []
+    page.route("**/click", lambda route: held.append(route))
+    flow.tokens(page).nth(index).click()
+    # route 처리기는 Playwright 호출 안에서만 돈다. time.sleep으로 기다리면 오지 않는다.
+    for _ in range(int(flow.SETTLE_TIMEOUT_SECONDS * 1000 / 50)):
+        if held:
+            break
+        page.wait_for_timeout(50)
+    assert held, "/click 요청이 나가지 않았다"
+
+    page.locator(".topbar .topbar-brand").click()
+    page.locator(".screen.home").wait_for(state="visible")
+
+    late = held[0]
+    late.fulfill(response=late.fetch())
+    page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    page.unroute("**/click")
+
+    assert page.locator(".sheet").count() == 0, "떠난 뒤에 설명 시트가 열렸다"
+    assert page.locator(".screen.home").count() == 1
+    assert sent == [], f"떠난 뒤 explanation_revealed를 보냈다: {sent}"
+    assert _interaction_counts(stack, presentation.id, focus_id) == {
+        EventType.ITEM_CLICKED: 1,
+        EventType.EXPLANATION_REVEALED: 0,
+    }

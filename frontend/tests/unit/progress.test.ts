@@ -77,7 +77,7 @@ describe('세션 종료 도달 판정', () => {
 describe('진행 문구', () => {
   it('uses the minutes the server sent', () => {
     expect(progressLabel(session({}))).toBe('오늘 약 7분')
-    expect(progressLabel(session({ extended_minutes: 5 }))).toBe('오늘 약 7분 (+5분 연장)')
+    expect(progressLabel(session({ extended_minutes: 5 }))).toBe('오늘 약 7분 · 5분 더')
     expect(progressReadout(session({ active_seconds: 150 }))).toBe('2분 / 7분')
   })
 

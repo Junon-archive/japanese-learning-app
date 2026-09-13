@@ -23,12 +23,12 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 import sqlalchemy as sa
-from playwright.sync_api import Locator, Page
+from playwright.sync_api import Locator, Page, Request, Route
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from sqlalchemy.orm import Session
 
@@ -67,6 +67,12 @@ PASSWORD = "correct horse battery staple"
 KNOWN = "알고 있었음"
 UNCERTAIN = "애매함"
 UNKNOWN = "몰랐음"
+
+# 화면 문구. `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `화면 문구 표`와 `frontend/src/ui/notice.ts`의
+# `MESSAGES`가 canonical이다. 사용자가 실제로 읽는 글자라서 여기 적는다.
+LOGIN_LABEL = "로그인"
+EMPTY_POOL_TEXT = "지금은 준비된 문장이 없어요."
+RECORDED_PREFIX = "기록했어요 · "
 
 # DOM/DB가 정착할 때까지의 상한. 정책값이 아니라 무한 대기 대신 실패로 끝내는 장치다.
 SETTLE_TIMEOUT_SECONDS = 15.0
@@ -114,16 +120,24 @@ def read_db(stack: E2EStack) -> Iterator[Session]:
 
 
 def sign_in(page: Page, stack: E2EStack, learner: Learner) -> None:
-    """로그인 화면의 두 필드를 실제로 채우고 제출한다.
+    """선택 홈에서 상단바 `로그인`을 눌러 로그인 화면으로 가고, 두 필드를 실제로 채워 제출한다.
 
-    boot이 `GET /api/auth/me`로 401을 받아 로그인 화면을 띄운 뒤다. 제출이 성공하면
-    학습 화면이 뜨고 그 마운트가 `POST /api/study/session`을 부른다.
+    부팅은 API를 부르지 않는다(불변식 14). `로그인`을 누르면 `GET /api/auth/me`가 401을 받아
+    로그인 화면이 뜬다. 제출이 성공하면 학습 화면이 뜨고 그 마운트가 `POST /api/study/session`을
+    부른다.
     """
     page.goto(stack.frontend_url)
+    press_topbar_login(page)
+    page.locator(".login-form").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
     page.locator("#login-id").fill(learner.login_id)
     page.locator("#password").fill(PASSWORD)
     page.locator(".login-form button[type=submit]").click()
     wait_for_sentence(page)
+
+
+def press_topbar_login(page: Page) -> None:
+    """공개 화면 상단바의 `로그인`. 로그인 진입(`GET /api/auth/me`)은 이것으로만 시작한다."""
+    page.locator(".topbar .topbar-login", has_text=LOGIN_LABEL).click()
 
 
 def wait_for_sentence(page: Page) -> None:
@@ -157,9 +171,33 @@ def sentence_text(page: Page) -> str:
 
 
 def tap(page: Page, index: int) -> None:
-    """tappable span 하나를 누른다. 설명 패널이 뜰 때까지 기다린다."""
+    """tappable span 하나를 누른다. 설명 시트가 뜰 때까지 기다린다.
+
+    열린 시트가 있으면 먼저 닫는다. 시트의 가림막이 뒤 화면을 덮으므로 사용자도 그렇게 한다.
+    """
+    close_sheet(page)
     tokens(page).nth(index).click()
-    page.locator(".explain").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
+    open_sheet(page).locator(".explain").wait_for(
+        state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000
+    )
+
+
+def open_sheet(page: Page) -> Locator:
+    """지금 열린(닫히는 중이 아닌) 설명 시트."""
+    return page.locator(".sheet-scrim:not(.is-closing) .sheet")
+
+
+def close_sheet(page: Page) -> None:
+    """열린 설명 시트를 `닫기`로 닫는다. 없으면 아무것도 하지 않는다.
+
+    닫으면 논리 상태가 즉시 바뀐다(가림막이 `is-closing`이 되어 조작을 받지 않는다). DOM에서
+    떼어지는 것은 transition 끝이므로 그것을 기다리지 않는다(03_UI_UX_SPEC.md의 `화면 전환과 시트`).
+    """
+    sheet = open_sheet(page)
+    if sheet.count() == 0:
+        return
+    sheet.locator(".sheet-close").click()
+    open_sheet(page).wait_for(state="detached", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
 
 
 def self_report(page: Page, label: str) -> None:
@@ -171,6 +209,7 @@ def self_report(page: Page, label: str) -> None:
 
 
 def reveal_translation(page: Page) -> None:
+    close_sheet(page)
     page.locator(".reveal-translation").click()
     page.locator(".translation").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
 
@@ -184,6 +223,7 @@ def press_next(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentati
     """
     previous = open_presentation(stack, learner)
     assert previous is not None, "열린 presentation이 없으면 Next를 누를 수 없다"
+    close_sheet(page)
     page.locator("button.next").click()
     return _wait_for_next_presentation(page, stack, learner, previous_id=previous.id)
 
@@ -207,11 +247,15 @@ def _wait_for_next_presentation(
 
 
 def _empty_pool_notice(page: Page) -> bool:
-    return page.locator(".notice", has_text="준비된 문장이 없습니다").count() > 0
+    return page.locator(".notice", has_text=EMPTY_POOL_TEXT).count() > 0
 
 
 def reopen(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentation | None:
-    """페이지를 다시 띄운다. boot이 `POST /session`으로 세션을 얻고 `/next`를 부른다.
+    """페이지를 다시 띄우고 상단바 `로그인`으로 학습 화면에 돌아간다.
+
+    로그인 영역에는 hash가 없으므로 새로고침하면 선택 홈이다(03_UI_UX_SPEC.md의 `화면 이동`).
+    쿠키가 유효하므로 `로그인`을 누르면 곧바로 학습 화면이고, 그 마운트가 `POST /session`으로
+    세션을 얻고 `/next`를 부른다.
 
     시계를 옮긴 뒤에 쓴다 --- idle timeout을 넘겼으면 이전 세션이 종료되고 새 세션이
     시작된다. 그 판정은 서버가 하고 화면은 안내 한 줄을 띄운다.
@@ -220,6 +264,8 @@ def reopen(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentation |
     `wait_for_sentence`로 15초를 태우지 않고 호출부가 단언할 수 있게 돌려준다.
     """
     page.reload()
+    page.locator(".screen.home").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
+    press_topbar_login(page)
 
     def settled() -> tuple[StudyPresentation | None] | None:
         row = open_presentation(stack, learner)
@@ -230,6 +276,77 @@ def reopen(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentation |
         return None
 
     return _poll(settled, what="새 세션의 첫 문장 또는 빈 pool 안내")[0]
+
+
+# --------------------------------------------------------------------------
+# 요청 기록
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class Traffic:
+    """페이지가 낸 요청 전부.
+
+    공개 화면(선택 홈, Demo, 가나 학습)은 frontend origin 밖으로 요청을 내지 않는다(불변식 13).
+    "서버 요청"의 서버는 API origin이고, frontend origin의 청크·아이콘·manifest는 정적 자산이다
+    (03_UI_UX_SPEC.md의 `화면 이동`).
+    """
+
+    frontend_url: str
+    api_url: str
+    seen: list[str] = field(default_factory=list)
+    blocked: list[str] = field(default_factory=list)
+    requests: list[Request] = field(default_factory=list)
+
+    @property
+    def foreign(self) -> list[str]:
+        """frontend origin 밖(API origin과 제3자 origin 모두)."""
+        return [
+            url
+            for url in self.seen
+            if not url.startswith(f"{self.frontend_url}/")
+            and url != self.frontend_url
+            and not url.startswith("data:")
+        ]
+
+    @property
+    def api_calls(self) -> list[str]:
+        """API origin으로 나간 요청. `METHOD /path` 모양이다."""
+        return [
+            f"{request.method} {request.url.removeprefix(self.api_url)}"
+            for request in self.requests
+            if request.url.startswith(f"{self.api_url}/")
+        ]
+
+    def assert_none_outside(self) -> None:
+        assert self.foreign == [], f"frontend origin 밖으로 요청이 나갔다: {self.foreign}"
+        assert self.blocked == [], f"막힌 외부 요청이 있다(즉 시도했다): {self.blocked}"
+
+
+def watch_traffic(page: Page, *, frontend_url: str, api_url: str, block: bool) -> Traffic:
+    """요청을 전부 기록한다. `block`이면 frontend origin 밖의 요청을 abort하고 `blocked`에 남긴다.
+
+    막아도 흐름이 그대로 끝나면 "요청을 안 했다"가 아니라 "요청이 필요 없다"가 증명된다.
+    """
+    traffic = Traffic(frontend_url=frontend_url, api_url=api_url)
+
+    def record(request: Request) -> None:
+        traffic.seen.append(request.url)
+        traffic.requests.append(request)
+
+    page.on("request", record)
+    if block:
+
+        def handler(route: Route) -> None:
+            url = route.request.url
+            if url.startswith(f"{frontend_url}/") or url.startswith("data:"):
+                route.continue_()
+                return
+            traffic.blocked.append(url)
+            route.abort()
+
+        page.route("**/*", handler)
+    return traffic
 
 
 # --------------------------------------------------------------------------

@@ -29,6 +29,7 @@ from app.models import (
     Sentence,
     SentenceItem,
     SentenceItemExplanation,
+    SentenceItemSpan,
     StudyPresentation,
     UserSentenceCandidate,
 )
@@ -112,9 +113,12 @@ def test_core_e2e_13_steps_in_a_real_browser(e2e_stack: E2EStack, page: Page) ->
 
     with flow.read_db(stack) as db:
         stored = db.execute(_explanation_of(presentation.sentence_id, focus.id)).scalar_one()
-    panel = page.locator(".explain")
-    # 화면에 뜬 문구가 **DB에 미리 있던 그 문구**다. 생성된 것이 아니다.
-    expect(panel.locator(".jp-word")).to_have_text(focus.lemma)
+    panel = flow.open_sheet(page).locator(".explain")
+    # 화면에 뜬 문구가 **DB에 미리 있던 그 문구**다. 생성된 것이 아니다. 머리는 문장 속 표면형과
+    # 그 읽기의 짝이다(03_UI_UX_SPEC.md의 `Explanation`) --- 표면형은 span이 가리키는 원문 조각이다.
+    expect(panel.locator(".jp-word")).to_have_text(
+        _surface(stack, presentation.sentence_id, focus.id)
+    )
     expect(panel.locator(".reading")).to_have_text(stored.reading)
     expect(panel.locator(".meaning")).to_have_text(stored.core_meaning)
     expect(panel.locator(".meaning-context")).to_have_text(stored.meaning_in_context)
@@ -130,7 +134,7 @@ def test_core_e2e_13_steps_in_a_real_browser(e2e_stack: E2EStack, page: Page) ->
     reported_at = clock.advance(timedelta(seconds=20))
     with no_provider_module_import():
         flow.self_report(page, flow.UNKNOWN)
-    expect(panel.locator(".feedback-done")).to_have_text(f"기록했습니다: {flow.UNKNOWN}")
+    expect(panel.locator(".feedback-done")).to_have_text(f"{flow.RECORDED_PREFIX}{flow.UNKNOWN}")
 
     signals = flow.events(stack, learner, event_type=EventType.SELF_REPORT_UNKNOWN)
     assert len(signals) == 1
@@ -318,6 +322,23 @@ def _count_ready(user_id: int) -> sa.Select[tuple[int]]:
         UserSentenceCandidate.user_id == user_id,
         UserSentenceCandidate.status == CandidateStatus.READY,
     )
+
+
+def _surface(stack: E2EStack, sentence_id: int, learning_item_id: int) -> str:
+    """그 문장에서 그 item의 tappable span이 가리키는 원문 조각. offset은 code point다."""
+    with flow.read_db(stack) as db:
+        japanese = db.execute(_sentence_text(sentence_id)).scalar_one()
+        spans = db.execute(
+            sa.select(SentenceItemSpan.start_codepoint, SentenceItemSpan.end_codepoint)
+            .join(SentenceItem, SentenceItem.id == SentenceItemSpan.sentence_item_id)
+            .where(
+                SentenceItem.sentence_id == sentence_id,
+                SentenceItem.learning_item_id == learning_item_id,
+            )
+            .order_by(SentenceItemSpan.start_codepoint)
+        ).all()
+    assert spans, "그 item의 span이 없다"
+    return "".join(japanese[row.start_codepoint : row.end_codepoint] for row in spans)
 
 
 def _sentence_text(sentence_id: int) -> sa.Select[tuple[str]]:

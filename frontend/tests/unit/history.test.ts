@@ -18,10 +18,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { dateFormat, renderItemHistory, renderSessionHistory } from '../../src/ui/history'
+import { dateFormat, mountHistory, renderItemHistory, renderSessionHistory } from '../../src/ui/history'
 import type { HistoryItem, HistorySession } from '../../src/types'
 import type { FakeElement } from './fake-dom'
-import { byClass, fakeDocument, flatText } from './fake-dom'
+import { buttons, byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
 
 const TRUNCATION_NOTE = '오래된 기록은'
 
@@ -115,7 +115,7 @@ describe('date formatting', () => {
       dateFormat('Asia/Seoul').format,
     ) as unknown as FakeElement
 
-    expect(flatText(seoul)).toContain('복습 2026-09-13')
+    expect(flatText(seoul)).toContain('다음 복습 2026-09-13')
   })
 
   it('formats the same way whatever the host locale would prefer', () => {
@@ -164,8 +164,7 @@ describe('renderSessionHistory', () => {
     const text = flatText(sessions(1, false))
 
     expect(text).toMatch(/\d{4}-\d{2}-\d{2}/)
-    expect(text).toContain('학습 11분')
-    expect(text).toContain('완료 9문장')
+    expect(text).toContain('학습 11분 · 9문장 완료')
   })
 
   it('marks a session that is still open instead of leaving it blank', () => {
@@ -193,9 +192,7 @@ describe('renderItemHistory', () => {
     const text = flatText(items([ITEM]))
 
     expect(text).toContain(ITEM.lemma)
-    expect(text).toContain('노출 3회')
-    expect(text).toMatch(/복습 \d{4}-\d{2}-\d{2}/)
-    expect(text).toContain('32%')
+    expect(text).toMatch(/표현 · 32% · 본 횟수 3회 · 다음 복습 \d{4}-\d{2}-\d{2}/)
   })
 
   it('reads a null mastery as "not evaluated yet", never as 0', () => {
@@ -228,5 +225,114 @@ describe('renderItemHistory', () => {
     expect(byClass(items([ITEM]), 'history-row').flatMap((row) => row.children)).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ tagName: 'BUTTON' })]),
     )
+  })
+})
+
+describe('mountHistory', () => {
+  const fetchMock = vi.fn<typeof fetch>()
+  let root: FakeElement
+  let events: string[]
+
+  function flush(): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+  }
+
+  function mount(): void {
+    mountHistory(root as unknown as HTMLElement, new AbortController().signal, {
+      timezone: 'UTC',
+      onHome: () => events.push('home'),
+      onBack: () => events.push('back'),
+      onUnauthenticated: () => events.push('unauthenticated'),
+      onLoggedOut: () => events.push('loggedOut'),
+    })
+  }
+
+  beforeEach(() => {
+    root = createFakeElement('div')
+    events = []
+    fetchMock.mockReset()
+    fetchMock.mockImplementation((url) => {
+      const path = String(url)
+      if (path.endsWith('/api/history/sessions')) {
+        return Promise.resolve(new Response(JSON.stringify({ sessions: [SESSION], truncated: false })))
+      }
+      if (path.endsWith('/api/history/items')) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [ITEM], truncated: false })))
+      }
+      return Promise.resolve(new Response(null, { status: 403 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  it('has only 로그아웃 on the right of the top bar', async () => {
+    mount()
+    await flush()
+
+    const bar = byClass(root, 'topbar')[0]!
+    expect(buttons(byClass(bar, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual([
+      '로그아웃',
+    ])
+    buttons(bar)[0]!.click()
+    expect(events).toEqual(['home'])
+  })
+
+  it('still ends with the two lists and the way back to studying', async () => {
+    mount()
+    await flush()
+
+    const screen = root.children[0]!
+    const content = screen.children.filter((child) => child.className !== 'topbar')
+    const contentButtons = content.flatMap(buttons).map((button) => button.textContent)
+    // 상단바 메뉴를 근거로 화면 내용에 컨트롤을 붙이지 않는다.
+    expect(contentButtons).toEqual(['학습으로 돌아가기'])
+    expect(byClass(root, 'history-section')).toHaveLength(2)
+    expect(screen.querySelector('h1')!.textContent).toBe('학습 기록')
+  })
+
+  it('says it fell back to the device timezone in the confirmed wording', async () => {
+    mountHistory(root as unknown as HTMLElement, new AbortController().signal, {
+      timezone: 'Not/AZone',
+      onHome: () => {},
+      onBack: () => {},
+      onUnauthenticated: () => {},
+      onLoggedOut: () => {},
+    })
+    await flush()
+
+    expect(flatText(root)).toContain('학습 시간대를 확인하지 못했어요. 날짜는 이 기기 기준으로 보여 드려요.')
+  })
+
+  it('keeps the screen and says so when logging out fails', async () => {
+    mount()
+    await flush()
+
+    buttons(byClass(root, 'topbar-actions')[0]!)[0]!.click()
+    await flush()
+
+    expect(events).toEqual([])
+    expect(byClass(root, 'history-section')).toHaveLength(2)
+    expect(byClass(byClass(root, 'notice-slot')[0]!, 'notice')).toHaveLength(1)
+  })
+})
+
+describe('history wording', () => {
+  it('titles the lists and says when they are empty', () => {
+    const noSessions = flatText(renderSessionHistory({ sessions: [], truncated: false }, utcDates()) as unknown as FakeElement)
+    const noItems = flatText(renderItemHistory({ items: [], truncated: false }, utcDates()) as unknown as FakeElement)
+
+    expect(noSessions).toContain('최근 학습')
+    expect(noSessions).toContain('아직 학습 기록이 없어요.')
+    expect(noItems).toContain('학습한 표현')
+    expect(noItems).toContain('아직 학습한 표현이 없어요.')
+  })
+
+  it('says the list was cut without a number', () => {
+    expect(flatText(sessions(1, true))).toContain('오래된 기록은 여기서 보이지 않아요.')
+  })
+
+  it('labels the item type for display', () => {
+    expect(flatText(items([{ ...ITEM, item_type: 'grammar' }]))).toContain('문법 · ')
   })
 })

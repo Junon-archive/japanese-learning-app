@@ -19,13 +19,16 @@
  * -   `beforeunload`/`pagehide`/`visibilitychange`에 아무것도 달지 않는다.
  */
 
+import type { PublicScreenContext } from '../routes'
 import type { ContentFlagReason, ExplicitSignal } from '../types'
 import type { InteractionOps } from '../ui/interactions'
 import { createInteractions } from '../ui/interactions'
-import { renderNotice } from '../ui/notice'
+import { MESSAGES, renderNotice } from '../ui/notice'
 import { renderProgress, sessionProgress } from '../ui/progress'
+import { showScreen } from '../ui/screen'
 import { renderSentence } from '../ui/segments'
 import { renderSessionEndChoice, renderSessionFinished } from '../ui/session-end'
+import { renderTopBar } from '../ui/topbar'
 import type { DemoSentence } from './fixture'
 import {
   DEMO_EXTENDED_MINUTES,
@@ -36,16 +39,34 @@ import {
 
 /** demo 전용 문구. 실제 화면 문구(`ui/notice.ts`의 `MESSAGES`)와 섞지 않는다. */
 const DEMO_MESSAGES = {
-  banner: '데모 모드입니다. 실제 계정이 아니며 학습 기록은 저장되지 않습니다.',
-  exit: '로그인 화면으로',
+  title: '표현 학습 체험',
+  banner: '체험 중이에요. 기록은 이 브라우저에만 남아요.',
+  /** demo 전용. 요청을 보내지 않으므로 신고가 저장되지 않는다. */
+  flagSubmitted: '체험에서는 신고가 저장되지 않아요.',
   lastSentence: '데모 문장을 모두 보았습니다.',
   restart: '처음부터 다시 보기',
   restarted: '데모 문장을 처음부터 다시 보여줍니다.',
 } as const
 
-export function mountDemo(root: HTMLElement, onExit: () => void): void {
+/**
+ * `#/demo` route의 화면(`routes.ts`). 나가는 길은 상단바다 --- 앱 이름은 선택 홈, `로그인`은 main.ts가
+ * 주입한 로그인 진입을 **넘기기만** 한다.
+ */
+export function mount(ctx: PublicScreenContext): void {
   const screen = document.createElement('main')
   screen.className = 'screen study demo'
+
+  const topBar = renderTopBar({
+    onHome: () => {
+      ctx.navigate('#/')
+    },
+    onLogin: ctx.openLogin,
+    actions: [],
+  })
+
+  const title = document.createElement('h1')
+  title.className = 'demo-title'
+  title.textContent = DEMO_MESSAGES.title
 
   const banner = document.createElement('div')
   banner.className = 'demo-banner'
@@ -55,12 +76,7 @@ export function mountDemo(root: HTMLElement, onExit: () => void): void {
   bannerText.className = 'demo-banner-text'
   bannerText.textContent = DEMO_MESSAGES.banner
 
-  const exit = document.createElement('button')
-  exit.type = 'button'
-  exit.className = 'demo-exit'
-  exit.textContent = DEMO_MESSAGES.exit
-  exit.addEventListener('click', onExit)
-  banner.append(bannerText, exit)
+  banner.append(bannerText)
 
   const progressSlot = document.createElement('header')
   progressSlot.className = 'progress-slot'
@@ -86,8 +102,8 @@ export function mountDemo(root: HTMLElement, onExit: () => void): void {
   foot.className = 'study-foot'
   foot.append(nextButton)
 
-  screen.append(banner, progressSlot, noticeSlot, sentenceSlot, interactionSlot, endSlot, foot)
-  root.replaceChildren(screen)
+  screen.append(topBar, title, banner, progressSlot, noticeSlot, sentenceSlot, interactionSlot, endSlot, foot)
+  showScreen(ctx.root, screen, ctx.signal)
 
   // ----------------------------------------------------------------------
   // 상태. **메모리에만 있다.**
@@ -167,11 +183,21 @@ export function mountDemo(root: HTMLElement, onExit: () => void): void {
       return
     }
 
-    const handle = createInteractions(entry.presentation, demoOps(entry))
+    // fixture 응답은 기다림이 없으므로 문장별 signal을 따로 두지 않는다. 화면 signal이면 충분하다.
+    const handle = createInteractions(entry.presentation, demoOps(entry), {
+      signal: ctx.signal,
+      sheetContainer: screen,
+      flagSubmittedText: DEMO_MESSAGES.flagSubmitted,
+    })
+    // Study와 같은 문장 아래 힌트(03_UI_UX_SPEC.md의 화면 문구 표).
+    const hint = document.createElement('p')
+    hint.className = 'sentence-hint'
+    hint.textContent = MESSAGES.sentenceHint
     sentenceSlot.replaceChildren(
       renderSentence(entry.presentation.render_segments, (sentenceItemId) => {
         handle.tapItem(sentenceItemId)
       }),
+      hint,
     )
     interactionSlot.replaceChildren(handle.element)
     nextButton.disabled = false
@@ -198,7 +224,7 @@ export function mountDemo(root: HTMLElement, onExit: () => void): void {
   }
 
   function finish(): void {
-    screen.replaceChildren(banner, renderSessionFinished(session))
+    screen.replaceChildren(topBar, title, banner, renderSessionFinished(session))
   }
 
   function extend(): void {

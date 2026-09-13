@@ -14,8 +14,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mountDemo } from '../../src/demo/demo'
+import { mount as mountDemo } from '../../src/demo/demo'
 import { DEMO_SENTENCES, DEMO_SESSION } from '../../src/demo/fixture'
+import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
 import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
 
@@ -44,13 +45,21 @@ function flush(): Promise<void> {
 }
 
 let root: FakeElement
-let exited: number
+let navigations: string[]
+let logins: number
 
 function mount(): void {
   root = createFakeElement('div')
-  exited = 0
-  mountDemo(root as unknown as HTMLElement, () => {
-    exited += 1
+  navigations = []
+  logins = 0
+  mountDemo({
+    root: root as unknown as HTMLElement,
+    signal: new AbortController().signal,
+    subpath: '',
+    navigate: (hash) => navigations.push(hash),
+    openLogin: () => {
+      logins += 1
+    },
   })
 }
 
@@ -160,6 +169,7 @@ describe('demo run', () => {
     expect(text()).toContain(first!.presentation.render_segments[0]!.text)
     expect(text()).not.toContain(first!.korean_translation)
     expect(byClass(root, 'translation')).toEqual([])
+    expect(flatText(byClass(root, 'sentence-box')[0]!)).toContain(MESSAGES.sentenceHint)
 
     // 2. 탭 -> 설명. reading은 여기에만 있다.
     click('token')
@@ -186,7 +196,7 @@ describe('demo run', () => {
     // 6. probe는 언제나 건너뛸 수 있고 즉시 지나간다.
     click('probe-option', 3)
     await flush()
-    expect(text()).toContain('건너뛰었습니다')
+    expect(text()).toContain('건너뛰었어요.')
     expect(byClass(root, 'probe-option')).toEqual([])
 
     // 7. 다음 문장 -> 같은 표현이 새 문맥으로 돌아온다.
@@ -203,7 +213,7 @@ describe('demo run', () => {
 
     // 9. 종료.
     click('primary')
-    expect(text()).toContain('오늘 학습을 마쳤습니다')
+    expect(text()).toContain('오늘 학습을 마쳤어요.')
 
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -213,7 +223,9 @@ describe('demo run', () => {
     click('flag-reason', 0)
     await flush()
 
-    expect(text()).toContain('학습에 사용되지 않습니다')
+    // demo 전용 안내. 요청을 보내지 않으므로 저장됐다고 말하지 않는다.
+    expect(text()).toContain('체험에서는 신고가 저장되지 않아요.')
+    expect(text()).not.toContain('이제 나오지 않아요')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -236,10 +248,16 @@ describe('demo run', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('offers a way back to the login screen', () => {
-    click('demo-exit')
+  it('leaves through the top bar only', () => {
+    expect(byClass(root, 'demo-exit')).toEqual([])
 
-    expect(exited).toBe(1)
+    click('topbar-brand')
+    expect(navigations).toEqual(['#/'])
+    expect(logins).toBe(0)
+
+    // 로그인 진입은 넘겨받은 값을 상단바가 누를 때 부른다. demo가 직접 부르지 않는다.
+    click('topbar-login')
+    expect(logins).toBe(1)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -265,7 +283,7 @@ describe('demo run', () => {
   })
 
   it('says it is a demo', () => {
-    expect(text()).toContain('데모')
-    expect(text()).toContain('저장되지 않습니다')
+    expect(root.children[0]!.querySelector('h1')!.textContent).toBe('표현 학습 체험')
+    expect(text()).toContain('체험 중이에요. 기록은 이 브라우저에만 남아요.')
   })
 })

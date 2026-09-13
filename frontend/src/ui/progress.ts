@@ -49,7 +49,7 @@ export function sessionProgress(session: StudySession): SessionProgress {
 /** `오늘 약 12분` 의 출처는 `target_minutes`, 연장분은 `extended_minutes`다. */
 export function progressLabel(session: StudySession): string {
   const base = `오늘 약 ${session.target_minutes}분`
-  return session.extended_minutes > 0 ? `${base} (+${session.extended_minutes}분 연장)` : base
+  return session.extended_minutes > 0 ? `${base} · ${session.extended_minutes}분 더` : base
 }
 
 /** `2분 / 7분`. 두 숫자 모두 payload에서 온다. */

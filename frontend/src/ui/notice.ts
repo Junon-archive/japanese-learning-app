@@ -18,27 +18,39 @@
  */
 
 export const MESSAGES = {
-  /** 03_UI_UX_SPEC.md의 `이전 세션 종료 안내`. 경고가 아니다. */
-  previousSessionTimedOut: '이전 세션은 오랫동안 활동이 없어 종료했습니다. 새 세션을 시작합니다.',
-  sessionResumed: '이어서 학습합니다.',
+  /** 03_UI_UX_SPEC.md의 `세션 시작 안내`(고정). 경고가 아니다. 토스트로 띄운다. */
+  previousSessionTimedOut: '한동안 쉬어서 새로 시작해요. 지난 기록은 그대로 있어요.',
+  sessionResumed: '이어서 학습해요.',
   /** Ready Pool이 빈 상태. 자동 재시도하지 않고 사용자가 누른다. */
-  emptyPool: '지금 준비된 문장이 없습니다. 잠시 후 다시 시도해 주세요.',
+  emptyPool: '지금은 준비된 문장이 없어요. 잠시 후 다시 시도해 주세요.',
   /** 409. 이 화면의 상호작용을 멈추고 현재 session을 다시 얻는다. */
-  sessionChanged: '이 세션은 이미 종료되어 새로 불러옵니다.',
-  sessionClosedElsewhere: '열린 세션이 없습니다. 새로 시작할 수 있습니다.',
-  /** 403. 배포 설정 문제이므로 재시도를 권하지 않는다. */
-  originRejected: '서버 설정 문제로 요청이 거부되었습니다. 관리자에게 문의해 주세요.',
+  sessionChanged: '이 학습은 이미 끝났어요. 새로 불러올게요.',
+  sessionClosedElsewhere: '진행 중인 학습이 없어요. 새로 시작할 수 있어요.',
+  /** 403. 배포 설정 문제이므로 재시도를 권하지 않는다. 주소·Origin 값을 적지 않는다. */
+  originRejected: '설정 문제로 연결할 수 없어요. 관리자에게 알려 주세요.',
   /** 5xx / 네트워크. 재시도는 사용자가 누른다. */
-  transient: '지금 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
-  notFound: '요청한 내용을 찾을 수 없습니다.',
-  invalid: '요청을 처리할 수 없습니다.',
-  unexpected: '알 수 없는 문제가 생겼습니다.',
+  transient: '지금 연결이 원활하지 않아요. 잠시 후 다시 시도해 주세요.',
+  notFound: '내용을 찾지 못했어요.',
+  invalid: '이 요청은 처리할 수 없어요.',
+  unexpected: '예상하지 못한 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
   /** 저장(=상태 변경)이 실패했다. 진행한 것처럼 보이게 하지 않는다. */
-  saveFailed: '저장하지 못했습니다. 다시 시도해 주세요.',
-  /** 로그인 실패는 사유와 무관하게 **하나의 문구**다(05_API_SPEC.md). */
-  loginFailed: '아이디 또는 비밀번호를 확인해 주세요.',
-  retry: '다시 시도',
-  startNewSession: '새 세션 시작',
+  saveFailed: '저장하지 못했어요. 다시 시도해 주세요.',
+  /**
+   * 로그인 실패는 사유와 무관하게 **하나의 문구**다(05_API_SPEC.md). 어느 쪽이 틀렸는지 암시하지 않는다.
+   */
+  loginFailed: '아이디나 비밀번호를 다시 확인해 주세요.',
+  /** 문장 아래 힌트. Study와 Demo가 같다. 어느 표현이 학습 대상인지 암시하지 않는다. */
+  sentenceHint: '모르는 표현을 눌러 보세요.',
+  retry: '다시 시도하기',
+  startNewSession: '새로 시작하기',
+  /** 상단바 `로그인`의 `fetchMe`가 403 밖의 이유로 실패했다. 재시도는 `fetchMe`만 다시 부른다. */
+  loginCheckFailed: '지금은 로그인 상태를 확인할 수 없어요. 체험과 글자 배우기는 그대로 쓸 수 있어요.',
+  /** 로그인 영역 코드의 동적 import 실패. 버튼을 두지 않는다 --- 다시 시도는 상단바 `로그인`이다. */
+  loginAreaLoadFailed: '로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요.',
+  /** 로그아웃 뒤 선택 홈에서 띄우는 토스트. */
+  loggedOut: '로그아웃했어요.',
+  /** demo route의 동적 import 실패. */
+  demoLoadFailed: '체험용 문장을 불러오지 못했어요. 새로고침해 주세요.',
 } as const
 
 export type NoticeTone = 'info' | 'error'
@@ -73,4 +85,45 @@ export function renderNotice(
   }
 
   return box
+}
+
+/** 토스트가 떠 있는 시간. 03_UI_UX_SPEC.md의 `토스트와 오류`. */
+const TOAST_MS = 4000
+
+let currentToast: HTMLElement | null = null
+
+/**
+ * 한 번 사라지는 **정보성** 안내(예: 세션 시작 안내, `기록했어요`). **오류에는 쓰지 않는다** ---
+ * 사라지는 오류는 놓치고 재시도 버튼을 붙일 수 없으므로 오류는 `renderNotice`로 그 자리에 둔다.
+ *
+ * `#app` 밖(`document.body`)에 붙는다. 화면이 바뀌어도 안내가 끊기지 않고 학습 진행을 막지 않는다.
+ * 4초 뒤, 또는 탭하면 바로 사라지기 시작한다. 한 번에 하나만 둔다. DOM에서 떼는 것은
+ * `transitionend`이고, 그 이벤트가 오지 않으면 다음 토스트가 뗀다.
+ */
+export function showToast(message: string): void {
+  currentToast?.remove()
+
+  const toast = document.createElement('div')
+  toast.className = 'toast'
+  toast.setAttribute('role', 'status')
+  toast.textContent = message
+  currentToast = toast
+
+  let leaving = false
+  function dismiss(): void {
+    if (leaving) return
+    leaving = true
+    clearTimeout(timer)
+    toast.classList.add('is-leaving')
+  }
+  const timer = setTimeout(dismiss, TOAST_MS)
+
+  toast.addEventListener('click', dismiss)
+  toast.addEventListener('transitionend', (event) => {
+    if (!leaving || event.target !== toast) return
+    toast.remove()
+    if (currentToast === toast) currentToast = null
+  })
+
+  document.body.append(toast)
 }
