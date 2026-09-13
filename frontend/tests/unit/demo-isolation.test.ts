@@ -362,8 +362,7 @@ describe('demo source', () => {
     for (const module of [
       'ui/interactions.ts',
       'ui/segments.ts',
-      'ui/progress.ts',
-      'ui/session-end.ts',
+      // (D3 임시) ui/progress.ts·ui/session-end.ts는 demo에서 뺐다. D7에서 이 목록을 다시 쓴다.
       'demo/fixture.ts',
     ]) {
       expect(graph).toContain(module)

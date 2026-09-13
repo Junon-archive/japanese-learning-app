@@ -16,6 +16,9 @@
  * -   **상태는 메모리(이 closure)에만 있다.** localStorage·sessionStorage·cookie·
  *     IndexedDB를 쓰지 않는다. 탭을 닫으면 사라진다.
  * -   타이머도 주기 호출도 없다. 진행은 `다음 문장`을 누를 때만 움직인다.
+ * -   (D3 임시) 12분 진행 표시와 `오늘 학습 완료`/`더 학습하기`를 뺐다. fixture 문장을 차례로
+ *     보여주고 끝에 처음부터 다시 보기만 둔다. 진도 저장·다시 보기·probe·완료 화면은 D6에서
+ *     이 파일을 다시 쓸 때 들어온다.
  * -   `beforeunload`/`pagehide`/`visibilitychange`에 아무것도 달지 않는다.
  */
 
@@ -24,18 +27,11 @@ import type { ContentFlagReason, ExplicitSignal } from '../types'
 import type { InteractionOps } from '../ui/interactions'
 import { createInteractions } from '../ui/interactions'
 import { MESSAGES, renderNotice } from '../ui/notice'
-import { renderProgress, sessionProgress } from '../ui/progress'
 import { showScreen } from '../ui/screen'
 import { renderSentence } from '../ui/segments'
-import { renderSessionEndChoice, renderSessionFinished } from '../ui/session-end'
 import { renderTopBar } from '../ui/topbar'
 import type { DemoSentence } from './fixture'
-import {
-  DEMO_EXTENDED_MINUTES,
-  DEMO_SECONDS_PER_SENTENCE,
-  DEMO_SENTENCES,
-  DEMO_SESSION,
-} from './fixture'
+import { DEMO_SENTENCES } from './fixture'
 
 /** demo 전용 문구. 실제 화면 문구(`ui/notice.ts`의 `MESSAGES`)와 섞지 않는다. */
 const DEMO_MESSAGES = {
@@ -78,9 +74,6 @@ export function mount(ctx: PublicScreenContext): void {
 
   banner.append(bannerText)
 
-  const progressSlot = document.createElement('header')
-  progressSlot.className = 'progress-slot'
-
   const noticeSlot = document.createElement('div')
   noticeSlot.className = 'notice-slot'
 
@@ -89,9 +82,6 @@ export function mount(ctx: PublicScreenContext): void {
 
   const interactionSlot = document.createElement('div')
   interactionSlot.className = 'interaction-slot'
-
-  const endSlot = document.createElement('div')
-  endSlot.className = 'end-slot'
 
   const nextButton = document.createElement('button')
   nextButton.type = 'button'
@@ -102,14 +92,13 @@ export function mount(ctx: PublicScreenContext): void {
   foot.className = 'study-foot'
   foot.append(nextButton)
 
-  screen.append(topBar, title, banner, progressSlot, noticeSlot, sentenceSlot, interactionSlot, endSlot, foot)
+  screen.append(topBar, title, banner, noticeSlot, sentenceSlot, interactionSlot, foot)
   showScreen(ctx.root, screen, ctx.signal)
 
   // ----------------------------------------------------------------------
   // 상태. **메모리에만 있다.**
   // ----------------------------------------------------------------------
 
-  const session = { ...DEMO_SESSION }
   /** 사용자가 demo에서 남긴 답. 아무 곳에도 보내지 않고 저장하지도 않는다. */
   const answers: string[] = []
   let index = 0
@@ -155,16 +144,6 @@ export function mount(ctx: PublicScreenContext): void {
     noticeSlot.replaceChildren(...(node === null ? [] : [node]))
   }
 
-  function applySession(): void {
-    progressSlot.replaceChildren(renderProgress(session))
-    // 도달은 세션 종료가 아니다. 선택지를 덧붙이고 문장은 그대로 둔다.
-    endSlot.replaceChildren(
-      ...(sessionProgress(session).reached
-        ? [renderSessionEndChoice({ onFinish: finish, onExtend: extend })]
-        : []),
-    )
-  }
-
   function showSentence(): void {
     const entry = DEMO_SENTENCES[index]
     if (entry === undefined) {
@@ -207,10 +186,7 @@ export function mount(ctx: PublicScreenContext): void {
   function advance(): void {
     if (DEMO_SENTENCES[index] === undefined) return
     setNotice(null)
-    // 실제 화면에서는 `/complete` 뒤 `GET /session`이 이 값을 갱신한다. 문장 단위다.
-    session.active_seconds += DEMO_SECONDS_PER_SENTENCE
     index += 1
-    applySession()
     showSentence()
   }
 
@@ -220,19 +196,7 @@ export function mount(ctx: PublicScreenContext): void {
     showSentence()
   }
 
-  function finish(): void {
-    screen.replaceChildren(topBar, title, banner, renderSessionFinished(session))
-  }
-
-  function extend(): void {
-    // `/extend` 응답이 갱신된 session payload를 주는 것과 같은 모양이다.
-    session.extended_minutes += DEMO_EXTENDED_MINUTES
-    applySession()
-    if (DEMO_SENTENCES[index] === undefined) restart()
-  }
-
   nextButton.addEventListener('click', advance)
 
-  applySession()
   showSentence()
 }
