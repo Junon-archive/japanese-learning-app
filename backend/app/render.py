@@ -18,6 +18,11 @@ frontend는 받은 `text` 조각을 순서대로 이어 붙이기만 하고 인�
 불러서** 확인한다(호출자 몫). 렌더링이 터지는 조건과 거부 조건이 정의상 같아진다.
 
 DB를 모른다. span row를 `SpanRef`로 바꿔 넘기는 것은 호출하는 service의 몫이다.
+
+**ruby(후리가나, MVP-02, ADR-021).** 저장값 모양 파싱(`parse_stored_ruby`), 검증
+(`validate_ruby_spans`), segment 안 분할(`build_render_segments`의 `ruby`)도 여기에 둔다.
+같은 검증 함수를 계산 시점(`app/furigana.py`)과 표시 시점(API)이 **둘 다** 부른다.
+분석기를 모른다. 좌표는 `sentence_item_spans`와 같은 code point `[start, end)`다.
 """
 
 from __future__ import annotations
@@ -33,6 +38,14 @@ class RenderSpanError(ValueError):
     콘텐츠 생성 validation이 막았어야 할 상태이므로 조용히 넘기지 않는다. 잘못된
     span을 무시하고 렌더링하면 사용자에게는 tappable이 하나 사라진 정상 문장처럼
     보이고, 아무도 그 문장을 고치지 않는다.
+    """
+
+
+class RubySpanError(RenderSpanError):
+    """ruby 값이 문장·tappable span과 맞지 않거나 저장값 모양이 틀렸다.
+
+    `RenderSpanError`와 달리 표시 시점에는 500이 아니다(05_API_SPEC.md R6). 호출자는 tappable
+    segment를 먼저 만들고(그 실패는 500) ruby 검증은 그 뒤에 따로 부른다.
     """
 
 
@@ -57,11 +70,33 @@ class ItemSpan:
 
 
 @dataclass(frozen=True)
+class RubySpan:
+    """`sentences.ruby_json.spans`의 원소 하나. `[start_codepoint, end_codepoint, reading]`."""
+
+    start_codepoint: int
+    end_codepoint: int
+    reading: str
+
+
+@dataclass(frozen=True)
+class RubyPart:
+    """segment 안의 표시 조각. `reading`이 None이면 후리가나 없이 text만 그린다."""
+
+    text: str
+    reading: str | None
+
+
+@dataclass(frozen=True)
 class RenderSegment:
-    """`sentence_item_id`가 NULL이면 tap할 수 없는 일반 텍스트다."""
+    """`sentence_item_id`가 NULL이면 tap할 수 없는 일반 텍스트다.
+
+    `ruby`가 비어 있으면 이 segment에 달 읽기가 없다(R2). 그 밖에는 parts의 text를 이으면
+    `text`와 같다(R1).
+    """
 
     text: str
     sentence_item_id: int | None
+    ruby: tuple[RubyPart, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -70,7 +105,11 @@ class TappableItem:
     learning_item_id: int
 
 
-def build_render_segments(japanese: str, spans: Sequence[SpanRef]) -> list[RenderSegment]:
+def build_render_segments(
+    japanese: str,
+    spans: Sequence[SpanRef],
+    ruby: Sequence[RubySpan] | None = None,
+) -> list[RenderSegment]:
     """문장을 순서대로 이어 붙일 수 있는 segment 목록으로 자른다.
 
     `is_tappable = false`인 sentence_item의 span은 **일반 텍스트로 흘려보낸다.**
@@ -83,6 +122,10 @@ def build_render_segments(japanese: str, spans: Sequence[SpanRef]) -> list[Rende
     `全然`이 표현의 일부가 되어 원문이 깨진다.
 
     길이 0인 segment는 만들지 않는다.
+
+    `ruby`가 있으면 tappable span을 **먼저** 검증한 뒤(`RenderSpanError`) ruby를 검증하고
+    (`RubySpanError`) segment마다 `RubyPart`로 자른다. `None`이나 빈 목록이면 모든 segment의
+    ruby는 `()`다.
     """
     tappable = sorted(
         (span for span in spans if span.is_tappable),
@@ -110,7 +153,13 @@ def build_render_segments(japanese: str, spans: Sequence[SpanRef]) -> list[Rende
 
     if cursor < len(japanese):
         segments.append(RenderSegment(japanese[cursor:], None))
-    return segments
+
+    if not ruby:
+        return segments
+    validate_ruby_spans(
+        japanese, ruby, [(span.start_codepoint, span.end_codepoint) for span in tappable]
+    )
+    return _attach_ruby(japanese, segments, ruby)
 
 
 def build_tappable_items(spans: Sequence[SpanRef]) -> list[TappableItem]:
@@ -207,3 +256,152 @@ def _validate(span: SpanRef, *, length: int) -> None:
             f"span ends past the sentence: end={span.end_codepoint} "
             f"length={length} (sentence_item_id={span.sentence_item_id})"
         )
+
+
+# --------------------------------------------------------------------------
+# ruby (MVP-02, ADR-021 결정 2·5, 05_API_SPEC.md R1~R6)
+# --------------------------------------------------------------------------
+
+# R4: 히라가나 U+3041..U+3096, ゝ(U+309D), ゞ(U+309E), ー(U+30FC). unicodedata는 쓰지 않는다
+# (Python minor마다 Unicode 버전이 달라 판정이 갈릴 수 있다).
+_READING_EXTRA_CODEPOINTS = frozenset({0x309D, 0x309E, 0x30FC})
+
+
+def is_reading_char(char: str) -> bool:
+    """ruby 읽기에 허용되는 문자 하나인지(R4)."""
+    codepoint = ord(char)
+    return 0x3041 <= codepoint <= 0x3096 or codepoint in _READING_EXTRA_CODEPOINTS
+
+
+def is_valid_reading(reading: str) -> bool:
+    """비어 있지 않고 모든 문자가 R4 집합 안이다."""
+    return bool(reading) and all(is_reading_char(char) for char in reading)
+
+
+def parse_stored_ruby(value: object) -> list[RubySpan]:
+    """`sentences.ruby_json` 저장값에서 span 목록을 꺼낸다. 모양만 본다.
+
+    `None`(미계산, R5)은 호출자가 먼저 가른다 --- 여기로 넘기면 모양 오류다. 범위·겹침·경계·
+    읽기 문자 집합은 `validate_ruby_spans`의 몫이다. 모양이 틀리면 `RubySpanError`다(R6).
+    """
+    if not isinstance(value, dict):
+        raise RubySpanError(f"ruby_json must be an object, got {type(value).__name__}")
+    if "spans" not in value:
+        raise RubySpanError("ruby_json has no 'spans'")
+    raw_spans = value["spans"]
+    if not isinstance(raw_spans, list):
+        raise RubySpanError(f"ruby_json.spans must be an array, got {type(raw_spans).__name__}")
+
+    parsed: list[RubySpan] = []
+    for index, raw in enumerate(raw_spans):
+        if not isinstance(raw, list) or len(raw) != 3:
+            raise RubySpanError(f"ruby_json.spans[{index}] must be a 3-element array")
+        start, end, reading = raw
+        # bool은 int의 하위 타입이다. JSON true를 좌표 1로 읽지 않는다.
+        if not _is_plain_int(start) or not _is_plain_int(end):
+            raise RubySpanError(f"ruby_json.spans[{index}] start/end must be integers")
+        if not isinstance(reading, str):
+            raise RubySpanError(f"ruby_json.spans[{index}] reading must be a string")
+        parsed.append(RubySpan(start_codepoint=start, end_codepoint=end, reading=reading))
+    return parsed
+
+
+def validate_ruby_spans(
+    japanese: str,
+    ruby: Sequence[RubySpan],
+    tappable_spans: Sequence[tuple[int, int]],
+) -> None:
+    """ruby span 목록이 문장과 tappable span에 맞는지 확인한다(04_DB_SPEC.md `ruby_json`, R6).
+
+    `tappable_spans`는 `is_tappable = true`인 sentence_item의 span `(start, end)` 전부다.
+    non-tappable span은 렌더링에서 일반 텍스트로 흐르므로 경계가 아니다.
+
+    - 모든 span이 원문 code point 범위 안이고 start < end
+    - start 오름차순이고 서로 겹치지 않는다
+    - 어떤 span도 tappable span의 경계를 넘지 않는다(안에 있거나 완전히 밖)
+    - reading이 비어 있지 않고 R4 문자만으로 되어 있다
+    """
+    length = len(japanese)
+    previous_end = 0
+    for index, span in enumerate(ruby):
+        start, end = span.start_codepoint, span.end_codepoint
+        if not 0 <= start < end <= length:
+            raise RubySpanError(
+                f"ruby span {index} [{start}, {end}) is out of range "
+                f"for a sentence of {length} code points"
+            )
+        if start < previous_end:
+            raise RubySpanError(
+                f"ruby span {index} [{start}, {end}) is not in ascending order "
+                "or overlaps the previous span"
+            )
+        previous_end = end
+        for tappable_start, tappable_end in tappable_spans:
+            inside = tappable_start <= start and end <= tappable_end
+            disjoint = end <= tappable_start or tappable_end <= start
+            if not (inside or disjoint):
+                raise RubySpanError(
+                    f"ruby span {index} [{start}, {end}) crosses the tappable span "
+                    f"[{tappable_start}, {tappable_end})"
+                )
+        if not is_valid_reading(span.reading):
+            raise RubySpanError(f"ruby span {index} reading is empty or not hiragana")
+
+
+def _is_plain_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _attach_ruby(
+    japanese: str, segments: list[RenderSegment], ruby: Sequence[RubySpan]
+) -> list[RenderSegment]:
+    """검증된 ruby span을 segment마다 `RubyPart`로 자른다(R1~R3).
+
+    검증을 통과한 span은 정의상 segment 하나 안에 들어간다(tappable span 안이거나, 일반 텍스트
+    segment = 인접 tappable span 사이의 최대 구간 안). 그래도 걸치면 조용히 자르지 않고 던진다.
+    """
+    result: list[RenderSegment] = []
+    remaining = list(ruby)
+    segment_start = 0
+    for segment in segments:
+        segment_end = segment_start + len(segment.text)
+        inside: list[RubySpan] = []
+        while remaining and remaining[0].start_codepoint < segment_end:
+            span = remaining.pop(0)
+            if span.end_codepoint > segment_end:
+                raise RubySpanError(
+                    f"ruby span [{span.start_codepoint}, {span.end_codepoint}) crosses "
+                    f"the segment [{segment_start}, {segment_end})"
+                )
+            inside.append(span)
+        result.append(
+            RenderSegment(
+                segment.text,
+                segment.sentence_item_id,
+                _ruby_parts(japanese, segment_start, segment_end, inside),
+            )
+        )
+        segment_start = segment_end
+    return result
+
+
+def _ruby_parts(
+    japanese: str, segment_start: int, segment_end: int, inside: Sequence[RubySpan]
+) -> tuple[RubyPart, ...]:
+    """R2: 달 읽기가 없으면 `[{"text": ..., "reading": null}]`가 아니라 `()`.
+
+    R3: span 사이의 일반 텍스트는 **최대 구간 하나**를 part 하나로 만든다. 그래서 reading이
+    null인 part가 서로 인접하는 일이 없고, 길이 0인 part도 없다.
+    """
+    if not inside:
+        return ()
+    parts: list[RubyPart] = []
+    cursor = segment_start
+    for span in inside:
+        if span.start_codepoint > cursor:
+            parts.append(RubyPart(japanese[cursor : span.start_codepoint], None))
+        parts.append(RubyPart(japanese[span.start_codepoint : span.end_codepoint], span.reading))
+        cursor = span.end_codepoint
+    if cursor < segment_end:
+        parts.append(RubyPart(japanese[cursor:segment_end], None))
+    return tuple(parts)
