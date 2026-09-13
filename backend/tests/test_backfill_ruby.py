@@ -34,8 +34,6 @@ from app.services.seed_loader import load_seed
 from app.settings import get_settings
 from tests import db_support, factories
 
-pytestmark = pytest.mark.integration
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SEED_MIN = Path(__file__).resolve().parent / "data" / "seed_min"
@@ -157,6 +155,7 @@ def _backups(tmp_path: Path) -> list[Path]:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_dry_run_writes_nothing_and_prints_the_target_first(
     target_db: URL, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -181,6 +180,7 @@ def test_dry_run_writes_nothing_and_prints_the_target_first(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_apply_takes_a_verified_backup_then_fills_every_null_row(
     target_db: URL, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -200,6 +200,7 @@ def test_apply_takes_a_verified_backup_then_fills_every_null_row(
     assert _tables_other_than_sentences(target_db) == learning_before
 
 
+@pytest.mark.integration
 def test_apply_without_pg_bin_is_refused_before_anything(
     target_db: URL, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -210,6 +211,7 @@ def test_apply_without_pg_bin_is_refused_before_anything(
     assert all(value is None for value in _ruby(target_db).values())
 
 
+@pytest.mark.integration
 def test_a_failed_backup_writes_nothing(
     target_db: URL, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -231,6 +233,7 @@ def test_there_is_no_option_to_skip_the_backup_or_recompute() -> None:
     assert set(vars(namespace)) == {"apply", "pg_bin", "backup_dir", "keep"}
 
 
+@pytest.mark.integration
 def test_the_second_apply_has_no_target_and_takes_no_backup(
     target_db: URL, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -249,6 +252,7 @@ def test_the_second_apply_has_no_target_and_takes_no_backup(
     assert len(_backups(tmp_path)) == 1
 
 
+@pytest.mark.integration
 def test_rows_that_already_have_ruby_are_not_targets_even_with_an_older_version(
     target_db: URL, tmp_path: Path
 ) -> None:
@@ -268,6 +272,7 @@ def test_rows_that_already_have_ruby_are_not_targets_even_with_an_older_version(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_a_value_committed_between_compute_and_write_is_not_overwritten(
     target_db: URL,
     tmp_path: Path,
@@ -298,6 +303,7 @@ def test_a_value_committed_between_compute_and_write_is_not_overwritten(
     assert all(value is not None for value in values.values())
 
 
+@pytest.mark.integration
 def test_two_overlapping_runs_end_in_the_same_state_and_the_late_one_updates_nothing(
     target_db: URL,
     tmp_path: Path,
@@ -342,6 +348,7 @@ def _fail_for(script: ModuleType, japanese_prefix: str, monkeypatch: pytest.Monk
     monkeypatch.setattr(script, "compute_ruby", flaky)
 
 
+@pytest.mark.integration
 def test_a_failure_makes_dry_run_exit_2(
     target_db: URL, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -356,6 +363,7 @@ def test_a_failure_makes_dry_run_exit_2(
     assert "dry-run: nothing written" in out
 
 
+@pytest.mark.integration
 def test_apply_writes_the_successes_then_exits_2_and_the_next_run_retries_only_the_failure(
     target_db: URL,
     tmp_path: Path,
@@ -381,6 +389,7 @@ def test_apply_writes_the_successes_then_exits_2_and_the_next_run_retries_only_t
     assert "updated 1 of 1 sentences" in out
 
 
+@pytest.mark.integration
 def test_all_failures_take_no_backup_and_exit_2(
     target_db: URL,
     tmp_path: Path,
@@ -397,6 +406,7 @@ def test_all_failures_take_no_backup_and_exit_2(
     assert all(value is None for value in _ruby(target_db).values())
 
 
+@pytest.mark.integration
 def test_the_analyzer_must_load_before_touching_the_database(
     target_db: URL, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -417,6 +427,7 @@ def test_the_analyzer_must_load_before_touching_the_database(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_control_characters_in_the_mismatch_list_are_escaped(
     target_db: URL, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -482,6 +493,7 @@ def _seed_payloads() -> list[SentencePayload]:
     ]
 
 
+@pytest.mark.integration
 def test_seed_worker_and_backfill_produce_the_same_spans(
     postgres_admin_dsn: URL, target_db: URL, tmp_path: Path
 ) -> None:
