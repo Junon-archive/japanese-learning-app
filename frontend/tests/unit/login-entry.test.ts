@@ -13,12 +13,15 @@
  *     `fetchMe` 대기 중에 떠나면 늦은 응답이 화면도 `POST /api/study/session`도 만들지 않는다.
  * -   URL에서 온 값은 화면에 나오지 않는다.
  */
+import ts from 'typescript'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { StudySession, User } from '../../src/types'
 import { MESSAGES } from '../../src/ui/notice'
 import type { FakeBrowser, FakeDocument, FakeElement } from './fake-dom'
 import { buttons, byClass, createFakeElement, descendants, fakeBrowser, fakeDocument, flatText } from './fake-dom'
+import type { Project } from './import-graph'
+import { createProject, lineOf } from './import-graph'
 
 const USER: User = { user_id: 1, login_id: 'owner', timezone: 'Asia/Seoul', starting_level: 'beginner' }
 
@@ -454,4 +457,238 @@ describe('url values', () => {
       expect(screenClass()).toContain('home')
     })
   }
+})
+
+// ---------------------------------------------------------------------------------------------
+// openLogin 호출 위치 (AST)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * **`openLogin` 호출은 `ui/topbar.ts`의 로그인 버튼 `click` 리스너 콜백 안 한 곳뿐이다**
+ * (`spec/04_SECURITY_AND_DATA.md`의 `모듈 경계`, ADR-022 결정 1). 정적 그래프 검사는 "언제 불리는가"를
+ * 보지 못한다 --- 부팅이나 타이머에서 부르면 그래프는 그대로인데 요청이 나간다. 위 부팅 단정이 결과를,
+ * 이 검사가 코드 위치를 본다.
+ *
+ * 주입된 로그인 함수의 이름은 `openLogin`(main·routes·private·공개 화면)과 `onLogin`(`renderTopBar`)이다.
+ * 그 이름의 참조는 다음만 허용한다.
+ *
+ * ``` text
+ * 선언          function openLogin, 매개변수, 구조 분해 { openLogin }, 타입의 속성 이름
+ * 값 전달       객체 리터럴의 속성 값 { onLogin: openLogin }, { openLogin }, { onLogin: ctx.openLogin }
+ * 존재 확인     onLogin !== undefined
+ * 호출          ui/topbar.ts의 로그인 버튼(className에 topbar-login) addEventListener('click', 콜백) 바로 안
+ * ```
+ *
+ * 그 밖(`setTimeout(openLogin)`, `const go = openLogin`, 이름을 바꾸는 구조 분해, `.call` 등)은 위반이다.
+ * 이름 기반이므로 다른 이름으로 옮겨 담는 의도적인 우회는 막지 못한다 --- 옮겨 담는 형태 자체를 위반으로 낸다.
+ */
+const LOGIN_NAMES = new Set(['openLogin', 'onLogin'])
+const TOPBAR = 'ui/topbar.ts'
+
+type LoginReference = { file: string; line: number; kind: 'call' | 'misuse'; text: string; inLoginClick: boolean }
+
+function inTypeNode(node: ts.Node): boolean {
+  for (let current = node.parent; current !== undefined; current = current.parent) {
+    if (ts.isTypeNode(current)) return true
+  }
+  return false
+}
+
+/** `addEventListener('click', 콜백)`의 콜백 바로 안이고, 대상이 `topbar-login` 버튼인가. */
+function isLoginClickListener(call: ts.CallExpression, file: string, source: ts.SourceFile): boolean {
+  if (file !== TOPBAR) return false
+  let fn: ts.Node | undefined = call.parent
+  while (fn !== undefined && !ts.isFunctionLike(fn)) fn = fn.parent
+  if (fn === undefined || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return false
+
+  const listen = fn.parent
+  if (!ts.isCallExpression(listen) || listen.arguments[1] !== fn) return false
+  const [event] = listen.arguments
+  const callee = listen.expression
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    callee.name.text !== 'addEventListener' ||
+    event === undefined ||
+    !ts.isStringLiteralLike(event) ||
+    event.text !== 'click' ||
+    !ts.isIdentifier(callee.expression)
+  ) {
+    return false
+  }
+
+  const target = callee.expression.text
+  let isLoginButton = false
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isPropertyAccessExpression(node.left) &&
+      node.left.name.text === 'className' &&
+      ts.isIdentifier(node.left.expression) &&
+      node.left.expression.text === target &&
+      ts.isStringLiteralLike(node.right) &&
+      node.right.text.split(/\s+/).includes('topbar-login')
+    ) {
+      isLoginButton = true
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return isLoginButton
+}
+
+/** 허용되지 않는 참조와 모든 호출. 선언·값 전달·존재 확인은 내지 않는다. */
+function loginReferences(project: Project): LoginReference[] {
+  const found: LoginReference[] = []
+
+  for (const file of project.files) {
+    const source = project.sourceFile(file)
+
+    const visit = (node: ts.Node): void => {
+      ts.forEachChild(node, visit)
+      if (!ts.isIdentifier(node) || !LOGIN_NAMES.has(node.text) || inTypeNode(node)) return
+
+      const parent = node.parent
+      // `ctx.openLogin`은 속성 접근 전체를 참조로 본다. `openLogin.x`는 그 자체로 위반이다.
+      let reference: ts.Node = node
+      if (ts.isPropertyAccessExpression(parent)) {
+        if (parent.name !== node) {
+          found.push({ file, line: lineOf(node), kind: 'misuse', text: parent.getText(source), inLoginClick: false })
+          return
+        }
+        reference = parent
+      }
+      const holder = reference.parent
+
+      const declaration =
+        (ts.isFunctionDeclaration(holder) && holder.name === reference) ||
+        (ts.isParameter(holder) && holder.name === reference) ||
+        (ts.isVariableDeclaration(holder) && holder.name === reference) ||
+        ((ts.isPropertySignature(holder) || ts.isPropertyDeclaration(holder)) && holder.name === reference) ||
+        (ts.isBindingElement(holder) &&
+          holder.name === reference &&
+          (holder.propertyName === undefined ||
+            (ts.isIdentifier(holder.propertyName) && holder.propertyName.text === node.text)))
+      const passedAsValue =
+        (ts.isPropertyAssignment(holder) &&
+          (holder.name === reference || holder.initializer === reference) &&
+          ts.isObjectLiteralExpression(holder.parent)) ||
+        (ts.isShorthandPropertyAssignment(holder) && ts.isObjectLiteralExpression(holder.parent))
+      const presenceCheck =
+        ts.isBinaryExpression(holder) &&
+        [
+          ts.SyntaxKind.EqualsEqualsEqualsToken,
+          ts.SyntaxKind.ExclamationEqualsEqualsToken,
+          ts.SyntaxKind.EqualsEqualsToken,
+          ts.SyntaxKind.ExclamationEqualsToken,
+        ].includes(holder.operatorToken.kind) &&
+        [holder.left, holder.right].some(
+          (side) => side !== reference && (side.kind === ts.SyntaxKind.NullKeyword || side.getText(source) === 'undefined'),
+        )
+      if (declaration || passedAsValue || presenceCheck) return
+
+      if (ts.isCallExpression(holder) && holder.expression === reference) {
+        found.push({
+          file,
+          line: lineOf(holder),
+          kind: 'call',
+          text: holder.getText(source),
+          inLoginClick: isLoginClickListener(holder, file, source),
+        })
+        return
+      }
+      found.push({ file, line: lineOf(node), kind: 'misuse', text: holder.getText(source).slice(0, 120), inLoginClick: false })
+    }
+    visit(source)
+  }
+  return found
+}
+
+const describeReference = (ref: LoginReference): string =>
+  `${ref.file}:${ref.line} ${ref.kind}${ref.inLoginClick ? ' (login click)' : ''}: ${ref.text}`
+
+describe('openLogin call site (AST)', () => {
+  it('is called only inside the login button click listener of ui/topbar.ts, and passed as a value elsewhere', () => {
+    const references = loginReferences(createProject())
+
+    expect(references.filter((ref) => ref.kind === 'misuse').map(describeReference)).toEqual([])
+    const callSites = references.filter((ref) => ref.kind === 'call')
+    expect(callSites.map((ref) => `${ref.file} ${ref.inLoginClick}`)).toEqual([`${TOPBAR} true`])
+  })
+
+  it('positive control: the value is actually passed from main.ts and the public screens', () => {
+    // 참조가 하나도 없어서 초록인 것이 아니다. 값 전달을 세면 허용 목록이 비어 있지 않다.
+    const project = createProject()
+    for (const file of ['main.ts', 'routes.ts', 'home/home.ts']) {
+      expect(project.read(file)).toMatch(/onLogin: (ctx\.)?openLogin/)
+    }
+  })
+
+  const TOPBAR_SOURCE = (): string => createProject().read(TOPBAR)
+
+  const MISPLACED: [string, Record<string, string>, 'call' | 'misuse'][] = [
+    [
+      'a public module calling ctx.openLogin()',
+      { 'kana/probe.ts': 'export function mount(ctx: { openLogin: () => void }): void {\n  ctx.openLogin()\n}\n' },
+      'call',
+    ],
+    [
+      'a public module calling a destructured openLogin()',
+      { 'demo/probe.ts': 'export function mount({ openLogin }: { openLogin: () => void }): void {\n  openLogin()\n}\n' },
+      'call',
+    ],
+    [
+      'main.ts scheduling openLogin with a timer',
+      { 'probe.ts': 'declare const openLogin: () => void\nsetTimeout(openLogin, 0)\n' },
+      'misuse',
+    ],
+    [
+      'aliasing openLogin',
+      { 'home/probe.ts': 'export function mount(ctx: { openLogin: () => void }): void {\n  const go = ctx.openLogin\n  go()\n}\n' },
+      'misuse',
+    ],
+    [
+      'renaming openLogin in a destructuring',
+      { 'home/probe.ts': 'export function mount({ openLogin: go }: { openLogin: () => void }): void {\n  go()\n}\n' },
+      'misuse',
+    ],
+    [
+      'openLogin.call()',
+      { 'home/probe.ts': 'export function mount(ctx: { openLogin: () => void }): void {\n  ctx.openLogin.call(null)\n}\n' },
+      'misuse',
+    ],
+  ]
+
+  for (const [name, overlay, kind] of MISPLACED) {
+    it(`positive control: flags ${name}`, () => {
+      const references = loginReferences(createProject(overlay))
+      const probe = references.filter((ref) => ref.file in overlay)
+      expect(probe.map((ref) => ref.kind)).toContain(kind)
+      expect(probe.some((ref) => ref.inLoginClick)).toBe(false)
+    })
+  }
+
+  it('positive control: flags onLogin() moved out of the click listener in ui/topbar.ts', () => {
+    const moved = TOPBAR_SOURCE().replace('right.append(login)', 'right.append(login)\n    onLogin()')
+    expect(moved).not.toBe(TOPBAR_SOURCE())
+    const calls = loginReferences(createProject({ [TOPBAR]: moved })).filter((ref) => ref.kind === 'call' && ref.file === TOPBAR)
+    expect(calls.map((ref) => ref.inLoginClick)).toEqual([true, false])
+  })
+
+  it('positive control: flags onLogin() deferred inside the click listener', () => {
+    const deferredCall = TOPBAR_SOURCE().replace(/(\n\s*)onLogin\(\)/, '$1queueMicrotask(() => onLogin())')
+    expect(deferredCall).not.toBe(TOPBAR_SOURCE())
+    const calls = loginReferences(createProject({ [TOPBAR]: deferredCall })).filter((ref) => ref.kind === 'call' && ref.file === TOPBAR)
+    expect(calls.map((ref) => ref.inLoginClick)).toEqual([false])
+  })
+
+  it('positive control: flags the call on a click listener of another element', () => {
+    const otherButton = TOPBAR_SOURCE().replace(
+      "home.addEventListener('click', () => {\n    onHome()",
+      "home.addEventListener('click', () => {\n    onHome()\n    options.onLogin?.()",
+    )
+    expect(otherButton).not.toBe(TOPBAR_SOURCE())
+    const calls = loginReferences(createProject({ [TOPBAR]: otherButton })).filter((ref) => ref.kind === 'call' && ref.file === TOPBAR)
+    expect(calls.map((ref) => ref.inLoginClick).sort()).toEqual([false, true])
+  })
 })
