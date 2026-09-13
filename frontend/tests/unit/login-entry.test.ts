@@ -342,10 +342,20 @@ describe('login entry result', () => {
 
   it('retries the dynamic import from the 로그인 on the load failure screen', async () => {
     let loads = 0
+    // `vi.dynamicImportSettled`는 mock factory 안의 `vi.importActual`을 기다리지 않는다. settle()만 믿으면
+    // 두 번째 진입이 끝나기 전에 단정하고, 남은 enterPrivate의 fetchMe가 다음 테스트의 fetchMock에 찍힌다.
+    let secondLoadDone: () => void = () => {}
+    const secondLoad = new Promise<void>((resolve) => {
+      secondLoadDone = resolve
+    })
     vi.doMock('../../src/private', async () => {
       loads += 1
       if (loads === 1) throw new Error('chunk load failed')
-      return await vi.importActual('../../src/private')
+      try {
+        return await vi.importActual('../../src/private')
+      } finally {
+        secondLoadDone()
+      }
     })
     await boot('#/demo')
 
@@ -360,6 +370,7 @@ describe('login entry result', () => {
 
     answerMe(async () => json(401, { detail: 'Not authenticated' }))
     loginButton().click()
+    await secondLoad
     await settle()
 
     expect(loads).toBe(2)
