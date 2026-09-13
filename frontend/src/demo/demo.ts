@@ -23,7 +23,7 @@ import type { PublicScreenContext } from '../routes'
 import type { ContentFlagReason, ExplicitSignal } from '../types'
 import type { InteractionOps } from '../ui/interactions'
 import { createInteractions } from '../ui/interactions'
-import { renderNotice } from '../ui/notice'
+import { MESSAGES, renderNotice } from '../ui/notice'
 import { renderProgress, sessionProgress } from '../ui/progress'
 import { showScreen } from '../ui/screen'
 import { renderSentence } from '../ui/segments'
@@ -189,10 +189,15 @@ export function mount(ctx: PublicScreenContext): void {
       sheetContainer: screen,
       flagSubmittedText: DEMO_MESSAGES.flagSubmitted,
     })
+    // Study와 같은 문장 아래 힌트(03_UI_UX_SPEC.md의 화면 문구 표).
+    const hint = document.createElement('p')
+    hint.className = 'sentence-hint'
+    hint.textContent = MESSAGES.sentenceHint
     sentenceSlot.replaceChildren(
       renderSentence(entry.presentation.render_segments, (sentenceItemId) => {
         handle.tapItem(sentenceItemId)
       }),
+      hint,
     )
     interactionSlot.replaceChildren(handle.element)
     nextButton.disabled = false

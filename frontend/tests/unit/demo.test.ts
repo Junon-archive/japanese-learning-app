@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mount as mountDemo } from '../../src/demo/demo'
 import { DEMO_SENTENCES, DEMO_SESSION } from '../../src/demo/fixture'
+import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
 import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
 
@@ -168,6 +169,7 @@ describe('demo run', () => {
     expect(text()).toContain(first!.presentation.render_segments[0]!.text)
     expect(text()).not.toContain(first!.korean_translation)
     expect(byClass(root, 'translation')).toEqual([])
+    expect(flatText(byClass(root, 'sentence-box')[0]!)).toContain(MESSAGES.sentenceHint)
 
     // 2. 탭 -> 설명. reading은 여기에만 있다.
     click('token')

@@ -39,6 +39,8 @@ export const MESSAGES = {
    * 로그인 실패는 사유와 무관하게 **하나의 문구**다(05_API_SPEC.md). 어느 쪽이 틀렸는지 암시하지 않는다.
    */
   loginFailed: '아이디나 비밀번호를 다시 확인해 주세요.',
+  /** 문장 아래 힌트. Study와 Demo가 같다. 어느 표현이 학습 대상인지 암시하지 않는다. */
+  sentenceHint: '모르는 표현을 눌러 보세요.',
   retry: '다시 시도하기',
   startNewSession: '새로 시작하기',
   /** 상단바 `로그인`의 `fetchMe`가 403 밖의 이유로 실패했다. 재시도는 `fetchMe`만 다시 부른다. */
