@@ -29,10 +29,12 @@ from tests.e2e.conftest import E2EStack
 
 pytestmark = [pytest.mark.e2e, pytest.mark.integration]
 
-SESSIONS_HEADING = "최근 세션"
+SESSIONS_HEADING = "최근 학습"
 ITEMS_HEADING = "학습한 표현"
-TRUNCATED_TEXT = "오래된 기록은 표시하지 않았습니다"
+TRUNCATED_TEXT = "오래된 기록은 여기서 보이지 않아요."
 NO_MASTERY_TEXT = "아직 평가 없음"
+BACK_LABEL = "학습으로 돌아가기"
+LOGOUT_LABEL = "로그아웃"
 
 # history를 두 번 읽는 사이에 흘리는 시간. `active_time_idle_gap_seconds`보다 **작게**
 # 둔다 --- 그보다 크면 서버가 gap을 0으로 처리하므로 "조회가 시간을 만들었는가"를
@@ -89,8 +91,12 @@ def test_history_renders_both_lists(e2e_stack: E2EStack, page: Page) -> None:
     item_rows = page.locator(".history-section").nth(1).locator(".history-row")
     assert item_rows.count() > 0, "완료한 문장의 target item이 목록에 없다"
 
-    # 읽기 전용 화면이다. 학습으로 이어지는 버튼을 두지 않는다(돌아가기 하나뿐).
-    assert page.locator(".screen.history button").count() == 1
+    # 읽기 전용 화면이다. 화면 내용에는 학습으로 이어지는 버튼을 두지 않는다(돌아가기 하나뿐).
+    # 상단바(앱 이름, `로그아웃`)는 화면 내용이 아니라 로그인 영역 공통 틀이다(03_UI_UX_SPEC.md의 `상단바`).
+    content_buttons = page.locator(".screen.history button:not(.topbar button)")
+    assert content_buttons.all_inner_texts() == [BACK_LABEL]
+    topbar = page.locator(".screen.history .topbar .topbar-actions button")
+    assert topbar.all_inner_texts() == [LOGOUT_LABEL]
     _back_to_study(page)
 
 

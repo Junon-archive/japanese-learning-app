@@ -34,6 +34,10 @@ REQUIRED_ICON_SIZES = (192, 512)
 # 학습 정책값이 아니다. 03_UI_UX_SPEC.md의 모바일 우선 요구를 숫자로 옮긴 것이다.
 MIN_TAP_TARGET_PX = 44
 
+# 레이아웃 좌표의 부동소수 오차. 44px로 선언한 요소가 device scale factor 3에서
+# 43.999998px로 측정된다. 1px보다 훨씬 작으므로 실제로 작은 요소를 통과시키지 않는다.
+_SUBPIXEL_TOLERANCE_PX = 0.01
+
 # 설치 가능한 PWA가 가질 수 있는 display 값. `browser`는 설치 대상이 아니다.
 INSTALLABLE_DISPLAYS = frozenset({"standalone", "fullscreen", "minimal-ui"})
 
@@ -50,10 +54,10 @@ PHONE_SESSION_MINUTES = 1
 FINISH_LABEL = "오늘 학습 완료"
 
 # **API를 부르지 않는 경로로 들어간다.** 설치 가능성은 정적 산출물의 성질이고, 이
-# 파일은 backend fixture를 요구하지 않는다. 루트(`/`)로 들어가면 boot이
-# `GET /api/auth/me`를 부르므로 backend 유무에 결과가 얽히고, 같은 pytest 세션에서
-# 다른 테스트가 띄워 둔 서버에 설정 없는 요청을 던져 서버 로그를 오염시킨다.
-_NO_API_ROUTE = "#/demo"
+# 파일은 backend fixture를 요구하지 않는다. MVP-02에서 부팅은 어떤 경로에서도 API를 부르지
+# 않으므로(불변식 14) 설치한 앱의 시작 주소(`start_url: "/"`)인 루트가 곧 그 경로다
+# (ADR-022의 `PWA start_url`).
+_NO_API_ROUTE = "/"
 
 
 def _manifest(page: Page, context: BrowserContext) -> dict[str, Any]:
@@ -80,7 +84,8 @@ def _undersized(locator: Locator, selector: str) -> list[str]:
     for index in range(locator.count()):
         box = locator.nth(index).bounding_box()
         assert box is not None, f"{selector}[{index}]가 화면에 없다"
-        if box["width"] < MIN_TAP_TARGET_PX or box["height"] < MIN_TAP_TARGET_PX:
+        limit = MIN_TAP_TARGET_PX - _SUBPIXEL_TOLERANCE_PX
+        if box["width"] < limit or box["height"] < limit:
             found.append(f"{selector}[{index}]={box['width']}x{box['height']}")
     return found
 
@@ -208,7 +213,8 @@ def test_the_install_prompt_event_fires(
 def test_the_study_screen_works_on_a_phone_viewport(
     e2e_stack: E2EStack, browser: Browser, playwright_driver: Playwright
 ) -> None:
-    """iPhone descriptor로 학습 화면을 시작부터 **세션 종료까지** 밟고 탭 타깃 크기를 본다.
+    """iPhone descriptor로 선택 홈 -> 상단바 `로그인` -> 학습 화면을 시작부터 **세션 종료까지** 밟고
+    탭 타깃 크기를 본다.
 
     03_UI_UX_SPEC.md는 모바일 우선이다. 데스크톱에서만 눌리는 화면은 그 요구를
     만족하지 않고, 크기 미달은 기능 테스트로는 절대 드러나지 않는다. 종료 버튼도 같다 ---
@@ -233,6 +239,14 @@ def test_the_study_screen_works_on_a_phone_viewport(
     try:
         page = context.new_page()
         learner = flow.seed_and_create_user(stack)
+
+        # 선택 홈. 설치한 앱을 열면 여기이고 계정 사용자는 상단바 `로그인`을 한 번 누른다.
+        page.goto(stack.frontend_url)
+        page.locator(".screen.home").wait_for(state="visible")
+        home_targets = _undersized(page.locator(".topbar-login"), ".topbar-login")
+        home_targets += _undersized(page.locator(".home-card"), ".home-card")
+        assert home_targets == [], f"탭 타깃이 {MIN_TAP_TARGET_PX}px 미만이다: {home_targets}"
+
         flow.sign_in(page, stack, learner)
 
         # 문장과 주 동작이 화면에 있다.
@@ -245,7 +259,14 @@ def test_the_study_screen_works_on_a_phone_viewport(
         flow.tap(page, 0)
 
         undersized: list[str] = []
-        for selector in ("button.next", ".explain .self-report", ".reveal-translation"):
+        for selector in (
+            "button.next",
+            ".explain .self-report",
+            ".sheet-close",
+            ".reveal-translation",
+            ".topbar .history-link",
+            ".topbar .logout",
+        ):
             undersized += _undersized(page.locator(selector), selector)
         assert undersized == [], f"탭 타깃이 {MIN_TAP_TARGET_PX}px 미만이다: {undersized}"
 
