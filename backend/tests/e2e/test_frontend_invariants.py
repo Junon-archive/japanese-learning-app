@@ -39,7 +39,9 @@ from tests.conftest import override_config
 from tests.e2e import study_flow as flow
 from tests.e2e.conftest import E2EStack, Frontend
 
-pytestmark = [pytest.mark.e2e, pytest.mark.integration]
+# DB를 쓰는 테스트에만 `integration`을 단다. 공개 화면 검사는 backend 없이 `frontend` fixture만 쓴다
+# (`test_marker_hygiene.py`).
+pytestmark = pytest.mark.e2e
 
 # 기본값과 **다른** 값을 주입한다. 기본값을 쓰면 config를 읽지 않는 구현도 통과한다.
 DEFERRAL_HOURS = 7
@@ -115,6 +117,7 @@ def _snapshot(state: ReviewState) -> dict[str, object]:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_completing_without_a_signal_defers_and_leaves_memory_state_alone(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -182,6 +185,7 @@ def test_completing_without_a_signal_defers_and_leaves_memory_state_alone(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_hammering_next_advances_exactly_one_presentation(e2e_stack: E2EStack, page: Page) -> None:
     """`다음 문장`을 3연타해도 진행은 1이고 exposure가 중복되지 않는다.
 
@@ -235,6 +239,7 @@ def test_hammering_next_advances_exactly_one_presentation(e2e_stack: E2EStack, p
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_a_retried_self_report_applies_evidence_once(e2e_stack: E2EStack, page: Page) -> None:
     """응답을 잃은 자가보고를 재시도해도 evidence가 한 번만 적용된다.
 
@@ -291,6 +296,7 @@ def test_a_retried_self_report_applies_evidence_once(e2e_stack: E2EStack, page: 
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_translation_exists_only_after_the_reveal_call_succeeds(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -369,6 +375,7 @@ def test_the_translation_exists_only_after_the_reveal_call_succeeds(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_leaving_the_page_mutates_nothing(e2e_stack: E2EStack, page: Page) -> None:
     """탭 숨김 / pagehide / 실제 이탈에서 요청이 하나도 나가지 않는다.
 
@@ -414,6 +421,7 @@ def test_leaving_the_page_mutates_nothing(e2e_stack: E2EStack, page: Page) -> No
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_an_empty_pool_does_not_poll_and_does_not_accrue_active_time(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -452,6 +460,7 @@ def test_an_empty_pool_does_not_poll_and_does_not_accrue_active_time(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_progress_bar_follows_the_configured_session_length(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -486,6 +495,7 @@ def test_the_progress_bar_follows_the_configured_session_length(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_server_rejects_a_second_evidence_for_the_same_exposure(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -823,6 +833,7 @@ def _watch_paths(page: Page, *suffixes: str) -> list[str]:
     return sent
 
 
+@pytest.mark.integration
 def test_reopening_an_explanation_sends_click_and_revealed_once(
     e2e_stack: E2EStack, page: Page
 ) -> None:
@@ -858,6 +869,7 @@ def test_reopening_an_explanation_sends_click_and_revealed_once(
     }
 
 
+@pytest.mark.integration
 def test_a_late_click_response_after_leaving_reveals_nothing(
     e2e_stack: E2EStack, page: Page
 ) -> None:

@@ -16,6 +16,9 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
+import type { Project } from './import-graph'
+import { createProject, fullGraph } from './import-graph'
+
 const SRC = fileURLToPath(new URL('../../src', import.meta.url))
 
 /** `src` 기준 경로(`/` 구분). */
@@ -582,5 +585,74 @@ describe('positive controls', () => {
     expect(slotCallCounts(sources, REQUIRED_SLOT_KEYS)).toEqual([
       `localSlot('nc.kana.v1') must be called exactly once, found 0`,
     ])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// private 그래프(shell 레인): 로그인 영역이 닿는 모듈의 localSlot key는 nc.furigana.v1뿐
+// ---------------------------------------------------------------------------
+
+/**
+ * 로그인 영역(`private.ts`에서 정적 + 리터럴 동적 import로 닿는 모듈)이 만들 수 있는 slot은 후리가나 설정
+ * 하나다(`spec/04_SECURITY_AND_DATA.md`의 `slot 소유`, 12_TEST_PLAN.md의 `localStorage (불변식 18)`).
+ * 가나·demo 진도는 공개 화면의 것이고 계정 진도와 섞이지 않는다. 그래프는 격리 검사와 같은
+ * `import-graph.ts`로 만든다. 그래서 `ui/furigana.ts`처럼 공개 화면과 함께 쓰는 모듈은 이 목록 안에 있다.
+ */
+const PRIVATE_ENTRY = 'private.ts'
+const PRIVATE_ALLOWED_KEYS: readonly StoreKey[] = ['nc.furigana.v1']
+
+function privateGraphSlotKeys(project: Project): { keys: string[]; violations: string[] } {
+  const graph = fullGraph(project, PRIVATE_ENTRY)
+  const sources = [...graph].sort().map((path) => parse(path, project.read(path)))
+  const { calls, violations } = collectSlotCalls(sources)
+  const keys = [...new Set(calls.map((call) => call.key))].sort()
+  return {
+    keys,
+    violations: [
+      ...violations,
+      ...keys
+        .filter((key) => !(PRIVATE_ALLOWED_KEYS as readonly string[]).includes(key))
+        .map((key) => `private graph creates localSlot('${key}')`),
+    ],
+  }
+}
+
+describe('private graph storage keys', () => {
+  it('reaches only nc.furigana.v1 from private.ts', () => {
+    const project = createProject()
+    // 그래프가 실제 로그인 영역을 담는다. 비어서 초록인 것이 아니다.
+    expect(fullGraph(project, PRIVATE_ENTRY)).toContain('ui/study.ts')
+    expect(privateGraphSlotKeys(project).violations).toEqual([])
+  })
+
+  it('positive control: flags nc.demo.v1 created in a module the private graph reaches', () => {
+    const study = createProject().read('ui/study.ts')
+    const project = createProject({
+      'ui/study.ts': `${study}\nimport { localSlot } from '../local-store'\nlocalSlot('nc.demo.v1', isDemo)\n`,
+    })
+    const result = privateGraphSlotKeys(project)
+    expect(result.keys).toContain('nc.demo.v1')
+    expect(result.violations).toContain(`private graph creates localSlot('nc.demo.v1')`)
+  })
+
+  it('positive control: follows a transitive and a dynamic import into a kana slot', () => {
+    const privateSource = createProject().read(PRIVATE_ENTRY)
+    const project = createProject({
+      [PRIVATE_ENTRY]: `${privateSource}\nexport const later = () => import('./ui/probe-slot')\n`,
+      'ui/probe-slot.ts': `import '../kana/progress'\n`,
+    })
+    expect(privateGraphSlotKeys(project).violations).toContain(`private graph creates localSlot('nc.kana.v1')`)
+  })
+
+  it('positive control: allows nc.furigana.v1 and ignores slots outside the private graph', () => {
+    // 실제 로그인 영역과 무관한 합성 그래프다. 실제 소스가 바뀌어도 이 대조군의 결과는 같다.
+    const project = createProject({
+      [PRIVATE_ENTRY]: `import './ui/probe-furigana'\n`,
+      'ui/probe-furigana.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.furigana.v1', isFlag)\n`,
+      'demo/probe-slot.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.demo.v1', isDemo)\n`,
+    })
+    const result = privateGraphSlotKeys(project)
+    expect(result.keys).toEqual(['nc.furigana.v1'])
+    expect(result.violations.filter((line) => line.startsWith('private graph'))).toEqual([])
   })
 })
