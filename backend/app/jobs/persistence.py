@@ -432,12 +432,20 @@ def _insert_sentence(
             )
     db.flush()
     _promote_to_validated(db, sentence=sentence)
-    _log_ruby(
-        sentence_id=sentence.id,
-        ruby=ruby,
-        error=ruby_error,
-        sentence_item_ids=sentence_item_ids,
-    )
+    try:
+        _log_ruby(
+            sentence_id=sentence.id,
+            ruby=ruby,
+            error=ruby_error,
+            sentence_item_ids=sentence_item_ids,
+        )
+    except Exception as error:
+        # 관측이 저장을 막지 않는다. 계산 실패(`ruby.failed`)와 같이 경고만 남기고 계속한다.
+        # 실패한 로그 함수를 다시 부르지 않고, 메시지 대신 타입 이름만 싣는다.
+        logger.warning(
+            "ruby log failed",
+            extra={"sentence_id": sentence.id, "error_type": type(error).__name__},
+        )
     return sentence.id
 
 
