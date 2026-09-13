@@ -86,13 +86,14 @@ export function mount(ctx: PublicScreenContext): void {
     progress = initialProgress(fixture)
   }
 
-  function topBar(): HTMLElement {
+  /** 후리가나 토글은 문장이 있는 화면에만 둔다(03_UI_UX_SPEC.md의 `상단바`). 완료 화면은 `로그인`뿐이다. */
+  function topBar(withFurigana: boolean): HTMLElement {
     return renderTopBar({
       onHome: () => {
         ctx.navigate('#/')
       },
       onLogin: ctx.openLogin,
-      actions: [renderFuriganaToggle()],
+      actions: withFurigana ? [renderFuriganaToggle()] : [],
     })
   }
 
@@ -134,7 +135,7 @@ export function mount(ctx: PublicScreenContext): void {
     foot.className = 'study-foot'
     foot.append(nextButton)
 
-    screen.append(topBar(), title, banner, progressText, sentenceSlot, interactionSlot, foot)
+    screen.append(topBar(true), title, banner, progressText, sentenceSlot, interactionSlot, foot)
     showScreen(ctx.root, screen, ctx.signal)
 
     /** 지금 문장의 수명. 문장을 바꾸거나 화면을 떠나면 abort되어 열린 설명 시트가 닫힌다. */
@@ -351,7 +352,7 @@ export function mount(ctx: PublicScreenContext): void {
     foot.className = 'demo-complete-foot'
     foot.append(kana, restart, note)
 
-    screen.append(topBar(), body, foot)
+    screen.append(topBar(false), body, foot)
     showScreen(ctx.root, screen, ctx.signal)
   }
 

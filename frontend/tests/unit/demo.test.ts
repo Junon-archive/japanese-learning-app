@@ -19,7 +19,7 @@ import { DEMO_SENTENCES } from '../../src/demo/fixture'
 import { resetDemoProgress } from '../../src/demo/progress'
 import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
-import { byClass, createFakeElement, fakeDocument, flatText, textWithoutRt } from './fake-dom'
+import { buttons, byClass, createFakeElement, fakeDocument, flatText, textWithoutRt } from './fake-dom'
 
 const fetchMock = vi.fn(() => {
   throw new Error('demo must not make network requests')
@@ -185,7 +185,14 @@ describe('demo run', () => {
   it('restarts instead of ending on an empty screen', () => {
     for (let i = 0; i < DEMO_SENTENCES.length; i += 1) click('next')
 
+    // 완료 화면에는 문장이 없으므로 상단바 오른쪽은 `로그인`뿐이다(후리가나 토글 없음).
+    expect(buttons(byClass(root, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual(['로그인'])
+
     click('demo-restart')
+    expect(buttons(byClass(root, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual([
+      '후리가나',
+      '로그인',
+    ])
     expect(text()).toContain(`1 / ${DEMO_SENTENCES.length}`)
     expect(text()).toContain(DEMO_SENTENCES[0]!.presentation.render_segments[0]!.text)
     expect(fetchMock).not.toHaveBeenCalled()
