@@ -21,8 +21,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  /* 좁은 폭에서 문구가 한 글자씩 세로로 꺾이지 않게 한다. */
-  white-space: nowrap;
 }
 
 .furigana-toggle[aria-pressed='true'] {

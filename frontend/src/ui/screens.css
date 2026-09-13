@@ -593,11 +593,14 @@ button.primary:active:not(:disabled) {
 
 /* --- 상단바 ------------------------------------------------------------ */
 
+/* 앱 이름과 버튼은 단어 안에서 꺾이지 않는다. 한 줄에 다 들어가지 않으면 오른쪽 메뉴 묶음이
+   통째로 앱 이름 아래 두 번째 줄로 내려가 오른쪽에 붙는다. 글자 단위로 꺾지 않는다. */
 .topbar {
   position: sticky;
   top: env(safe-area-inset-top, 0);
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
@@ -617,9 +620,11 @@ button.primary:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
 }
 
 .topbar-button {
+  white-space: nowrap;
   padding: 0 10px;
   border: 0;
   border-radius: 10px;
@@ -638,6 +643,17 @@ button.primary:active:not(:disabled) {
 
 .topbar-login {
   color: var(--accent);
+}
+
+/* 좁은 폭에서만 버튼 좌우 여백과 앱 이름 글자를 줄인다. 탭 높이(44px)는 그대로다. */
+@media (max-width: 480px) {
+  .topbar-button {
+    padding: 0 6px;
+  }
+
+  .topbar-brand {
+    font-size: 16px;
+  }
 }
 
 /* 확인 중. 흐리게만 하고 글자는 읽히게 둔다. */
