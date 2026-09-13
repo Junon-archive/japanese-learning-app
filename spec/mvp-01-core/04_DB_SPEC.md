@@ -738,6 +738,26 @@ starter seed set**을 둔다.
 
 seed는 Git으로 관리하고 migration 또는 별도 seed 절차로 적재한다.
 
+### 알려진 공백 --- seed가 감당해야 하는 규모와 추가 적재
+
+**아래 두 가지는 결정되지 않았다.** 사실만 적는다.
+
+-   **MVP에서 `learning_items`의 공급원은 seed뿐이다.** worker는
+    `learning_items`를 만들지 않고(`08_LLM_SPEC.md`의 `worker가 만들지 않는 것`)
+    새 어휘 공급은 Future다. 반면 이 절은 seed를 "작은 starter seed set"으로,
+    `06_LEARNING_ENGINE.md`의 `Cold Start`는 "첫 몇 세션"용으로 적고 있고,
+    `13_ACCEPTANCE_CRITERIA.md`는 기술 검증 뒤 실제 2\~4주 사용 평가를 요구한다.
+    세 조항을 합치면 **2\~4주 평가 기간에 쓰일 item 전량이 seed에서 와야 한다.**
+    이 결론은 그동안 어디에도 적혀 있지 않았다. seed 규모는 실사용 평가 기간을
+    감당해야 하지만 **그 규모는 정하지 않았다**(위 "정확한 개수는 제품 명세에
+    고정하지 않는다"는 그대로다).
+-   **추가 적재 의미론이 없다.** 이미 seed가 적재된 DB에 item을 더하는 절차가
+    명세에 없다. 현재 loader는 `origin = seed` 행이 하나라도 있으면 적재 전체를
+    거부한다. `learning_items`에는 seed 파일의 안정 키가 저장되지 않고 `lemma`
+    유일성 제약도 없어, 이미 적재된 item을 DB에서 식별할 안정 키가 없다. 학습
+    기록이 쌓인 뒤에는 `make db-reset`으로 다시 만드는 경로도 쓸 수 없다(데이터를
+    지운다).
+
 ## Demo Data
 
 Public Demo는 static frontend fixture이며 **DB를 사용하지 않는다.**
@@ -748,3 +768,43 @@ private mastery를 오염시킬 경로 자체가 존재하지 않는다.
 
 DB schema 변경은 Alembic migration 없이 직접 production DB에 적용하지
 않는다. 빈 DB에서 migration만으로 전체 schema를 재현할 수 있어야 한다.
+
+### 운영 DB에 migration을 적용하는 경로 (MVP 확정)
+
+데이터가 있는 DB의 schema를 올리는 경로는 **데이터를 보존하는
+`alembic upgrade head` 하나**다. 개발용 초기화(`make db-reset`: DROP → CREATE →
+upgrade)는 데이터를 지우고 `APP_ENV = production`에서 거부되므로 이 경로가 아니다.
+
+``` text
+1. 대상 출력    password를 가린 DSN(host, port, database)을 먼저 출력한다
+2. pending 확인 현재 revision이 이미 head면 아무것도 하지 않고 성공으로 끝낸다
+3. 직전 백업    pending migration이 있으면 백업을 만든다
+                (spec/04_SECURITY_AND_DATA.md의 Backup. 새 백업 검증까지 포함)
+                백업이 실패하면 migration을 하지 않고 실패로 끝낸다
+4. upgrade      alembic upgrade head
+```
+
+-   **pending migration이 있으면 백업은 생략할 수 없다.** 백업을 건너뛰는 옵션을
+    두지 않는다. 근거는 셋이다. 사용자 1명 규모라 비용은 몇 초다. 되돌릴 수 없는
+    schema 변경 직전의 유일한 안전망이다. 강제하지 않으면 운영자가 빠뜨린다.
+-   **이미 head면 백업도 만들지 않는다.** 바뀌는 것이 없어 안전망이 필요 없고,
+    배포 때마다 생기는 불필요한 백업이 보관 개수
+    (`spec/04_SECURITY_AND_DATA.md`의 `주기와 보관 개수`)를
+    채워 옛 백업을 밀어내지 않게 한다.
+-   **롤백은 downgrade가 아니라 3에서 만든 백업의 복원이다.** 운영 경로에
+    downgrade 명령을 두지 않는다. downgrade는 테이블·컬럼을 DROP하는 방향이라
+    데이터가 있는 DB에서는 되돌림이 아니라 추가 손실이고, 데이터 위에서 검증된
+    적도 없다. migration 파일의 `downgrade()`는 빈 DB에서의 migration 왕복 테스트에
+    쓰이며, 이 규칙은 그것을 지우라는 뜻이 아니다.
+-   **대상 DB를 먼저 출력하는 이유:** DSN이 두 가지다. 컨테이너 안에서 쓰는 DSN은
+    compose 서비스 이름을 host로 쓰고, 호스트에서 쓰는 DSN은 loopback에 열린 port를
+    쓴다. 셸에 남아 있던 다른 `DATABASE_URL`(예: 로컬 개발 DB)로 실행하면 백업과
+    migration이 함께 엉뚱한 DB에 적용된다. password는 출력하지 않는다
+    (`make db-reset`의 출력과 같다).
+-   **3부터 4가 끝날 때까지 API와 worker를 멈춘다.** 복원은 백업 이후의 쓰기를
+    전부 잃으므로, 그 사이에 학습 기록이 쓰이면 롤백이 그것을 조용히 지운다. 새
+    schema 위에서 옛 코드가 도는 창도 함께 없어진다.
+-   upgrade가 실패하거나 upgrade 뒤에 문제가 드러나면 3의 백업으로 복원한다. 위
+    `learning_events`의 unique index처럼 **위반 행을 정리하는 migration 단계를 두지
+    않는** 경우 migration 실패는 설계된 결과이며, 이 경로가 그 실패를 우회하지
+    않는다.

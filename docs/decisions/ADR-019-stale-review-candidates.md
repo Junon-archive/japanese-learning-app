@@ -127,3 +127,11 @@ review가 성립한다는 것이고, 그것은 지금도 유효하다.
 -   `expired`는 값만 있고 쓰이지 않는 상태로 남는다. `queued`와 같은 처지이며
     같은 방식으로 처리했다 --- 지우지 않고, 쓰지 않는다는 것과 언제 유효해지는지를
     `04_DB_SPEC.md`에 적었다.
+-   **tie-break는 reason bucket 안에서만 돈다.** reason 선택이 ordering보다 먼저이므로
+    (`06_LEARNING_ENGINE.md`의 `Review Reason 선택`) 서로 다른 reason의 candidate는
+    이 규칙으로 비교되지 않는다. 그래서 같은 item에 `(anchor, reinforcement)`인 낡은
+    candidate와 `(near_original, fsrs_due)`인 새 candidate가 함께 ready이고
+    `context_repair`가 없으며 `reinforcement_deficit`이 양수이면, reason 선택이
+    `reinforcement`를 먼저 골라 낡은 `anchor` candidate가 선택된다. **명세 위반은
+    아니다** --- reason 선택이 먼저인 것은 확정된 절차다. 이 결정으로 (2)의 증폭이
+    모두 해소되었다고 읽지 않도록 적는다.

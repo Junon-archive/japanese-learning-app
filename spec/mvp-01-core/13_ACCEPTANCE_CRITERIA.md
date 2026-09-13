@@ -58,9 +58,14 @@
 -   Postgres 직접 인터넷 노출 없음
 -   secret frontend/Git 노출 없음
 -   명세 하한 미만 password로는 계정을 만들 수 없음
--   restart 후 state 유지
+-   restart 후 state 유지: API·worker **프로세스 재시작**과 **Postgres 재시작**
+    뒤에 로그인 세션, 열린 study session, exposure, mastery, history가 그대로다
+    (다시 로그인하지 않아도 되고, idle timeout 이내면 같은 study session이
+    이어진다). 호스트 재부팅 후 자동 기동은 이 기준에 들어가지 않는다
 -   retry 무한루프 없음 (max attempts + dead-letter)
--   backup/restore 최소 1회 검증
+-   backup/restore 최소 1회 검증 (무엇을 보여야 검증인지는
+    `spec/04_SECURITY_AND_DATA.md`의 `restore 검증`. 복원 명령의 성공만으로는
+    검증이 아님)
 
 ## 수치 취급 원칙
 

@@ -202,6 +202,11 @@ avoid_japanese     target item이 이미 등장한 기존 문장의 japanese.
 deterministic duplicate 검사가 한다. 사용자 식별자, `login_id`, event
 원문, mastery 수치를 프롬프트에 싣지 않는다.
 
+**알려진 공백 --- 출력 토큰 상한:** provider 요청에 출력 토큰 상한을 싣는 조항이
+없고, 현재 구현도 싣지 않는다. 출력이 폭주하면 호출 1회가 모델의 최대 출력 길이까지
+간다. 반대로 상한을 너무 낮게 잡으면 structured output이 중간에 잘려 parsing 실패와
+retry가 늘고 비용이 오히려 커진다. 상한을 둘지와 그 값은 결정하지 않았다.
+
 ## GENERATE_SENTENCE_BATCH 대상 선정 (MVP 확정)
 
 **payload에 item 목록을 넣지 않는다.** replenishment job의

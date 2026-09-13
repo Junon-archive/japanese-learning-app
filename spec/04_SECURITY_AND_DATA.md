@@ -98,6 +98,24 @@ LLM_API_KEY  = provider secret   LLM_PROVIDER = openai 일 때 필수
 근거와 버린 대안은 `docs/decisions/ADR-016-llm-provider-selection.md`(원안의
 `stub` env 값을 폐기한 이유는 그 문서의 `개정` 절).
 
+### 학습 정책 파일 경로 (MVP 확정)
+
+``` text
+NC_CONFIG_PATH = 학습 정책 YAML 파일 경로    미설정(빈 값 포함)이면 config/default.yaml
+```
+
+-   `.env` 계열 환경변수다. 파일의 **내용**은 학습 정책이고 canonical 정의는
+    `spec/mvp-01-core/14_CONFIGURATION.md`이지만, **어느 파일을 읽는가**는
+    배포마다 다른 설정이므로 `APP_ENV`와 같은 취급이다.
+-   경로는 그 값을 읽는 프로세스가 보는 경로다(컨테이너로 돌리면 컨테이너 안의
+    경로). **API와 worker는 같은 파일을 읽는다.** 두 프로세스가 같은 정책 키를
+    서로 다른 쪽에서 소비하므로(예: `max_new_items_per_sentence`는 API의
+    materialization과 worker의 validation이 함께 쓴다) 파일이 갈리면 두 경로의
+    판정이 갈린다.
+-   production이 이 변수로 무엇을 가리키는지, 그 파일을 어떻게 만들고
+    갱신하는지는 `spec/mvp-01-core/14_CONFIGURATION.md`의
+    `production override (MVP 확정)`이 canonical이다.
+
 ## Authentication (MVP 확정)
 
 이 앱은 SaaS가 아니다.
@@ -364,6 +382,99 @@ PostgreSQL이 canonical source이다. DB 내부 파일을 직접 편집하지 �
 
 정기 pg_dump + rotation + 가능하면 다른 물리 디스크/위치에 최소 1개.
 restore 절차도 실제 검증한다.
+
+### 주기와 보관 개수 (MVP 확정)
+
+``` text
+주기        하루 1회
+보관 개수   최근 7개   (백업 명령의 보관 개수 인자, 기본값 7)
+위치        data/backups/   (spec/02_ARCHITECTURE.md)
+```
+
+-   **두 값은 운영값이며 학습 정책값이 아니다.** 그래서
+    `spec/mvp-01-core/14_CONFIGURATION.md`의 YAML에 두지 않는다. 그 파일은
+    API·worker가 전 키를 읽어 검증하는 학습 정책 파일인데, 두 값을 쓰는 것은
+    백업 명령뿐이고 API·worker는 쓰지 않는다. 실사용 후 튜닝하는 학습값과 섞이지도
+    않는다.
+-   **환경변수에도 두지 않는다.** `.env` 계열 값은 API·worker 프로세스가 받는
+    설정인데(`APP_ENV`, `AUTH_SESSION_TTL_DAYS`) 두 프로세스가 쓰지 않는 값을 거기
+    두면 소비처 없는 설정이 생긴다. 보관 개수는 **백업 명령의 인자**이고 기본값이
+    7이다.
+-   **주기는 저장소가 가진 값이 아니다.** 백업 명령을 하루 1회 실행하는 것은 호스트
+    스케줄러 설정이며, 위 `배포 계층 (운영자 책임)`의 Cloudflare 설정처럼 이
+    저장소의 구현물이 아니다. 이 절은 그 설정이 따라야 할 값을 정한다.
+-   하루 1회이므로 최악의 경우 **마지막 백업 이후 최대 하루치 기록**을 잃는다.
+    사용자 1명 규모에서 받아들인다. 7개는 문제(잘못된 적용, 데이터 훼손)를 며칠
+    늦게 알아채도 그 이전 상태가 남아 있는 창이다.
+-   보관 단위는 **일이 아니라 개수**다. migration 직전 백업
+    (`spec/mvp-01-core/04_DB_SPEC.md`의 `운영 DB에 migration을 적용하는 경로`)도
+    같은 명령이 만들므로 한 개로 센다.
+-   바꾸려면 이 절을 먼저 고친다.
+
+### rotation 규칙 (MVP 확정)
+
+``` text
+순서   dump -> 새 백업 검증 -> rotation(보관 개수를 넘는 가장 오래된 것부터 삭제)
+```
+
+-   **오래된 백업은 새 백업의 검증이 끝난 뒤에만 지운다.** 먼저 지우면 dump가
+    실패하는 날이 이어지는 동안 옛 백업만 줄어들어 **백업이 0개**가 될 수 있다.
+-   새 백업의 검증이 실패하면 rotation을 하지 않고 명령이 non-zero로 끝난다.
+    실패한 파일은 보관 개수에 세지 않는다.
+-   dump 중인 파일은 검증이 끝나기 전까지 **완성된 백업의 이름으로 보이지 않게**
+    쓴다(임시 이름으로 쓰고 검증 뒤 이름을 바꾼다). 중간에 끊긴 파일이 "최근
+    백업"으로 세어져 온전한 옛 백업을 밀어내지 않게 하기 위해서다.
+-   여기서 말하는 **새 백업 검증**은 파일이 온전하다는 것까지다: 덤프 도구가
+    성공으로 끝났고, 파일이 비어 있지 않으며, 복원 도구가 그 파일의 목차를 끝까지
+    읽을 수 있다. 복원된 데이터가 원본과 같다는 증명은 아래 `restore 검증`이다.
+
+### restore 검증 (MVP 확정)
+
+**복원 명령이 exit 0으로 끝난 것은 검증이 아니다.** 테이블이 빠지거나 행이 비어도
+복원 명령은 성공할 수 있다. restore 검증은 다음 여섯 가지를 **모두** 보여야 한다.
+
+``` text
+1. alembic_version   복원 DB와 원본의 값이 같고, 그 값이 migration head다
+2. 테이블 내용       catalog에서 나열한 모든 public 테이블의 행 수와 내용 해시가 같다
+3. sequence          모든 sequence의 last_value가 같다
+4. 제약·index        제약 이름 집합과 index 이름 집합이 같다 (partial unique index 포함)
+5. 동작              복원 DB에 붙인 API로 login과 history가 동작한다
+6. 음성 대조군       복원본의 1행을 훼손하면 검증이 실패한다
+```
+
+-   **테이블 목록을 하드코딩하지 않는다.** 목록을 적어 두면 테이블이 추가된
+    날부터 그 테이블은 검증 밖에 있게 되는데 검증은 계속 통과한다. 비교 대상은
+    매번 catalog에서 나열한다.
+-   4에 partial unique index를 명시하는 이유: `uq_study_presentations_open`,
+    `uq_learning_events_evidence` 같은 index가 불변식의 DB 강제 수단인데
+    (`spec/mvp-01-core/04_DB_SPEC.md`) 행 내용 비교로는 index가 빠진 것이
+    드러나지 않는다.
+-   **6이 없으면 1\~4는 아무것도 증명하지 않는다.** 항상 "같다"고 답하는
+    검증(같은 DB를 두 번 읽는다, 해시에 행 내용이 들어가지 않는다)도 1\~4를
+    통과한다.
+-   **원본은 dump 시점부터 비교가 끝날 때까지 쓰기가 없어야 한다.** worker는 job이
+    없어도 `worker_heartbeats`를 주기적으로 쓰고 API는 인증 요청에서
+    `auth_sessions.last_used_at`을 쓰므로, 살아 있는 원본과 비교하면 2가 거짓으로
+    실패한다. API·worker를 멈춘 상태에서 dump하고 비교한다.
+-   **5는 1\~4가 끝난 뒤에 한다.** login이 `auth_sessions`에 행을 쓰므로 먼저 하면
+    2가 실패한다.
+-   복원은 **별도 DB**에 한다. 원본 DB를 덮어써서 검증하지 않는다.
+-   `spec/mvp-01-core/13_ACCEPTANCE_CRITERIA.md`의 `backup/restore 최소 1회
+    검증`이 가리키는 것이 이 여섯 가지다. 테스트 항목은
+    `spec/mvp-01-core/12_TEST_PLAN.md`에 있다.
+
+### 백업 파일의 민감도
+
+-   백업에는 `users.password_hash`와 `auth_sessions.token_hash`가 들어 있다.
+    password hash가 유출되면 추측 시도는 위 `온라인 무차별 대입 방어`의 2차
+    방어(서버 처리량이 시도율의 상한)를 받지 않고 오프라인에서 병렬로 돈다. 남는
+    방어는 1차(password 엔트로피)뿐이다.
+-   백업 파일은 **권한 0600**(백업을 만든 운영 사용자만 읽기·쓰기)이다. 만든 뒤에
+    권한을 줄이는 것이 아니라 만드는 시점부터 0600이어야 한다. 그 사이에 다른
+    사용자가 읽을 수 있는 창이 생기지 않게 하기 위해서다.
+-   백업은 Git에 넣지 않는다(아래 `Git 제외`, `spec/02_ARCHITECTURE.md`의
+    `data/backups`). 다른 물리 디스크/위치의 사본도 같은 파일이므로 같은 권한으로
+    다룬다.
 
 ## Git 제외
 

@@ -1427,3 +1427,82 @@ stage 필터가 없고 같은 item의 두 candidate는 `order_key`가 같으므�
 `13_ACCEPTANCE_CRITERIA.md`와 `14_CONFIGURATION.md`는 변경하지 않았다. 위 여섯 건
 어디에도 새 tuning 값이 없고(전부 기존 상태·기존 ladder로 판정한다) acceptance가
 말하는 범위도 그대로다. `spec/future/`와 루트 `spec/05`·`spec/06`도 변경하지 않았다.
+
+#### Wave 5 착수 전 반영 --- 운영 공백 4건과 알려진 공백 4건 (같은 후속 보완)
+
+Wave 5(운영) 착수 전에 planner가 찾은 공백 4건(G1\~G4)과 ADR-019 한 줄(S2)을 반영하고,
+coordinator가 넘긴 4건(H1\~H4)을 **결정 없이 공백으로만** 기록했다. 새 버전 번호를
+만들지 않았다. 실제 도메인은 어느 문서에도 적지 않았다(`spec/04`의 "`infra/`에 도메인을
+고정하지 않는다"). 새 ADR은 만들지 않았다 --- 운영 토폴로지(ADR-020)는 architect가
+따로 쓰고, 아래 네 건은 전부 절차·운영값이라 절 하나를 고치면 되돌아간다.
+
+-   **[48] 백업 주기·보관 개수·rotation·restore 검증이 없었다**
+    (`spec/04_SECURITY_AND_DATA.md`의 `Backup`): "정기 + rotation"만 있고 숫자도, 무엇이
+    검증인지도 없었다. 기존 한 문단은 그대로 두고 소절 넷을 붙였다. `주기와 보관 개수`에
+    **하루 1회, 최근 7개**를 넣고 **어디에 두는지**를 정했다 --- 두 값은 운영값이라
+    `14_CONFIGURATION.md`(API·worker가 전 키를 읽는 학습 정책 파일)에 두지 않고, API·worker가
+    받는 `.env` 계열에도 두지 않는다(소비처가 백업 명령뿐이다). 보관 개수는 **백업 명령의
+    인자 기본값**, 주기는 **호스트 스케줄러 설정**이 따를 값이다. `14_CONFIGURATION.md`
+    끝의 "이 파일에 두지 않는다" 목록에 한 단락을 붙여 canonical을 가리켰다. `rotation
+    규칙`은 **새 백업 검증 뒤에만 삭제**한다(먼저 지우면 실패가 이어질 때 백업이 0개가
+    된다). `restore 검증`은 planner의 실측 정의 여섯 가지를 그대로 옮겼고, 그 정의가 참이
+    되려면 필요한 조건 셋을 함께 적었다: 원본은 dump부터 비교까지 쓰기가 없어야 한다
+    (`worker_heartbeats`와 `auth_sessions.last_used_at` 때문에 살아 있는 원본과 비교하면
+    거짓 실패한다), login 확인은 비교 뒤에 한다, 복원은 별도 DB에 한다. `백업 파일의
+    민감도`에 password hash·token hash 포함, 0600, Git 제외를 적었다.
+    `13_ACCEPTANCE_CRITERIA.md`의 `backup/restore 최소 1회 검증`에 그 정의를 가리키는
+    괄호를 붙였다.
+-   **[49] production에서 사용량 한도를 켜는 방법이 없었다**
+    (`14_CONFIGURATION.md`의 `production override (MVP 확정)` 신설, `spec/04`의
+    `학습 정책 파일 경로 (MVP 확정)` 신설): `NC_CONFIG_PATH`가 코드와 `.env.example`에만
+    있었다. repo 기본값은 `null` 유지, production은 `NC_CONFIG_PATH`로 **전체 사본**을
+    가리키고 사본은 **한도 두 줄만** 다르며 Git에 넣지 않는다. 전체 사본의 두 실패(키 추가 →
+    기동 실패, 승인값 변경 → 조용히 미반영)와 그래서 필요한 diff 절차, 프로세스 시작 시 한 번
+    읽는다는 사실(한도 변경은 worker 재시작), UTC 경계가 한국시간 오전 9시라는 사실, 하나만
+    설정하면 `cost.guard_disabled`가 기동마다 뜬다는 사실을 운영자 서술로 적었다. YAML
+    블록의 주석 "production에서 필요 시"를 "production은 두 키 모두 integer를 설정한다"로
+    고쳤다 --- 사용자 결정(한도는 반드시 켠다)이다. **`null = limit disabled`의 의미는 바꾸지
+    않았다.** `spec/04`에는 API와 worker가 같은 파일을 읽는다는 것을 적었다
+    (`max_new_items_per_sentence`를 두 프로세스가 나눠 쓴다).
+-   **[50] 데이터를 보존하는 migration 경로가 없었다**
+    (`04_DB_SPEC.md`의 `Migration Rule` 아래 `운영 DB에 migration을 적용하는 경로 (MVP
+    확정)` 신설): `make db-reset`은 데이터를 지우고 production에서 거부된다. 대상 출력 →
+    head면 no-op → pending이면 백업 강제(실패하면 중단) → `upgrade head`. 롤백은 백업 복원이고
+    downgrade 명령과 백업 생략 옵션을 두지 않는다. 채택안에 **두 가지를 덧붙였다.** (1) 백업부터
+    upgrade까지 API·worker를 멈춘다 --- 복원이 롤백 수단인 이상 그 사이 쓰기는 롤백이 조용히
+    지우므로, 이 조건이 없으면 안전망이 성립하지 않는다. (2) head일 때는 백업도 만들지 않는다
+    --- 보관 단위가 개수라 불필요한 백업이 옛 백업을 밀어낸다. migration 파일의 `downgrade()`는
+    빈 DB 왕복 테스트용으로 남으며 이 규칙이 그것을 지우라는 뜻이 아님도 적었다.
+-   **[51] `restart 후 state 유지`의 범위와 근거 테스트가 없었다**
+    (`13_ACCEPTANCE_CRITERIA.md`, `12_TEST_PLAN.md`): API·worker 프로세스 재시작과 Postgres
+    재시작 뒤 로그인 세션·열린 study session·exposure·mastery·history 유지로 범위를 적고,
+    호스트 재부팅 후 자동 기동은 기준에 넣지 않았다. `12_TEST_PLAN.md`의 Integration에
+    backup/restore, rotation, restart 세 항목을 넣었다. rotation 항목은 13이 직접 요구하지
+    않지만 [48]의 "백업 0개" 방지 규칙을 지키는 유일한 관측이라 함께 넣었다. restart 항목은
+    Postgres 재시작 쪽이 **데이터가 남는가**만 단정하고 API의 연결 자동 회복은 요구하지 않는다고
+    못박았다 --- 채택안이 말한 것은 데이터 유지이고, 회복 요구는 새 요구사항이 된다.
+-   **[52] ADR-019 `한계`에 reason bucket 한 줄** (S2): tie-break는 reason bucket 안에서만
+    돌아서 `(anchor, reinforcement)` 낡은 candidate가 `(near_original, fsrs_due)` 새 candidate보다
+    먼저 선택되는 경우가 남는다. 명세 위반이 아니고 [44]로 증폭이 모두 해소되었다는 오독을 막으려
+    적었다. 조건에 `context_repair`가 없다는 전제를 붙였다(선택 절차 1번이 먼저 걸리기 때문이다).
+    `06_LEARNING_ENGINE.md`의 `candidate 단위 tie-break`에는 `한계` 절이 없어서 반영하지 않았다.
+
+**알려진 공백 (결정하지 않았다):** 규칙을 만들지 않고 사실만 각 조항 가까이에 적었다.
+
+-   **[53] seed 규모와 추가 적재** (`04_DB_SPEC.md`의 `Seed Data` 뒤
+    `알려진 공백 --- seed가 감당해야 하는 규모와 추가 적재`): worker가 `learning_items`를 만들지
+    않으므로 2\~4주 평가의 item 전량이 seed에서 와야 한다는 결론, 그리고 추가 적재 의미론이
+    없다는 사실(loader 전체 거부, DB에 item 안정 키 없음). 규모 숫자는 적지 않았다.
+-   **[54] 출력 토큰 상한** (`08_LLM_SPEC.md`의 `요청 context` 끝): 조항 없음, 구현도 없음,
+    너무 낮으면 잘림으로 retry가 는다는 양면만 적었다.
+-   **[55] 예외로 끝난 provider 호출의 계상** (`09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`
+    마지막 bullet): timeout·5xx·429와 빈 본문 예외가 `provider_calls`에도 token에도 잡히지
+    않는다는 사실, SDK 내부 재시도가 1회로 적힌다는 사실, `null`과 0 양쪽의 귀결. 함께 SDK 기본
+    timeout 600초·재시도 2회가 기본 `claim_lease_seconds`(300초)와 맺는 관계를
+    `14_CONFIGURATION.md`의 lease 단락 뒤에 **운영 판단 대상**으로 적었다.
+-   **[56] 사용량 한도의 허용 범위** (`14_CONFIGURATION.md`의 fail-closed 단락 뒤): 범위 미정,
+    판정이 `>=`라 0이나 음수면 생성이 영구히 멈춘다는 사실, 끄는 방법은 `null`이라는 사실.
+    `production override`의 운영자 서술에서 이 단락을 가리켰다.
+
+`spec/future/`, 루트 `spec/05`·`spec/06`, `backend/`·`frontend/`·`infra/`·`scripts/`·`config/`·
+`seed/`는 변경하지 않았다.

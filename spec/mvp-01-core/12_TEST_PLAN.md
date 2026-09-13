@@ -220,6 +220,30 @@ Alembic from empty DB.
     (`spec/04_SECURITY_AND_DATA.md`의 `LLM provider 자격증명 (MVP 확정)`).
 -   job 완료 후 `result_ref.usage`가 채워지고, 그 합이 daily ceiling 판정에
     쓰인다. 판정 경계는 UTC 일이다.
+-   backup/restore(`13_ACCEPTANCE_CRITERIA.md`의 `backup/restore 최소 1회 검증`):
+    migration + seed + 계정 생성 + 학습 진행(presentation 완료, self-report,
+    history에 행이 생기는 정도)으로 데이터를 만든 DB를 백업하고 **별도 DB**에
+    복원한 뒤, `spec/04_SECURITY_AND_DATA.md`의 `restore 검증` 여섯 가지를 모두
+    단정한다. 비교할 테이블은 catalog에서 나열하며 테스트에 테이블 이름 목록을
+    두지 않는다. **음성 대조군이 빨개지는 것까지 본다** --- 복원본의 1행을 훼손한
+    뒤 같은 비교가 실패해야 하며, 이것이 없으면 항상 "같다"고 답하는 비교가
+    통과한다. login과 history 확인은 1\~4 비교 **뒤에** 한다(login이
+    `auth_sessions`에 쓰기 때문이다).
+-   rotation(`spec/04_SECURITY_AND_DATA.md`의 `rotation 규칙`): 보관 개수만큼
+    백업이 있는 상태에서 새 백업이 실패하도록 만들면 **옛 백업이 하나도 지워지지
+    않고** 명령이 non-zero로 끝난다. 성공하면 가장 오래된 것부터 지워져 보관
+    개수가 유지된다. 만들어진 백업 파일의 권한이 0600이다.
+-   restart 후 state 유지(`13_ACCEPTANCE_CRITERIA.md`): 로그인하고 study session을
+    열어 presentation 완료와 self-report까지 진행한 뒤 (a) API와 worker를 **새
+    프로세스로** 다시 띄우고, 별도로 (b) Postgres를 멈췄다가 같은 data 디렉터리로
+    다시 띄운다. 각각의 뒤에 **재시작 전에 받은 cookie로** 인증된 요청이 성공하고,
+    idle timeout 이내의 `POST /api/study/session`이 같은 session을 이어받으며
+    (`resumed`), 그 사용자의 `item_exposures`와 `user_mastery`와 history 응답이
+    재시작 전과 같다. (a)의 "새 프로세스"는 같은 프로세스 안에서 캐시를 비우는
+    것이 아니다 --- in-process 상태(`lru_cache`, connection pool)가 살아 있으면 그
+    상태에 기댄 구현도 통과한다. (b)가 단정하는 것은 **데이터가 남는가**이며,
+    API 프로세스가 끊긴 DB 연결에서 스스로 회복하는지는 이 항목이 요구하지 않는다.
+    호스트 재부팅 후 자동 기동은 검사하지 않는다.
 
 ## Core E2E Scenario
 

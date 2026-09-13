@@ -294,3 +294,14 @@ review/reinforcement 중심의 저하 모드로 동작한다.
 -   **한계:** 하루를 걸쳐 실행된 job의 token은 `last_call_at`이 속한 날에
     전부 계상된다. 개인 사용 규모에서 무시할 만한 오차이고, 정확히 하려면
     호출 단위 테이블이 필요하다 --- MVP는 만들지 않는다.
+-   **알려진 공백 --- 예외로 끝난 provider 호출의 계상:** 위 기록 규칙은 "provider
+    응답을 받은 **직후**"만 정한다. timeout · 5xx · 429처럼 **예외로 끝난 호출**을
+    어떻게 계상할지는 정해져 있지 않고, 현재 그런 호출은 `provider_calls`에도 token에도
+    잡히지 않는다. 응답은 왔지만 본문이 비어 예외로 처리된 호출도 같다. 또 SDK 내부
+    자동 재시도로 HTTP 요청이 여러 번 나가도 성공한 응답 하나는 `provider_calls = 1`로
+    적힌다. 그래서 `daily_request_limit`이 세는 수는 실제 요청 수보다 작을 수 있다.
+    결정이 가볍지 않다: 예외 호출의 token을 `null`로 적으면 위 fail-closed 때문에
+    `daily_token_limit`이 켜진 상태에서 429 한 번으로 그날 생성이 멈추고, 0으로 적으면
+    위 "token 수를 모르면 `null`이다. 0이 아니다" 규칙과 충돌한다. 결정하지 않았다.
+    SDK 기본 timeout·재시도가 `claim_lease_seconds`와 맺는 관계는
+    `14_CONFIGURATION.md`에 운영 판단 대상으로 적었다.

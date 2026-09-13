@@ -81,7 +81,8 @@ llm:
   # Public Demo는 static frontend fixture이므로 API/worker를 사용하지
   # 않는다. 이 flag는 구조적 분리에 더한 안전장치이며 true로 바꾸지 않는다.
   public_demo_generation_enabled: false
-  # null = limit disabled. production에서 필요 시 integer를 설정한다.
+  # null = limit disabled. production은 두 키 모두 integer를 설정한다
+  # (아래 production override).
   # 판정은 UTC 일 경계다 (09_BACKGROUND_JOBS.md의 usage 기록과 일 경계).
   daily_request_limit: null
   daily_token_limit: null
@@ -155,11 +156,24 @@ heartbeat_stale_seconds > heartbeat_interval_seconds
 넉넉해야 하며(짧으면 살아 있는 job을 회수한다) 그 관계는 코드로 검증할 수
 없으므로 운영 판단이다.
 
+**운영 판단 대상으로 기록하는 사실:** 현재 provider client는 SDK 기본값으로 돌며,
+그 기본값은 요청 timeout 600초에 자동 재시도 2회다. 따라서 provider 호출 하나가
+**30분을 넘길 수 있고** 이는 기본 `claim_lease_seconds`(300초)보다 길다. 즉 위
+"lease는 job 하나의 최대 실행 시간보다 넉넉해야 한다"는 관계가 **기본값에서 성립하지
+않는다.** 어느 쪽을 맞출지는 결정하지 않았다.
+
 `daily_token_limit`이 integer일 때, 그날 token 총량을 **모르는** job이 하나라도
 있으면 한도는 도달한 것으로 본다(fail-closed). 이는 `null = limit disabled`와
 모순되지 않는다 --- `null`은 판정 자체를 하지 않는다는 뜻이고 fail-closed는
 한도를 **켜 둔** 경우에만 적용된다. `daily_request_limit`은 영향받지 않는다.
 근거와 판정식은 `09_BACKGROUND_JOBS.md`의 `usage 기록과 일 경계`가 canonical이다.
+
+**알려진 공백 --- 두 사용량 한도의 허용 범위:** `daily_request_limit`과
+`daily_token_limit`은 `null` 또는 integer인데, 위 다른 정수 키와 달리 integer일 때의
+**허용 범위가 정해져 있지 않다.** 로더도 범위를 검사하지 않는다. 한도 판정이 "오늘
+사용량 `>=` 한도"이므로 **0이나 음수를 넣으면 매 판정이 도달로 끝나 생성이 영구히
+멈춘다** --- UTC 날짜가 바뀌어도 풀리지 않는다. 한도를 끄는 방법은 `null`이며 0은 끄는
+방법이 아니다. 허용 범위는 결정하지 않았다.
 
 `srs`, `session`, `user`, `content`, `jobs`, `llm` 섹션의 키는 비율 합
 검증 대상이 아니다.
@@ -179,3 +193,55 @@ new_context`)의 전이 조건도 **이 파일에 두지 않는다.** 조정 대
 password 최소 길이도 **이 파일에 두지 않는다.** 환경변수도 아니며 코드에
 고정한다(낮추는 스위치를 만들지 않는다). canonical 정의는
 `spec/04_SECURITY_AND_DATA.md`의 `Password 요구사항 (MVP 확정)`이다.
+
+백업 주기와 보관 개수도 **이 파일에 두지 않는다.** 학습 정책이 아니라 운영값이고
+API·worker가 쓰지 않는다. canonical 정의는 `spec/04_SECURITY_AND_DATA.md`의
+`주기와 보관 개수 (MVP 확정)`이다.
+
+## production override (MVP 확정)
+
+repo의 `config/default.yaml`에서 `daily_request_limit`과 `daily_token_limit`은
+**`null`로 유지한다.** production은 두 한도를 **둘 다** integer로 켠다. 값은 이 명세가
+정하지 않고 운영자가 정한다. `null = limit disabled`의 의미는 바꾸지 않는다.
+
+``` text
+repo 기본값   config/default.yaml                두 한도 null
+production    NC_CONFIG_PATH -> 전체 파일 사본   default.yaml과 두 한도 줄만 다르다
+```
+
+-   **부분 override는 없다.** 로더가 누락 키와 모르는 키를 모두 거부하므로 override
+    파일은 `default.yaml`의 **전체 사본**이어야 한다. 두 키만 담은 파일로는 기동하지
+    못한다. `NC_CONFIG_PATH`의 정의는 `spec/04_SECURITY_AND_DATA.md`의
+    `학습 정책 파일 경로 (MVP 확정)`이다.
+-   **사본은 `default.yaml`과 사용량 한도 두 줄만 달라야 한다.** production에서 학습
+    정책값을 따로 튜닝하는 통로로 쓰지 않는다. 승인값은 `default.yaml` 한 곳이다.
+-   **override 파일은 Git에 넣지 않는다.** 저장소 작업 트리 밖에 둔다 --- 트리 안에
+    두면 커밋되지 않는 것이 무시 규칙 하나에 기댄다.
+
+### 전체 사본이 만드는 두 가지 실패
+
+-   **`default.yaml`에 키가 추가되면 production 기동이 실패한다**(키가 삭제되어
+    사본에만 남아도 같다). 로더가 거부하기 때문이다. 시끄러운 실패이므로 받아들인다.
+-   **승인값이 바뀌어도 production에는 반영되지 않는다.** `default.yaml`의 기존 키
+    값이 바뀌면 사본은 옛 값을 가진 채 정상 기동한다. 조용한 실패다.
+-   그래서 **업데이트할 때마다 `default.yaml`과 사본을 diff 한다.** 기대하는 차이는
+    사용량 한도 두 줄뿐이다. 그 밖의 차이가 나오면 새 `default.yaml`을 다시 복사하고
+    두 줄만 다시 고친다.
+
+### 운영자가 알아야 하는 동작
+
+-   **config는 프로세스가 시작한 뒤 한 번 읽고 다시 읽지 않는다.** 한도를 바꾸면
+    **worker를 재시작해야** 반영된다. 두 한도를 쓰는 것은 worker뿐이므로 한도만
+    바꿨다면 worker 재시작으로 충분하다. API도 같은 파일을 한 번 읽으므로, diff에서
+    다른 차이가 나와 사본을 다시 만든 경우는 API와 worker를 둘 다 재시작한다.
+-   **하루는 UTC 기준이라 한도는 한국시간 오전 9시에 리셋된다.** 한도에 걸려 생성이
+    멈추면 한국시간 자정이 아니라 그다음 오전 9시에 다시 돈다. 멈춘 동안에도 학습
+    세션은 Ready Pool로 계속된다. 판정 규칙은 `09_BACKGROUND_JOBS.md`의
+    `usage 기록과 일 경계`가 canonical이다.
+-   **두 키를 모두 설정한다.** 하나만 설정하면 나머지는 꺼진 한도이고, 실제 키로 도는
+    worker는 기동할 때마다 `cost.guard_disabled` 경고를 남긴다. 그 경고가 늘 뜨는
+    상태를 정상으로 두면 정말로 한도가 꺼진 배포를 구분할 수 없게 된다.
+-   `daily_token_limit`을 켜면 그날 token 수를 모르는 호출이 하나라도 있을 때 생성이
+    멈춘다(위 fail-closed). 멈춤 로그의 token이 `null`인 job 수로 한도 도달과
+    구분한다.
+-   0이나 음수는 한도를 끄는 값이 아니며 생성을 영구히 멈춘다(위 `알려진 공백`).
