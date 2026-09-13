@@ -12,6 +12,9 @@
  * -   `focus()`는 자신이나 조상이 `inert`면 아무것도 하지 않고, 아니면 전역 `document`의
  *     `activeElement`를 바꾼다.
  * -   `transitionend`는 저절로 오지 않는다. 테스트가 `fire`로 흘리지 않으면 영영 없다.
+ * -   텍스트 노드가 있다(`createTextNode`, `append`/`replaceChildren`의 문자열). `childNodes`는 텍스트 노드를
+ *     포함하고 `children`은 요소만이다. 요소의 `textContent`는 여전히 필드일 뿐이라 후손 텍스트를 모아 주지
+ *     않는다 --- 모은 문자열은 `flatText`/`textWithoutRt`로 본다.
  */
 
 export type FakeEvent = {
@@ -32,7 +35,17 @@ export type FakeClassList = {
   contains: (name: string) => boolean
 }
 
+/** `createTextNode`나 `append('문자열')`이 만든 노드. */
+export type FakeText = {
+  nodeType: 3
+  textContent: string
+  parentNode: FakeElement | null
+}
+
+export type FakeNode = FakeElement | FakeText
+
 export type FakeElement = {
+  nodeType: 1
   tagName: string
   className: string
   /** `className`을 원본으로 읽고 쓴다. */
@@ -46,13 +59,17 @@ export type FakeElement = {
   inert: boolean
   scrollTop: number
   parentNode: FakeElement | null
-  children: FakeElement[]
+  /** 텍스트 노드를 포함한 자식. 순서가 문서 순서다. */
+  childNodes: FakeNode[]
+  /** `childNodes` 중 요소만. */
+  readonly children: FakeElement[]
   attributes: Record<string, string>
   style: Record<string, string>
   setAttribute: (name: string, value: string) => void
   getAttribute: (name: string) => string | null
-  append: (...nodes: FakeElement[]) => void
-  replaceChildren: (...nodes: FakeElement[]) => void
+  /** 문자열은 텍스트 노드가 된다(실제 DOM과 같다). */
+  append: (...nodes: (FakeNode | string)[]) => void
+  replaceChildren: (...nodes: (FakeNode | string)[]) => void
   remove: () => void
   /** 태그 이름 선택자(`'h1'`)만 받는다. 자신은 빼고 후손에서 찾는다. */
   querySelector: (selector: string) => FakeElement | null
@@ -67,6 +84,7 @@ export type FakeElement = {
 
 export type FakeDocument = {
   createElement: (tagName: string) => FakeElement
+  createTextNode: (data: string) => FakeText
   documentElement: FakeElement
   body: FakeElement
   activeElement: FakeElement | null
@@ -74,11 +92,19 @@ export type FakeDocument = {
 
 const LISTENERS = new WeakMap<FakeElement, Record<string, ((event: FakeEvent) => void)[]>>()
 
-function detach(node: FakeElement): void {
+function detach(node: FakeNode): void {
   const parent = node.parentNode
   if (parent === null) return
-  parent.children = parent.children.filter((child) => child !== node)
+  parent.childNodes = parent.childNodes.filter((child) => child !== node)
   node.parentNode = null
+}
+
+function isElement(node: FakeNode): node is FakeElement {
+  return node.nodeType === 1
+}
+
+export function createFakeText(data: string): FakeText {
+  return { nodeType: 3, textContent: data, parentNode: null }
 }
 
 function isInert(element: FakeElement): boolean {
@@ -92,6 +118,7 @@ export function createFakeElement(tagName: string): FakeElement {
   const listeners: Record<string, ((event: FakeEvent) => void)[]> = {}
   const names = (): string[] => element.className.split(' ').filter((name) => name !== '')
   const element: FakeElement = {
+    nodeType: 1,
     tagName: tagName.toUpperCase(),
     className: '',
     classList: {
@@ -121,7 +148,10 @@ export function createFakeElement(tagName: string): FakeElement {
     inert: false,
     scrollTop: 0,
     parentNode: null,
-    children: [],
+    childNodes: [],
+    get children() {
+      return element.childNodes.filter(isElement)
+    },
     attributes: {},
     style: {},
     setAttribute(name, value) {
@@ -131,15 +161,16 @@ export function createFakeElement(tagName: string): FakeElement {
       return element.attributes[name] ?? null
     },
     append(...nodes) {
-      for (const node of nodes) {
+      for (const given of nodes) {
+        const node = typeof given === 'string' ? createFakeText(given) : given
         detach(node)
         node.parentNode = element
-        element.children.push(node)
+        element.childNodes.push(node)
       }
     },
     replaceChildren(...nodes) {
-      for (const child of element.children) child.parentNode = null
-      element.children = []
+      for (const child of element.childNodes) child.parentNode = null
+      element.childNodes = []
       element.append(...nodes)
     },
     remove() {
@@ -194,7 +225,13 @@ export function fakeDocument(): FakeDocument {
   const documentElement = createFakeElement('html')
   const body = createFakeElement('body')
   documentElement.append(body)
-  return { createElement: createFakeElement, documentElement, body, activeElement: null }
+  return {
+    createElement: createFakeElement,
+    createTextNode: createFakeText,
+    documentElement,
+    body,
+    activeElement: null,
+  }
 }
 
 export function isTappable(element: FakeElement): boolean {
@@ -214,16 +251,32 @@ export function byClass(root: FakeElement, className: string): FakeElement[] {
   return descendants(root).filter((node) => node.className.split(' ').includes(className))
 }
 
+/** 자신을 포함한 모든 후손 노드(텍스트 노드 포함), 문서 순서. */
+function nodes(root: FakeNode): FakeNode[] {
+  return isElement(root) ? [root, ...root.childNodes.flatMap(nodes)] : [root]
+}
+
 /**
- * 후손 전체의 `textContent`를 이어 붙인 문자열.
+ * 후손 전체(텍스트 노드 포함)의 `textContent`를 이어 붙인 문자열.
  *
  * 실제 DOM의 `textContent`는 후손을 모아 주지만 이 스텁은 필드일 뿐이다. "화면에 이
  * 문자열이 있는가"를 단정할 때 쓴다.
  */
 export function flatText(root: FakeElement): string {
-  return descendants(root)
+  return nodes(root)
     .map((node) => node.textContent)
     .join(' ')
+}
+
+/**
+ * `<rt>`(후리가나 읽기)를 뺀 텍스트를 구분자 없이 문서 순서로 이은 문자열.
+ *
+ * 문장 텍스트를 원문과 비교할 때 쓴다(03_UI_UX_SPEC.md의 `토글과 렌더링`: "`rt`의 읽기를 빼고 비교한다").
+ */
+export function textWithoutRt(root: FakeNode): string {
+  if (!isElement(root)) return root.textContent
+  if (root.tagName === 'RT') return ''
+  return root.textContent + root.childNodes.map(textWithoutRt).join('')
 }
 
 /**

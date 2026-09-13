@@ -170,14 +170,14 @@ describe('top bar on each screen', () => {
     expect(right()).toEqual([])
   })
 
-  it('study: 학습 기록, 로그아웃', () => {
+  it('study: 학습 기록, 로그아웃, 후리가나', () => {
     mountStudy(root as unknown as HTMLElement, new AbortController().signal, {
       onHome: noop,
       onUnauthenticated: noop,
       onOpenHistory: noop,
       onLoggedOut: noop,
     })
-    expect(right()).toEqual(['학습 기록', '로그아웃'])
+    expect(right()).toEqual(['학습 기록', '로그아웃', '후리가나'])
   })
 
   it('history: 로그아웃 only', () => {
