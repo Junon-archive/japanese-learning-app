@@ -37,6 +37,7 @@ export const KANA_MESSAGES = {
   resultAll: (total: number) => `${total}문제를 모두 바로 맞혔어요.`,
   resultSome: (total: number, correct: number) => `${total}문제 중 ${correct}문제를 바로 맞혔어요.`,
   resultRetried: '한 번 더 풀어 본 글자예요.',
+  quizProgress: (current: number, total: number) => `${current} / ${total}`,
   again: '한 번 더 풀기',
   backToTable: '글자 표로 돌아가기',
 } as const
@@ -60,8 +61,8 @@ const RANGE_DESCRIPTIONS: Readonly<Record<KanaRange, Readonly<Record<KanaScript,
   seion: both('기본 글자예요.'),
   dakuon: both('점 두 개(゛)가 붙으면 흐린 소리가 나요.'),
   handakuon: both('작은 동그라미(゜)가 붙으면 ㅍ 소리가 나요.'),
-  yoon: both('작은 ゃ·ゅ·ょ가 붙으면 한 소리로 읽어요.'),
-  sokuon: both('작은 っ 자리에서 한 박자 쉬어요.'),
+  yoon: { hiragana: '작은 ゃ·ゅ·ょ가 붙으면 한 소리로 읽어요.', katakana: '작은 ャ·ュ·ョ가 붙으면 한 소리로 읽어요.' },
+  sokuon: { hiragana: '작은 っ 자리에서 한 박자 쉬어요.', katakana: '작은 ッ 자리에서 한 박자 쉬어요.' },
   choon: { hiragana: 'あ·い·う 같은 모음 글자만큼 길게 읽어요.', katakana: 'ー 표시만큼 길게 읽어요.' },
   gairaigo: both('다른 나라 말을 가타카나로 적어요. ティ, ファ처럼 작은 글자를 붙인 표기도 있어요.'),
 }

@@ -3,7 +3,7 @@
  *
  * ``` text
  * 글자 표    탭(히라가나/가타카나) · 범위 칩 7개 · 범위 설명 · 표 또는 단어 목록 · 퀴즈 카드 · 저장 안내
- * 퀴즈       보고 읽기 | 보고 고르기. 한 라운드는 quiz.ts의 createKanaRound
+ * 퀴즈       진행 {현재} / {전체} · 보고 읽기 | 보고 고르기 · [글자 표로 돌아가기]. 한 라운드는 quiz.ts의 createKanaRound
  * 결과       바로 맞힌 수 · 한 번 더 풀어 본 글자 · [한 번 더 풀기] [글자 표로 돌아가기]
  * ```
  *
@@ -117,9 +117,12 @@ export function mount(ctx: PublicScreenContext): void {
     const round = createKanaRound(pool, Math.random)
     const name = QUIZ_MODES.find((entry) => entry.mode === mode)?.name ?? ''
     const screen = newScreen('kana-quiz', name)
+    const progress = document.createElement('p')
+    progress.className = 'kana-progress'
     const area = document.createElement('div')
     area.className = 'kana-question-area'
-    screen.append(area)
+    // 라운드를 버리고 표로 돌아간다. 응답마다 저장한 진도는 그대로다.
+    screen.append(progress, area, button('secondary kana-back', KANA_MESSAGES.backToTable, showTable))
     showScreen(ctx.root, screen, ctx.signal)
 
     function answer(key: string, correct: boolean): { willRetry: boolean } {
@@ -133,6 +136,8 @@ export function mount(ctx: PublicScreenContext): void {
         showResult(round, mode)
         return
       }
+      // 다시 묻는 문항이 끝에 붙으면 전체 수가 늘어난다.
+      progress.textContent = KANA_MESSAGES.quizProgress(round.position() + 1, round.length())
       const question = mode === 'read' ? renderRead() : renderChoose()
       if (round.position() > 0) question.focus({ preventScroll: true })
     }
