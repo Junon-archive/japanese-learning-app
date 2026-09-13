@@ -4,11 +4,11 @@
 |---|---|
 | 번호 | U-005 |
 | 제목 | demo 확장과 방문자 진도 저장 |
-| 상태 | 결정됨 |
+| 상태 | 배포 대기 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `spec/mvp-01-core/01_USER_FLOW.md`, `03_UI_UX_SPEC.md`, `12_TEST_PLAN.md`, `spec/04_SECURITY_AND_DATA.md` |
-| 커밋 | - |
+| 커밋 | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 1305fc2 · 직접 526a48d |
 
 ---
 
@@ -133,26 +133,26 @@
 ### 충돌
 
 -   `spec/mvp-01-core/01_USER_FLOW.md`의 `Public Demo`: "Demo interaction state는 browser
-    memory/session 수준에서만 유지한다." (Wave 1 반영 예정)
+    memory/session 수준에서만 유지한다." (반영됨, b1ea50d)
 -   `spec/04_SECURITY_AND_DATA.md`의 `Public Demo 구조`: "Demo interaction state는 browser
-    memory/session 수준에서만 유지한다." 같은 취지다. (Wave 1 반영 예정)
+    memory/session 수준에서만 유지한다." 같은 취지다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `Demo`: "backend API를 호출하지 않으며 demo 상태는 browser
-    memory/session 수준에서만 유지한다." 같은 취지다. (Wave 1 반영 예정)
+    memory/session 수준에서만 유지한다." 같은 취지다. (반영됨, b1ea50d)
 
 세 문장이 같은 규칙을 반복한다. Wave 1에서 canonical을 한 곳에 두고 나머지는 참조하게 한다.
 
 ### 영향
 
 -   `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `Demo`: 진행 규칙, 체험 안내, 완료 화면, 진도 초기화.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d, 78a3b38, 0b405c9)
 -   demo 전용 상수(다시 보기 간격, probe 간격)와 fixture 선택 규칙을 명세에 적는다. 두 상수는 학습
-    정책값이 아니다. 둘 곳은 Wave 1에서 정한다. (Wave 1 반영 예정)
+    정책값이 아니다. 둘 곳은 Wave 1에서 정한다. (반영됨, b1ea50d, 78a3b38)
 -   `spec/mvp-01-core/12_TEST_PLAN.md`의 `Demo isolation`, `Demo E2E`: 동적 import 검사, 재생성
-    일치 테스트는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 둔다. (Wave 1 반영 예정)
+    일치 테스트는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 둔다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/13_ACCEPTANCE_CRITERIA.md`의 "Demo는 backend/DB/LLM과 구조적으로 분리":
-    유지한다. 확장 기준은 MVP-02 합격 기준에 둔다. (Wave 1 반영 예정)
+    유지한다. 확장 기준은 MVP-02 합격 기준에 둔다. (반영됨, b1ea50d)
 -   `spec/02_ARCHITECTURE.md`의 "Public Demo는 static frontend fixture": 유지한다. fixture가 `seed/`에서
-    생성된다는 출처를 더한다. (Wave 1 반영 예정)
+    생성된다는 출처를 더한다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/04_DB_SPEC.md`의 `Seed Data`와 `spec/CHANGELOG.md` [53](seed 추가 적재
     의미론 미결정): fixture는 seed 파일을 읽을 뿐 DB에 적재하지 않으므로 [53]을 결정하지 않는다.
 
@@ -167,3 +167,10 @@
 | 1 | main | spec-sync 반영(demo 진도 규칙, 격리 확장, demo 전용 상수, fixture 선택 규칙) |
 | 3 | `demo` | seed → fixture 생성 스크립트(정렬 모듈로 ruby 포함, 제외 목록 출력), 일치 테스트, 동적 import 로딩, demo 진행 규칙, localStorage 진도·초기화·완료 화면, 동적 import까지 덮는 격리 검사, 요청 0건 e2e |
 | 4 | main | fixture 통계 보고, `backlog.md` #35 상태 확인, `ROADMAP.md` 상태를 `배포 대기`로 갱신(`done/` 이동은 사용자 배포 확인 후) |
+
+실제와 달라진 곳:
+
+-   분량: 약 200문장이 아니라 171문장으로 seed의 200개 표현을 모두 덮었다(제외 0, 덮지 못한 표현 0)(1305fc2).
+-   `backlog.md` #35는 이미 `MVP-02에서 해소(U-005)` 상태다. 문자열을 조합한 동적 import는 격리 검사가 실패로 막는다(5a95fc2).
+-   demo 진도 검증을 선형 시간으로 바꾸는 수정을 main에 직접 넣었다(526a48d).
+-   배포 참고: `infra/DEPLOY.md`의 17절 "MVP-02 업데이트"(프론트 재배포, 확인 체크리스트)(655f5b6).

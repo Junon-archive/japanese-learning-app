@@ -4,11 +4,11 @@
 |---|---|
 | 번호 | U-002 |
 | 제목 | README 재작성과 문서 계층 |
-| 상태 | 결정됨 |
+| 상태 | 배포 대기 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `README.md`, `AGENTS.md`, `docs/decisions/ADR-020-production-topology.md` |
-| 커밋 | - |
+| 커밋 | 명세 b1ea50d · 문서 655f5b6 |
 
 ---
 
@@ -84,21 +84,21 @@
 
 -   `docs/decisions/ADR-020-production-topology.md`의 결정 6(커밋되는 파일에는 실제 도메인을 쓰지
     않는다)과 충돌한다. → Wave 1에서 README의 사이트 주소 1개만 예외로 개정한다.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
 -   ADR-020 결정 6이 개정되기 전이라 이 요청서에는 실제 주소를 적지 않는다.
 -   `AGENTS.md`: "MVP 구현 source of truth는 `spec/mvp-01-core/*`다." 새 계층과 다르다.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
 -   루트 `README.md`의 `문서 계층`, `우선순위`: source of truth가 `spec/mvp-01-core/*` 하나다.
-    머리의 `Current Milestone: MVP-01 Core Learning`도 바뀐다. (문서 계층은 Wave 1, 전체 재작성은
-    Wave 4 반영 예정)
+    머리의 `Current Milestone: MVP-01 Core Learning`도 바뀐다. (반영됨, 문서 계층 b1ea50d, 전체 재작성
+    655f5b6)
 
 ### 영향
 
 -   `spec/mvp-02-onboarding/` 신설: `00_SCOPE.md`, `12_TEST_PLAN.md`, `13_ACCEPTANCE_CRITERIA.md`.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
 -   `.claude/agents/`의 여러 정의(`planner`, `scope-guard`, `spec-sync` 등)가 `spec/mvp-01-core/*`를
     유일한 source of truth로 적고 있다. Wave 1에서 `.claude/agents/`의 source of truth 표기를
-    `mvp-01-core + mvp-02-onboarding delta`로 고친다. (Wave 1 반영 예정)
+    `mvp-01-core + mvp-02-onboarding delta`로 고친다. (반영됨, b1ea50d)
 -   `spec/04_SECURITY_AND_DATA.md`: "`infra/`에 도메인을 고정하지 않는다." README는 `infra/`가
     아니므로 충돌은 아니다. `infra/DEPLOY.md`에는 계속 도메인을 쓰지 않는다.
 
@@ -112,3 +112,8 @@
 |---|---|---|
 | 1 | main | ADR-020 결정 6 예외 개정, `spec/mvp-02-onboarding/` 신설, `AGENTS.md` 문서 계층 갱신 |
 | 4 | main | README 재작성, 커밋 파일 전체 공개 정보 점검(security-reviewer), `ROADMAP.md` 스크린샷 자리 유지 |
+
+실제와 달라진 곳:
+
+-   `.claude/agents/`의 source of truth 표기도 Wave 1에서 함께 고쳤다(b1ea50d).
+-   README 재작성은 배포 절차 문서(`infra/DEPLOY.md` 17절)와 한 커밋에 들어갔다(655f5b6).

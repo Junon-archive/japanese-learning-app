@@ -4,11 +4,11 @@
 |---|---|
 | 번호 | U-001 |
 | 제목 | 선택 홈, 로그인 진입, 말투와 화면 전환 |
-| 상태 | 결정됨 |
+| 상태 | 배포 대기 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `spec/mvp-01-core/01_USER_FLOW.md`, `03_UI_UX_SPEC.md`, `12_TEST_PLAN.md`, `spec/04_SECURITY_AND_DATA.md`, `spec/reference/ui/` |
-| 커밋 | - |
+| 커밋 | 명세 b1ea50d, 42548b7, 7178f41, 0b405c9 · 머지 5a95fc2, 7c3cab0, ec581a7 · 직접 f196c9a |
 
 ---
 
@@ -109,24 +109,24 @@
 
 -   `spec/mvp-01-core/01_USER_FLOW.md`의 `Private Learning`: 흐름이
     `App Open → Authentication check`로 시작한다. 불변식 14(로그인 진입점을 누를 때만 확인)와
-    충돌한다. (Wave 1 반영 예정)
+    충돌한다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/01_USER_FLOW.md`의 `Public Demo`:
     `Visitor opens app → Demo mode 즉시 사용 가능`. 선택 홈의 카드를 거치는 흐름으로 바뀐다.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
 -   `spec/mvp-01-core/03_UI_UX_SPEC.md` 머리 단락: "화면 사이 이동은 각 화면 안의 링크·버튼으로
     한다." 상단바 `로그인` 진입점과 부드러운 화면 전환이 더해진다. 단일 컬럼 규칙은 그대로다.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
 
 ### 영향
 
 -   `spec/mvp-01-core/03_UI_UX_SPEC.md`: 선택 홈 절 신설, 문구 가이드, 전환·시트 규칙.
-    `Login` 절의 폼·단일 문구·진입점 금지 규칙은 유지한다. (Wave 1 반영 예정)
+    `Login` 절의 폼·단일 문구·진입점 금지 규칙은 유지한다. (반영됨, b1ea50d, 42548b7, 7178f41, 0b405c9)
 -   `spec/04_SECURITY_AND_DATA.md`의 `Public Demo 구조`: 서버 요청 0건·import 금지 경계를
-    홈·가나 학습으로 넓힌다. (Wave 1 반영 예정)
+    홈·가나 학습으로 넓힌다. (반영됨, b1ea50d, 7178f41)
 -   `spec/mvp-01-core/12_TEST_PLAN.md`의 `Demo isolation`, `Demo E2E`: 세 route로 확장한 격리
-    검사는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 둔다. (Wave 1 반영 예정)
--   `spec/reference/ui/`: 선택 홈·시트·가나 학습 목업 반영. (Wave 1 반영 예정)
--   `docs/decisions/ADR-022`: 선택 홈 route와 로그인 진입, 격리 경계 확장. (Wave 1 반영 예정)
+    검사는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 둔다. (반영됨, b1ea50d)
+-   `spec/reference/ui/`: 선택 홈·시트·가나 학습 목업 반영. (반영됨, b1ea50d)
+-   `docs/decisions/ADR-022`: 선택 홈 route와 로그인 진입, 격리 경계 확장. (반영됨, b1ea50d, 7178f41)
 -   `spec/mvp-01-core/05_API_SPEC.md`의 `GET /api/auth/me`: 변경 없음. 호출 시점만 바뀐다.
 
 ## 7. 결정 필요 질문 --- Claude 작성
@@ -144,3 +144,12 @@
 | 2 | `shell` | 선택 홈, 상단 로그인 진입, 라우터, 전환·시트 공통 CSS, 문구 가이드 전면 적용, 격리 테스트 확장 |
 | 3 | `kana-ui` | 홈 카드와 가나 학습 화면 연결 |
 | 4 | main | `ROADMAP.md` 상태를 `배포 대기`로 갱신(`done/` 이동은 사용자 배포 확인 후) |
+
+실제와 달라진 곳:
+
+-   문장 뜻 확인은 시트가 아니라 문장 바로 아래 인라인 펼침으로 명세했다. 시트는 item 설명에만 쓴다(b1ea50d).
+-   홈 카드 두 개는 Wave 2 `shell`이 두었고(5a95fc2), Wave 3 `kana-ui`는 `#/kana` route와 화면을 더했다(6b131ab).
+-   좁은 폭 상단바 배치는 Wave 3 `furigana-fe`에 들어갔다(ec581a7).
+-   Wave 2 게이트 수정(화면 이탈 signal, 늦은 응답, demo 오류 문구)을 따로 머지했다(7c3cab0).
+-   로그인 진입 테스트 불안정 수정을 main에 직접 넣었다(f196c9a).
+-   배포 참고: `infra/DEPLOY.md`의 17절 "MVP-02 업데이트"(655f5b6).

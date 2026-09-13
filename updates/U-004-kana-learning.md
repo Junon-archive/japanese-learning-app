@@ -4,11 +4,11 @@
 |---|---|
 | 번호 | U-004 |
 | 제목 | 히라가나·가타카나 학습 |
-| 상태 | 결정됨 |
+| 상태 | 배포 대기 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `spec/mvp-01-core/00_SCOPE.md`, `01_USER_FLOW.md`, `03_UI_UX_SPEC.md`, `spec/04_SECURITY_AND_DATA.md`, `spec/reference/ui/` |
-| 커밋 | - |
+| 커밋 | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 db32fc7, 6b131ab |
 
 ---
 
@@ -97,19 +97,19 @@ demo와 같다. 서버 요청 0건, API 모듈 import 금지. route는 `#/kana` 
 
 -   `spec/mvp-01-core/00_SCOPE.md`의 `In Scope`에 가나 학습이 없다. MVP-02 범위 delta로 더한다
     (`spec/mvp-02-onboarding/00_SCOPE.md`). `Out of Scope`의 `pronunciation`과는 겹치지 않는다
-    (소리 제외). (Wave 1 반영 예정)
+    (소리 제외). (반영됨, b1ea50d)
 -   `spec/04_SECURITY_AND_DATA.md`의 `Public Demo 구조`: 격리 조항이 demo만 다룬다. 가나 학습으로
-    넓히고 localStorage 사용 범위를 적는다. (Wave 1 반영 예정)
+    넓히고 localStorage 사용 범위를 적는다. (반영됨, b1ea50d, 7178f41)
 
 ### 영향
 
 -   `spec/mvp-01-core/03_UI_UX_SPEC.md`: 가나 학습 화면(퀴즈 두 방식, 정답 표기, 진도 초기화).
-    (Wave 1 반영 예정)
--   `spec/mvp-01-core/01_USER_FLOW.md`: 선택 홈 → 가나 학습 흐름. (Wave 1 반영 예정)
+    (반영됨, b1ea50d, 7178f41, 78a3b38, 0b405c9)
+-   `spec/mvp-01-core/01_USER_FLOW.md`: 선택 홈 → 가나 학습 흐름. (반영됨, b1ea50d)
 -   `spec/mvp-02-onboarding/12_TEST_PLAN.md`: 데이터 품질 unit test, 격리 검사, 휴대폰 e2e.
-    (Wave 1 반영 예정)
--   `spec/reference/ui/`: 가나 학습 목업. (Wave 1 반영 예정)
--   `docs/decisions/ADR-022`: 격리 경계 확장에 `#/kana` 계열 포함. (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
+-   `spec/reference/ui/`: 가나 학습 목업. (반영됨, b1ea50d)
+-   `docs/decisions/ADR-022`: 격리 경계 확장에 `#/kana` 계열 포함. (반영됨, b1ea50d)
 -   Learning Engine, SRS, DB, API 명세: 변경 없음. 가나 학습은 학습 이벤트를 만들지 않는다(불변식 16).
 
 ## 7. 결정 필요 질문 --- Claude 작성
@@ -124,3 +124,9 @@ demo와 같다. 서버 요청 0건, API 모듈 import 금지. route는 `#/kana` 
 | 2 | `kana-core` | `frontend/src/kana/` 정적 데이터 + 퀴즈 로직 + 저장 모듈(화면 연결 없음), unit test |
 | 3 | `kana-ui` | 가나 학습 화면, 홈 카드 연결, localStorage 진도, 휴대폰 e2e |
 | 4 | main | `ROADMAP.md` 상태를 `배포 대기`로 갱신(`done/` 이동은 사용자 배포 확인 후) |
+
+실제와 달라진 곳:
+
+-   `kana-core`는 가나 모듈과 함께 공통 localStorage 슬롯 모듈(`local-store`)을 두었다(db32fc7).
+-   홈의 `글자부터 배우기` 카드는 Wave 2 `shell`이 두었고(5a95fc2), `kana-ui`는 `#/kana` route와 화면을 더했다(6b131ab).
+-   배포 참고: `infra/DEPLOY.md`의 17절 "MVP-02 업데이트"(655f5b6).

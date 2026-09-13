@@ -4,11 +4,11 @@
 |---|---|
 | 번호 | U-003 |
 | 제목 | 후리가나 on/off |
-| 상태 | 결정됨 |
+| 상태 | 배포 대기 |
 | 우선순위 | 높음 |
 | 요청일 | 2026-09-13 |
 | 관련 명세 | `spec/mvp-01-core/03_UI_UX_SPEC.md`, `04_DB_SPEC.md`, `05_API_SPEC.md`, `08_LLM_SPEC.md`, `14_CONFIGURATION.md`, `spec/02_ARCHITECTURE.md`, `spec/06_LLM_ENGINEERING_PRINCIPLES.md`, `AGENTS.md` |
-| 커밋 | - |
+| 커밋 | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 8b89619, 82e9794, a55ce3a, ec581a7 |
 
 ---
 
@@ -118,40 +118,40 @@
 ### 충돌
 
 -   `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `Translation/Furigana`: "furigana 상시 표시 금지, item tap
-    후 reading 제공." 새 규칙(기본 끔, 켤 수 있음)으로 바꾼다. (Wave 1 반영 예정)
+    후 reading 제공." 새 규칙(기본 끔, 켤 수 있음)으로 바꾼다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/14_CONFIGURATION.md`의 `reading_default_visible` 단락: "`reading_default_visible`은
     항상 `false`를 유지한다. furigana 상시 표시 금지는 UI 규칙이며(`03_UI_UX_SPEC.md`) 이 키는
     reading reveal 기본 상태를 뜻한다." 금지 규칙 참조를 고치고, 이 키(item reading reveal)와
-    후리가나 설정(localStorage)이 다른 것임을 적어야 한다. (Wave 1 반영 예정)
+    후리가나 설정(localStorage)이 다른 것임을 적어야 한다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/14_CONFIGURATION.md` 같은 절: "presentation payload에는 `korean_translation`
     필드도 reading 필드도 존재하지 않으므로 … 번역과 reading은 각각 `/translation/reveal`과
     `/click`을 거쳐야만 나온다." payload에 ruby를 실으면 이 서술이 사실과 달라진다. item 설명의
-    reading과 ruby의 관계를 정리해야 한다. (Wave 1 반영 예정)
+    reading과 ruby의 관계를 정리해야 한다. (반영됨, b1ea50d)
 -   `AGENTS.md`의 "MVP 구현 대상이 아님" 목록에 `형태소 분석기`가 있다. 이 항목만 MVP-02로
-    해제한다. (Wave 1 반영 예정)
+    해제한다. (반영됨, b1ea50d)
 -   `.claude/agents/scope-guard.md`의 `즉시 위반으로 보고할 것`에 `형태소 분석기 도입`이 있다.
-    그대로 두면 Wave 1 이후 게이트가 이 요청의 구현을 위반으로 보고한다. (Wave 1 반영 예정)
--   `spec/06_LLM_ENGINEERING_PRINCIPLES.md`의 MVP 제외 목록: "14번 중 형태소 분석기 도입". (Wave 1
-    반영 예정)
+    그대로 두면 Wave 1 이후 게이트가 이 요청의 구현을 위반으로 보고한다. (반영됨, b1ea50d)
+-   `spec/06_LLM_ENGINEERING_PRINCIPLES.md`의 MVP 제외 목록: "14번 중 형태소 분석기 도입". (반영됨,
+    b1ea50d)
 
 ### 영향
 
 -   `spec/mvp-01-core/01_USER_FLOW.md`: "reading은 item 설명에서 reveal." item 설명의 reading은
-    그대로이고 후리가나는 별도 표시 보조라는 관계를 적는다. (Wave 1 반영 예정)
+    그대로이고 후리가나는 별도 표시 보조라는 관계를 적는다. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/04_DB_SPEC.md`: ruby span 저장(additive migration), provenance, `Seed Data`
-    적재 단계, `운영 DB에 migration을 적용하는 경로`와 backfill 관계. (Wave 1 반영 예정)
+    적재 단계, `운영 DB에 migration을 적용하는 경로`와 backfill 관계. (반영됨, b1ea50d)
 -   `spec/mvp-01-core/05_API_SPEC.md`의 `Sentence Presentation Payload`: 저장된 ruby를 싣는 필드.
-    (Wave 1 반영 예정)
--   `spec/mvp-01-core/08_LLM_SPEC.md`: 검증 통과 뒤 파이프라인 후처리. prompt 불변. (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
+-   `spec/mvp-01-core/08_LLM_SPEC.md`: 검증 통과 뒤 파이프라인 후처리. prompt 불변. (반영됨, b1ea50d)
 -   `spec/02_ARCHITECTURE.md`: 분석기가 적재·생성·backfill에만 있고 요청 경로에 없다는 경계.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d)
 -   `spec/mvp-01-core/11_OBSERVABILITY.md`: 생략 토큰 수, 계산 실패, `explanation.reading` 불일치
-    보고의 관측 위치. (Wave 1 반영 예정)
+    보고의 관측 위치. (반영됨, b1ea50d, 7178f41)
 -   `spec/mvp-01-core/02_LEARNING_POLICY.md`: 후리가나 토글이 학습 신호가 아님(불변식 16).
-    learning-verifier 게이트 대상. (Wave 1 반영 예정)
--   `spec/04_SECURITY_AND_DATA.md`: localStorage 사용 범위. (Wave 1 반영 예정)
+    learning-verifier 게이트 대상. (반영됨, b1ea50d)
+-   `spec/04_SECURITY_AND_DATA.md`: localStorage 사용 범위. (반영됨, b1ea50d, 7178f41)
 -   `docs/decisions/ADR-021`: 분석기 선정, ruby 데이터 모델, 한자 run 정렬 규칙, backfill 방식.
-    (Wave 1 반영 예정)
+    (반영됨, b1ea50d, 7178f41)
 
 ## 7. 결정 필요 질문 --- Claude 작성
 
@@ -172,3 +172,10 @@
 | 3 | `furigana-fe` | 토글(기본 끔, localStorage), 공통 문장 렌더러의 ruby 렌더링(tap·번역 규칙 유지), 로그인 학습 화면 연결, e2e |
 | 3 | `demo` | fixture 생성 스크립트의 ruby 계산, demo 화면에 토글 연결(`U-005`) |
 | 4 | main | 정렬 통계 보고, `ROADMAP.md` 상태를 `배포 대기`로 갱신(`done/` 이동은 사용자 배포 확인 후) |
+
+실제와 달라진 곳:
+
+-   분석기와 사전은 worker 이미지에만 넣었다. API 이미지에는 넣지 않는다(b1ea50d, 8b89619).
+-   Wave 2 게이트 수정으로 ruby 로그 단계 실패 격리와 `ruby.log_failed` 이벤트를 따로 머지했다(82e9794, a55ce3a, 명세 7178f41).
+-   Wave 3 `furigana-fe`에 좁은 폭 상단바 배치(`U-001`)가 함께 들어갔다(ec581a7).
+-   배포 참고: `infra/DEPLOY.md`의 17절 "MVP-02 업데이트"(migration, backfill dry-run·적용, 되돌리기)(655f5b6).

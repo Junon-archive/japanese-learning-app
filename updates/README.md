@@ -104,4 +104,4 @@ updates/
 -   secret(API key, password, token, `.env` 값)
 
 실제 도메인도 쓰지 않는다(`docs/decisions/ADR-020-production-topology.md`의 결정 6).
-README의 사이트 주소 1개를 예외로 두는 개정은 `U-002`에서 다룬다.
+README의 사이트 주소 1개는 예외다. 근거는 ADR-020 결정 6 개정(2026-09-13)이다.
