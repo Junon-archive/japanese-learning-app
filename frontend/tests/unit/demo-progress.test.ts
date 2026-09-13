@@ -501,6 +501,40 @@ describe('isDemoProgress', () => {
   it.each(REJECTED)('rejects %s', (_name, make) => {
     expect(isDemoProgress(make())).toBe(false)
   })
+
+  /** 모든 문장을 본, 마지막 문장 위의 진도. 대기열·다시 본 문장·probe가 가리킬 수 있는 범위가 가장 넓다. */
+  const allSeen = (patch: Partial<Record<'queue' | 'reviewed' | 'probed', unknown[]>>): unknown => ({
+    ...initialProgress(DEMO_FIXTURE),
+    position: total - 1,
+    seen: total,
+    ...patch,
+  })
+  const distinctItems = [...new Set(fixtureItems)]
+
+  it('accepts arrays as long as the fixture allows and rejects one element more', () => {
+    const queue = upTo(total).map((index) => ({ index, due: 0 }))
+    const probed = distinctItems.map((item) => ({ item, seen: total }))
+    expect(isDemoProgress(allSeen({ queue }))).toBe(true)
+    expect(isDemoProgress(allSeen({ reviewed: upTo(total) }))).toBe(true)
+    expect(isDemoProgress(allSeen({ probed }))).toBe(true)
+
+    expect(isDemoProgress(allSeen({ queue: [...queue, { index: 0, due: 0 }] }))).toBe(false)
+    expect(isDemoProgress(allSeen({ reviewed: [...upTo(total), 0] }))).toBe(false)
+    expect(isDemoProgress(allSeen({ probed: [...probed, { item: distinctItems[0], seen: total }] }))).toBe(false)
+  })
+
+  it('rejects huge stored arrays quickly', () => {
+    // 원소 하나하나는 형식이 맞는다. 대기열 x 다시 본 문장을 모두 비교하면 멈추는 크기다.
+    const queue = Array.from({ length: 200_000 }, () => ({ index: 0, due: 0 }))
+    const reviewed = new Array<number>(1_000_000).fill(1)
+    const probed = Array.from({ length: 200_000 }, () => ({ item: distinctItems[0], seen: 1 }))
+
+    for (const value of [allSeen({ queue, reviewed }), allSeen({ reviewed }), allSeen({ probed })]) {
+      const started = performance.now()
+      expect(isDemoProgress(value)).toBe(false)
+      expect(performance.now() - started).toBeLessThan(200)
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------------------------

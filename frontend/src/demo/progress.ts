@@ -229,9 +229,15 @@ function isProgressOf(fixture: DemoFixture, value: unknown): value is DemoProgre
   const items = new Set(
     fixture.sentences.flatMap((sentence) => sentence.presentation.tappable_items.map((item) => String(item.learning_item_id))),
   )
+  // 원소마다 fixture 문장·표현을 가리키고 중복이 없으므로 길이 상한은 규칙을 좁히지 않는다. 조작된 거대 배열을
+  // 원소 검사 전에 거른다. 아래 검사는 거짓이 나오는 즉시 끝나고 모두 선형 시간이다.
+  if (queue.length > total || reviewed.length > total || probed.length > items.size) return false
+
   const reportsValid = Object.entries(selfReports).every(
     ([key, report]) => items.has(key) && typeof report === 'string' && SELF_REPORT_VALUES.includes(report),
   )
+  if (!reportsValid) return false
+
   const probedValid =
     probed.every(
       (record) =>
@@ -241,6 +247,8 @@ function isProgressOf(fixture: DemoFixture, value: unknown): value is DemoProgre
         items.has(String(record.item)) &&
         isIntIn(record.seen, 1, seen),
     ) && isDistinct(probed.map((record: { item: unknown }) => record.item))
+  if (!probedValid) return false
+
   const queueValid =
     queue.every(
       (entry) =>
@@ -250,10 +258,12 @@ function isProgressOf(fixture: DemoFixture, value: unknown): value is DemoProgre
         Number.isSafeInteger(entry.due) &&
         (entry.due as number) >= 0,
     ) && isDistinct(queue.map((entry: { index: unknown }) => entry.index))
-  const reviewedValid = reviewed.every((index) => isIntIn(index, 0, seen - 1)) && isDistinct(reviewed)
-  const disjoint = !queue.some((entry: { index: unknown }) => reviewed.includes(entry.index))
+  if (!queueValid) return false
 
-  return reportsValid && probedValid && queueValid && reviewedValid && disjoint
+  if (!reviewed.every((index) => isIntIn(index, 0, seen - 1)) || !isDistinct(reviewed)) return false
+
+  const reviewedSet = new Set<unknown>(reviewed)
+  return !queue.some((entry: { index: unknown }) => reviewedSet.has(entry.index))
 }
 
 /** 지금 fixture의 진도인가(`localSlot`의 isValid). */
