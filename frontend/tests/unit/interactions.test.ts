@@ -18,10 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FLAG_SUBMITTED_TEXT } from '../../src/ui/flag'
 import { createInteractions } from '../../src/ui/interactions'
+import { renderSentence } from '../../src/ui/segments'
 import type { InteractionFailure, InteractionOps } from '../../src/ui/interactions'
 import type { Explanation, Presentation } from '../../src/types'
 import type { FakeDocument, FakeElement } from './fake-dom'
-import { byClass, createFakeElement, fakeDocument, flatText } from './fake-dom'
+import { byClass, createFakeElement, descendants, fakeDocument, flatText } from './fake-dom'
 
 const KOREAN = '연구실에 갈 생각이었지만 왠지 마음이 내키지 않아 집에 있었다.'
 
@@ -44,10 +45,19 @@ const PRESENTATION: Presentation = {
   sentence_id: 1907,
   japanese: '今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。',
   render_segments: [
-    { text: '今日は', sentence_item_id: null },
-    { text: 'なんとなく', sentence_item_id: 5511 },
-    { text: '気が乗らなくて', sentence_item_id: 5512 },
-    { text: '家にいた。', sentence_item_id: null },
+    { text: '今日は', sentence_item_id: null, ruby: [{ text: '今日', reading: 'きょう' }, { text: 'は', reading: null }] },
+    { text: 'なんとなく', sentence_item_id: 5511, ruby: [] },
+    {
+      text: '気が乗らなくて',
+      sentence_item_id: 5512,
+      ruby: [
+        { text: '気', reading: 'き' },
+        { text: 'が', reading: null },
+        { text: '乗', reading: 'の' },
+        { text: 'らなくて', reading: null },
+      ],
+    },
+    { text: '家にいた。', sentence_item_id: null, ruby: [{ text: '家', reading: 'いえ' }, { text: 'にいた。', reading: null }] },
   ],
   presentation_role: 'review',
   review_reason: 'fsrs_due',
@@ -543,6 +553,56 @@ describe('probe', () => {
 
     expect(byClass(element, 'probe')).toEqual([])
     expect(byClass(element, 'reveal-translation')).toHaveLength(1)
+  })
+})
+
+/**
+ * 후리가나 표시 범위(`03_UI_UX_SPEC.md`의 `후리가나 표시 규칙`, 합격 기준 18). 읽기는 학습 문장에만 있다.
+ * 설명 시트의 예문·`canonical_form`, probe의 표현 표기에는 ruby 데이터가 없으므로 달지 않는다. probe가 떠 있는
+ * 동안과 응답한 뒤에도 문장의 읽기는 그대로다(probe는 자기평가이고 읽기는 뜻이 아니다).
+ */
+describe('furigana display range', () => {
+  function rubyNodes(root: FakeElement): FakeElement[] {
+    return descendants(root).filter((node) => node.tagName === 'RUBY' || node.tagName === 'RT')
+  }
+
+  it('keeps ruby out of the explanation sheet and the probe, and keeps the sentence ruby around the probe', async () => {
+    const { handle, element, box, calls } = setup()
+    const sentence = renderSentence(PRESENTATION.render_segments, (id) => {
+      handle.tapItem(id)
+    }) as unknown as FakeElement
+    element.append(sentence)
+    const readings = rubyNodes(sentence)
+    expect(readings.filter((node) => node.tagName === 'RT').map((rt) => rt.textContent)).toEqual([
+      'きょう',
+      'き',
+      'の',
+      'いえ',
+    ])
+
+    // probe가 떠 있는 동안
+    const probe = byClass(box, 'probe')[0]!
+    expect(rubyNodes(probe)).toEqual([])
+    expect(byClass(probe, 'probe-expression')[0]!.textContent).toBe(PRESENTATION.probe!.expression)
+    expect(rubyNodes(sentence)).toEqual(readings)
+
+    // 표현을 눌러 설명 시트를 연다
+    byClass(sentence, 'token')[1]!.click()
+    await flush()
+    const sheet = byClass(element, 'sheet')[0]!
+    expect(byClass(sheet, 'canonical-form')[0]!.textContent).toBe(EXPLANATION.canonical_form)
+    expect(byClass(sheet, 'example')[0]!.textContent).toBe(EXPLANATION.example_sentence)
+    expect(rubyNodes(sheet)).toEqual([])
+    expect(rubyNodes(box)).toEqual([])
+    expect(rubyNodes(sentence)).toEqual(readings)
+
+    // probe에 답한 뒤
+    closeSheet(element)
+    byClass(box, 'probe-option')[1]!.click()
+    await flush()
+    expect(calls).toEqual(['click:5512', 'revealed:5512', 'probe:318:uncertain'])
+    expect(rubyNodes(box)).toEqual([])
+    expect(rubyNodes(sentence)).toEqual(readings)
   })
 })
 
