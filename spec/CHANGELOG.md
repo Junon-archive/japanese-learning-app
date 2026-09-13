@@ -1506,3 +1506,25 @@ coordinator가 넘긴 4건(H1\~H4)을 **결정 없이 공백으로만** 기록�
 
 `spec/future/`, 루트 `spec/05`·`spec/06`, `backend/`·`frontend/`·`infra/`·`scripts/`·`config/`·
 `seed/`는 변경하지 않았다.
+
+#### seed 교체와 Core E2E fixture (같은 후속 보완)
+
+저장소 `seed/`가 기술 검증용 최소 seed에서 **확장 seed**로 교체되었다. 이것은 파일 교체이며
+명세 결정이 아니다 --- [53](H1)의 seed 규모와 추가 적재 의미론은 **여전히 결정하지 않았다.**
+교체로 드러난 공백 1건을 결정으로 반영했다. 새 버전 번호와 새 ADR은 만들지 않았다.
+
+-   **[57] Core E2E의 "seed 기반 cold start"가 어느 seed인지 없었다**
+    (`12_TEST_PLAN.md`의 `Core E2E Scenario` 머리 단락): 저장소 `seed/`가 확장 seed로
+    교체되자 2단계의 `任せる`가 exploration 순서상 첫 몇 문장 안에 나오지 않아 Core E2E가
+    깨졌다. Core E2E는 seed loader로 적재한 seed-origin 콘텐츠로 성립하되 테스트 전용
+    fixture `backend/tests/data/seed_core_e2e/`를 쓴다는 단락을 추가했다. 시나리오가 특정
+    표현과 문장 구성에 기대므로 실 seed 교체와 분리한다는 이유, 그리고 실 `seed/`의 cold
+    start는 Integration의 backup/restore·restart 항목이 확인한다는 사실을 붙였다. 이것은
+    `seed/README.md`의 "테스트는 `backend/tests/data/` fixture를 쓴다" 원칙과 같고,
+    `13_ACCEPTANCE_CRITERIA.md`의 "seed 기반으로 첫 세션을 시작 가능"은 위 integration이
+    실 seed로 계속 근거한다. **2단계의 `任せる` 고정과 13단계 내용은 바꾸지 않았다.**
+
+같은 변경에서 `seed/`(확장 seed와 `seed/README.md`), `backend/tests/`(Core E2E의 fixture
+전환과 fixture 추가), `infra/DEPLOY.md`의 4.4(seed 적재 확인 문구)가 함께 바뀌었다.
+`13_ACCEPTANCE_CRITERIA.md`, `14_CONFIGURATION.md`, `spec/future/`, 루트 `spec/05`·`spec/06`은
+변경하지 않았다.

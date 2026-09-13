@@ -247,6 +247,12 @@ Alembic from empty DB.
 
 ## Core E2E Scenario
 
+Core E2E(in-process와 브라우저 둘 다)는 seed loader로 적재한 seed-origin 콘텐츠로
+성립하며, 저장소 `seed/`가 아니라 **테스트 전용 fixture**
+(`backend/tests/data/seed_core_e2e/`)를 적재한다. 아래 단계가 특정 표현(`任せる`)과
+문장 구성에 기대므로 실 seed 교체와 분리하기 위해서다. 저장소 `seed/`로 cold start가
+되는지는 Integration의 backup/restore와 restart 항목이 그 seed를 적재해 확인한다.
+
 1.  신규 사용자/테스트 사용자 생성 (seed 기반 cold start). 세션 시작이
     Ready Pool을 만든다(`06_LEARNING_ENGINE.md`의
     `Candidate Materialization`). Wave 3 worker 없이 성립한다.
