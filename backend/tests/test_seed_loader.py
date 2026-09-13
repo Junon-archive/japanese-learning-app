@@ -13,12 +13,21 @@ fixture는 `backend/tests/data/`에 따로 둔다. repo 루트의 `seed/`는 실
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
+from typing import Never
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
+from sqlalchemy.engine import URL
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.db import get_engine
+from app.furigana import CORRECTION_RULES, RubyComputation, RubyItem, compute_ruby
 from app.models.content import (
     LearningItem,
     Sentence,
@@ -28,7 +37,10 @@ from app.models.content import (
 )
 from app.models.enums import LearningItemOrigin, SentenceSourceType
 from app.normalization import normalized_sentence_hash
+from app.render import ItemSpan
+from app.services import seed_loader
 from app.services.seed_loader import SeedError, load_seed
+from app.settings import get_settings
 from tests.factories import NOW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -204,3 +216,173 @@ def test_stored_normalized_hash_matches_the_shared_function(db_session: Session)
     assert rows
     for row in rows:
         assert row.normalized_hash == normalized_sentence_hash(row.japanese)
+
+
+# --------------------------------------------------------------------------
+# 후리가나 계산 (MVP-02, ADR-021 결정 4, 04_DB_SPEC.md의 Seed Data)
+# --------------------------------------------------------------------------
+
+_RUBY_KEYS = {
+    "algorithm_version",
+    "analyzer",
+    "dictionary",
+    "split_mode",
+    "computed_at",
+    "spans",
+    "omitted",
+    "corrected",
+}
+
+
+def _ruby_by_seed_id(session: Session) -> dict[str | None, object]:
+    return {row.source_id: row.ruby_json for row in session.scalars(sa.select(Sentence)).all()}
+
+
+@pytest.mark.integration
+def test_every_seed_sentence_gets_ruby_in_the_same_load(db_session: Session) -> None:
+    summary = load_seed(db_session, SEED_MIN, now=NOW)
+
+    ruby = _ruby_by_seed_id(db_session)
+    assert set(ruby) == {"sn_min_0001", "sn_min_0002"}
+    for value in ruby.values():
+        assert isinstance(value, dict)
+        assert set(value) == _RUBY_KEYS
+        # 모든 행이 진입점이 읽은 같은 시각을 갖는다(ADR-007).
+        assert value["computed_at"] == NOW.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    first = ruby["sn_min_0001"]
+    second = ruby["sn_min_0002"]
+    assert isinstance(first, dict) and isinstance(second, dict)
+    # 仕事(설명 しごと), 任せる(설명 まかせる): explanation 읽기가 두 item을 덮는다.
+    assert first["spans"] == [[0, 2, "しごと"], [3, 4, "まか"]]
+    # 불연속 item 気が…乗ら 와 탭할 수 없는 今日·全然.
+    assert second["spans"] == [[0, 2, "きょう"], [3, 4, "き"], [5, 7, "ぜんぜん"], [7, 8, "の"]]
+
+    assert (summary.ruby.sentences, summary.ruby.computed, summary.ruby.failed) == (2, 2, 0)
+    assert summary.ruby.corrected_explanation_tokens == 4
+    assert len(summary.ruby.rule_hits) == len(CORRECTION_RULES)
+
+
+@pytest.mark.integration
+def test_seed_ruby_is_the_shared_computation(db_session: Session) -> None:
+    """seed 적재가 자기만의 계산을 하지 않는다: 같은 입력의 `compute_ruby`와 같은 값이다."""
+    load_seed(db_session, SEED_MIN, now=NOW)
+
+    sentence = db_session.scalars(
+        sa.select(Sentence).where(Sentence.source_id == "sn_min_0002")
+    ).one()
+    expected = compute_ruby(
+        sentence.japanese,
+        [RubyItem("it_min_kiganoru", (ItemSpan(3, 5, 0), ItemSpan(7, 9, 1)), "きがのら")],
+        now=NOW,
+    )
+    assert sentence.ruby_json == expected.ruby_json
+
+
+@pytest.mark.integration
+def test_a_failed_ruby_computation_leaves_null_and_the_load_continues(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def flaky(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
+        if japanese.startswith("仕事"):
+            raise RuntimeError("simulated analyzer failure")
+        return compute_ruby(japanese, items, now=now)
+
+    monkeypatch.setattr(seed_loader, "compute_ruby", flaky)
+
+    summary = load_seed(db_session, SEED_MIN, now=NOW)
+
+    ruby = _ruby_by_seed_id(db_session)
+    assert ruby["sn_min_0001"] is None
+    assert isinstance(ruby["sn_min_0002"], dict)
+    # 문장·item·설명은 그대로 적재된다. 후리가나 실패가 적재를 막지 않는다.
+    assert (summary.sentences, summary.explanations) == (2, 3)
+    assert _count(db_session, SentenceItemExplanation) == 3
+    assert (summary.ruby.sentences, summary.ruby.computed, summary.ruby.failed) == (2, 1, 1)
+
+
+@pytest.mark.integration
+def test_seed_ruby_does_not_change_the_text_or_spans(db_session: Session) -> None:
+    load_seed(db_session, SEED_MIN, now=NOW)
+
+    sentence = db_session.scalars(
+        sa.select(Sentence).where(Sentence.source_id == "sn_min_0001")
+    ).one()
+    spans = db_session.execute(
+        sa.select(SentenceItemSpan.start_codepoint, SentenceItemSpan.end_codepoint)
+        .join(SentenceItem, SentenceItem.id == SentenceItemSpan.sentence_item_id)
+        .where(SentenceItem.sentence_id == sentence.id)
+        .order_by(SentenceItemSpan.start_codepoint)
+    ).all()
+    assert sentence.japanese == "仕事を任せる。"
+    assert [tuple(row) for row in spans] == [(0, 2), (3, 6)]
+
+
+# --------------------------------------------------------------------------
+# CLI (`scripts/load_seed.py`)
+# --------------------------------------------------------------------------
+
+
+def _load_seed_script() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "load_seed", REPO_ROOT / "scripts" / "load_seed.py"
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["load_seed"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.integration
+def test_cli_prints_the_ruby_summary(
+    committed_db: sessionmaker[Session],
+    database_url: URL,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", database_url.render_as_string(hide_password=False))
+    get_settings.cache_clear()
+
+    try:
+        code = _load_seed_script().main(["--seed-dir", str(SEED_MIN)])
+    finally:
+        engine = get_engine()
+        if engine is not None:
+            engine.dispose()
+
+    output = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert output[1].startswith(
+        "ruby: algorithm_version=2 sentences=2 computed=2 failed=0 omitted_tappable_boundary=0 "
+    )
+    assert output[2 : 2 + len(CORRECTION_RULES)] == [
+        line for line in output if line.startswith("rule ")
+    ]
+    assert len([line for line in output if line.startswith("rule ")]) == len(CORRECTION_RULES)
+    with committed_db() as check:
+        assert all(row.ruby_json is not None for row in check.scalars(sa.select(Sentence)).all())
+
+
+@pytest.mark.integration
+def test_cli_fails_at_start_when_the_analyzer_cannot_load(
+    committed_db: sessionmaker[Session],
+    database_url: URL,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """분석기 부재는 문장별 NULL로 흡수하지 않는다. DB에 아무것도 쓰기 전에 끝난다."""
+    monkeypatch.setenv("DATABASE_URL", database_url.render_as_string(hide_password=False))
+    get_settings.cache_clear()
+    script = _load_seed_script()
+
+    def missing() -> Never:
+        raise ModuleNotFoundError("No module named 'sudachidict_core'")
+
+    monkeypatch.setattr(script, "load_analyzer", missing)
+
+    with pytest.raises(ModuleNotFoundError):
+        script.main(["--seed-dir", str(SEED_MIN)])
+
+    with committed_db() as check:
+        assert _count(check, Sentence) == 0
+        assert _count(check, LearningItem) == 0
