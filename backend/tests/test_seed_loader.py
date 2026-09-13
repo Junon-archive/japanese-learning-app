@@ -293,6 +293,11 @@ def test_a_failed_ruby_computation_leaves_null_and_the_load_continues(
 
     ruby = _ruby_by_seed_id(db_session)
     assert ruby["sn_min_0001"] is None
+    # JSON `null`이 아니라 SQL NULL이어야 backfill 대상(`ruby_json IS NULL`)이다.
+    assert (
+        db_session.scalar(sa.select(Sentence.source_id).where(Sentence.ruby_json.is_(None)))
+        == "sn_min_0001"
+    )
     assert isinstance(ruby["sn_min_0002"], dict)
     # 문장·item·설명은 그대로 적재된다. 후리가나 실패가 적재를 막지 않는다.
     assert (summary.sentences, summary.explanations) == (2, 3)

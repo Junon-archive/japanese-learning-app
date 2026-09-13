@@ -2,7 +2,7 @@ UV ?= $(shell command -v uv || echo $(HOME)/.local/bin/uv)
 # --env-file을 명시하지 않으면 compose가 infra/.env를 찾는다. 루트 .env를 쓴다.
 COMPOSE ?= docker compose --env-file .env -f infra/docker-compose.yml
 
-.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset db-migrate db-backup db-restore-check seed create-user prompts
+.PHONY: install lint format typecheck test test-unit test-e2e frontend-build frontend-test ci run worker-run db-up db-up-local db-down db-reset db-migrate db-backup db-restore-check seed create-user prompts backfill-ruby
 
 install:
 	$(UV) sync
@@ -98,6 +98,13 @@ db-restore-check:
 # 예: make create-user ARGS="--login-id junon"
 create-user:
 	$(UV) run python scripts/create_user.py $(ARGS)
+
+# 기존 문장의 후리가나 backfill (04_DB_SPEC.md). ruby_json IS NULL 행만 대상이다.
+# 기본은 dry-run(쓰기 없음). --apply는 쓸 행이 있으면 검증된 백업 뒤 한 트랜잭션으로 쓴다.
+# 백업 생략·재계산 옵션은 없다. 계산 실패가 하나라도 있으면 exit 2다.
+# 예: make backfill-ruby / make backfill-ruby ARGS="--apply --pg-bin <PG_BIN>"
+backfill-ruby:
+	$(UV) run python scripts/backfill_ruby.py $(ARGS)
 
 # seed/의 starter set을 적재한다. 재적재는 지원하지 않는다 (seed/README.md).
 seed:

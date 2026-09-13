@@ -681,6 +681,8 @@ def test_a_failed_ruby_computation_still_stores_a_validated_sentence(
 
     assert sentence.status is SentenceStatus.VALIDATED
     assert sentence.ruby_json is None
+    # JSON `null`이 아니라 SQL NULL이어야 backfill 대상(`ruby_json IS NULL`)이다.
+    assert db.scalar(sa.select(Sentence.id).where(Sentence.ruby_json.is_(None))) == sentence.id
     assert _count(db, SentenceItemExplanation) == 1
     (record,) = _records(caplog, observability.RUBY_FAILED)
     assert record.levelno == logging.WARNING

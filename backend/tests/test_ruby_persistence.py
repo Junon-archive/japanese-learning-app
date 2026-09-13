@@ -205,6 +205,9 @@ def test_a_failed_ruby_computation_does_not_block_ready(
     sentence = _generated(observer)
     assert sentence.status is SentenceStatus.VALIDATED
     assert sentence.ruby_json is None
+    assert (
+        observer.scalar(sa.select(Sentence.id).where(Sentence.ruby_json.is_(None))) == sentence.id
+    ), "JSON null이 아니라 SQL NULL이어야 backfill 대상이다"
     failed = [r for r in caplog.records if r.getMessage() == observability.RUBY_FAILED]
     assert [record.__dict__["sentence_id"] for record in failed] == [sentence.id]
 
