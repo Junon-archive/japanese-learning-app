@@ -29,7 +29,7 @@ from typing import Literal
 
 import pytest
 import sqlalchemy as sa
-from playwright.sync_api import Browser, Page, Request, Route, expect
+from playwright.sync_api import Browser, Locator, Page, Request, Route, expect
 
 from app.config import AppConfig, get_config
 from app.learning.mastery import OBSERVATION, ema
@@ -570,12 +570,22 @@ def test_the_server_rejects_a_second_evidence_for_the_same_exposure(
 # 공개 화면은 frontend origin 밖으로 요청을 내지 않는다 (불변식 13·14, 격리 검사 (f))
 # --------------------------------------------------------------------------
 
-# 공개 route. `#/kana`는 Wave 2에서 route 표에 없어 선택 홈(`#/`)으로 떨어진다. Wave 3 kana-ui가
-# 가나 학습 화면을 더하면 그 조작도 여기서 본다.
+# 공개 route: 선택 홈, Demo, 가나 학습.
 PUBLIC_ROUTES = ("", "#/demo", "#/kana")
 HOME_HASH = "#/"
+KANA_ROUTE = "#/kana"
 DEMO_CARD_TITLE = "표현 학습 체험해 보기"
 KANA_CARD_TITLE = "글자부터 배우기"
+# 가나 학습 문구(03_UI_UX_SPEC.md의 `화면 문구 표`의 `가나 학습`).
+KANA_TAB = "가타카나"
+KANA_CHIP = "탁음"
+KANA_CHOOSE_MODE = "보고 고르기"
+KANA_RESULT_TITLE = "이번 라운드를 마쳤어요."
+KANA_SHOW_RESULT = "결과 보기"
+
+# 가나 한 라운드를 끝까지 누를 횟수 상한. 정책값이 아니라 무한 루프 방지다(라운드 길이는
+# `test_kana_browser.py`가 quiz.ts의 상수로 본다).
+_MAX_KANA_PRESSES = 64
 
 # 조작 뒤 늦게 나가는 요청(타이머, 토스트 등)이 드러날 때까지 기다리는 시간. 정책값이 아니다.
 _LATE_REQUEST_WINDOW_MS = 2000
@@ -592,6 +602,41 @@ def _operate_demo(page: Page) -> None:
     page.locator(".screen.demo .sentence").wait_for(state="visible")
 
 
+def _kana_button(page: Page, container: str, label: str) -> Locator:
+    # has_text는 부분 일치다(`탁음`이 `반탁음`에도 맞는다).
+    return page.locator(f"{container} button", has_text=re.compile(f"^{re.escape(label)}$"))
+
+
+def _operate_kana(page: Page) -> None:
+    """가나 학습에서 사용자가 하는 것: 탭, 범위 칩, 보고 고르기 한 문항, 표로 돌아가기."""
+    page.locator(".screen.kana").wait_for(state="visible")
+    _kana_button(page, ".kana-tabs", KANA_TAB).click()
+    _kana_button(page, ".kana-chips", KANA_CHIP).click()
+    page.locator(".kana-mode", has_text=KANA_CHOOSE_MODE).click()
+    page.locator(".kana-option").first.click()
+    page.locator(".kana-feedback").wait_for(state="visible")
+    page.locator(".screen.kana .kana-back").click()
+    page.locator(".screen.kana .kana-quiz-card").wait_for(state="visible")
+
+
+def _finish_kana_round(page: Page) -> None:
+    """가나 학습에서 보고 고르기 한 라운드를 결과 화면까지 푼다. 고르는 선택지는 맞든 틀리든 첫 번째다."""
+    page.locator(".screen.kana .kana-quiz-card").wait_for(state="visible")
+    page.locator(".kana-mode", has_text=KANA_CHOOSE_MODE).click()
+    for _ in range(_MAX_KANA_PRESSES):
+        page.locator(".kana-option:not([disabled])").first.click()
+        next_button = page.locator(".kana-next")
+        last = next_button.inner_text() == KANA_SHOW_RESULT
+        next_button.click()
+        if last:
+            break
+    else:
+        raise AssertionError("가나 라운드가 끝나지 않았다")
+    expect(page.locator(".screen.kana h1")).to_have_text(KANA_RESULT_TITLE)
+    page.locator(".screen.kana .kana-back").click()
+    page.locator(".screen.kana .kana-quiz-card").wait_for(state="visible")
+
+
 def _operate_home(page: Page) -> None:
     """선택 홈에서 두 카드를 누르고 돌아온다."""
     page.locator(".screen.home").wait_for(state="visible")
@@ -600,9 +645,8 @@ def _operate_home(page: Page) -> None:
     page.locator(".topbar .topbar-brand").click()
     page.locator(".screen.home").wait_for(state="visible")
     page.locator(".home-card", has_text=KANA_CARD_TITLE).click()
-    # Wave 2: 가나 학습 route가 아직 없어 선택 홈(`#/`)이다.
-    expect(page).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
-    page.locator(".screen.home").wait_for(state="visible")
+    page.locator(".screen.kana").wait_for(state="visible")
+    expect(page).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
     page.go_back()
     page.locator(".screen.home").wait_for(state="visible")
 
@@ -625,10 +669,9 @@ def test_public_screens_send_nothing_outside_the_frontend_origin(
         _operate_demo(page)
         page.locator(".topbar .topbar-brand").click()
         _operate_home(page)
-    elif route == "#/kana":
-        # Wave 2의 #/kana는 선택 홈(#/)이다.
-        expect(page).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
-        page.locator(".screen.home").wait_for(state="visible")
+    elif route == KANA_ROUTE:
+        _operate_kana(page)
+        page.locator(".topbar .topbar-brand").click()
         _operate_home(page)
     else:
         _operate_home(page)
@@ -788,6 +831,8 @@ def test_public_screens_work_when_local_storage_throws(
         assert page.evaluate(probe) == "threw"
 
         _operate_home(page)
+        page.goto(f"{frontend.url}/{KANA_ROUTE}")
+        _finish_kana_round(page)
         page.goto(f"{frontend.url}/#/demo")
         _operate_demo(page)
 
