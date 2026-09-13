@@ -75,7 +75,7 @@ MVP-01에서 다음 사이클로 미룬 항목이다. **명세가 아니고 구�
 | 모바일에서 세션 시작/진행/종료 가능 (#1) | iOS 실기기에서 세션 종료까지 진행한다 | 대기 |
 | Postgres 직접 인터넷 노출 없음 (#37) | 외부에서 DB 포트 접속이 실패하는지 확인한다 | 대기 |
 
-## 5. MVP-02에서 제기된 항목 (6건)
+## 5. MVP-02에서 제기된 항목 (16건)
 
 MVP-02 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 항목이다.
 
@@ -87,3 +87,13 @@ MVP-02 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 �
 | backfill 불일치 출력이 bidi 제어문자(U+202E 등)를 이스케이프하지 않는다(C0·C1·U+007F만 이스케이프) | MVP-02 Wave 2 게이트에서 제기. `spec/mvp-01-core/11_OBSERVABILITY.md`의 CLI 출력 이스케이프 | 대기 |
 | 브라우저 e2e 격리 검사 (f)가 WebSocket 요청을 기록·차단하지 않는다(식별자 AST 검사 (d)가 막고 있어 이중 방어 중 한 겹만 빈다) | MVP-02 Wave 2 게이트에서 제기. `spec/04_SECURITY_AND_DATA.md`의 `격리 검사 (MVP-02 확정)` | 대기 |
 | `local-store.ts`의 `read`가 메모리에 든 값의 참조를 그대로 돌려준다(현재 호출자는 복사해서 쓴다) | MVP-02 Wave 2 게이트에서 제기. `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)` | 대기 |
+| 후리가나 켬/끔 e2e 비교(켠 상태의 요청이 끈 상태와 같다)에 self-report·probe 응답(evidence를 만드는 요청) 경로가 없다. 탭·설명·번역·다음 문장만 비교한다 | MVP-02 Wave 3 게이트에서 제기(검증 후보). `backend/tests/e2e/test_furigana_browser.py`, `spec/mvp-02-onboarding/12_TEST_PLAN.md`의 `test_furigana_browser.py` 행 | 대기 |
+| demo 진도 검증 속도 테스트가 200ms 절대 기준이라 느린 CI에서 흔들릴 수 있다 | MVP-02 Wave 3 구현에서 제기. `frontend/tests/unit/demo-progress.test.ts` | 대기 |
+| 가나 진도의 맞음/틀림 수 저장값이 최대 안전 정수이면 다음 응답의 값이 형식 검증을 통과하지 못해 그 페이지 동안 그 글자의 기록이 멈춘다(오류는 없다) | MVP-02 Wave 3 구현에서 제기. `frontend/src/kana/progress.ts`, `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)` | 대기 |
+| demo fixture 스크립트가 구조 오류를 stderr에 낼 때 문구 안의 seed 값을 제어문자 이스케이프하지 않는다(stdout의 제외·미커버·ruby 실패 줄은 이스케이프한다) | MVP-02 Wave 3 구현에서 제기. `scripts/build_demo_fixture.py`, `spec/mvp-01-core/11_OBSERVABILITY.md`의 CLI 출력 이스케이프 | 대기 |
+| `isDemoProgress`가 다시 보기 문장이 아닌 위치가 `seen - 1`인지 보지 않는다(본 문장 중 하나인지만 본다) | MVP-02 Wave 3 구현에서 제기. `frontend/src/demo/progress.ts`, `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)` | 대기 |
+| e2e 도우미 `backend/tests/e2e/study_flow.py`의 `self_report`가 닫히는 중인 설명 시트의 버튼과 겹쳐 잘못 누를 수 있다(e2e에서 우회하고 있다) | MVP-02 Wave 3 구현에서 제기. `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `설명 시트` | 대기 |
+| demo 화면 문구에 "새 문맥 재등장을 약속하지 않는다"를 직접 부정하는 단언이 없다(같은 문장 다시 보기만 단언한다) | MVP-02 Wave 3 구현에서 제기(검증 후보). `spec/mvp-02-onboarding/13_ACCEPTANCE_CRITERIA.md`의 demo 체험 항목 | 대기 |
+| localStorage 저장값에 `login_id`·서버 응답이 들어가지 않는다는 직접 테스트가 없다(정확한 키 집합 형식 검증이 막고 있다) | MVP-02 Wave 3 구현에서 제기(검증 후보). `spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위 (MVP-02 확정)` | 대기 |
+| 가나 학습에 소리(발음 재생)·획순이 없다는 전용 테스트가 없다 | MVP-02 Wave 3 구현에서 제기(검증 후보). `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `가나 학습` | 대기 |
+| 부하가 걸린 상태에서 PWA e2e의 `.login-form` 15초 대기가 시간 초과로 1회 실패했다(단독 재실행은 통과) | MVP-02 Wave 3 구현에서 제기. `backend/tests/e2e/test_pwa_installable.py`가 쓰는 로그인 도우미 `backend/tests/e2e/study_flow.py` | 대기 |

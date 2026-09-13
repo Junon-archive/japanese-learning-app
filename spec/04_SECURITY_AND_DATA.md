@@ -178,7 +178,21 @@ key              용도           저장하는 것                              
 nc.furigana.v1   후리가나 설정  {"on": boolean}                                   frontend/src/ui/furigana.ts
 nc.kana.v1       가나 진도      글자·단어별 맞음/틀림 수, 전체 마지막 학습 시각     frontend/src/kana/
 nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 자기평가,         frontend/src/demo/
-                                다시 보기 대기열, 본 문장 수, probe로 물은 표현
+                                다시 보기 대기열, 본 문장 수, probe로 물은 표현,
+                                다시 보기를 마친 문장
+```
+
+demo 진도 값의 키는 다음과 같다(Wave 3 보완 결정, 2026-09-13). 다른 키는 없다.
+
+``` text
+키            뜻
+fixtureId     fixture 식별자
+position      화면에 있는 문장의 fixture 순번. 문장 수와 같으면 완료 화면
+seen          본 문장 수. 새 문장은 fixture 순서로 나오므로 순번 0..seen-1이 본 문장이다
+selfReports   learning_item_id(문자열) -> 마지막 자기평가 값(known / uncertain / unknown)
+probed        probe로 물은 표현의 목록. 원소는 { item: learning_item_id, seen: 물었을 때의 본 문장 수 }
+queue         다시 보기 대기열. 넣은 순서. 원소는 { index: 문장 순번, due: 보여줄 본 문장 수 }
+reviewed      다시 보기로 이미 보여준 문장 순번의 목록 (한 문장은 다시 보기에 한 번까지)
 ```
 
 화면 규칙은 `mvp-01-core/03_UI_UX_SPEC.md`의 `Translation/Furigana`, `가나 학습`, `Demo`에 있다.
@@ -216,6 +230,9 @@ nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 �
                자기평가·다시 보기 대기열·본 문장 수·probe로 물은 표현이 가리키는 문장·표현은 지금 fixture에 있고
                값은 허용값 안이다. 표현은 learning item이고 자기평가의 key는 learning_item_id다
                (Wave 3 보완 결정, 2026-09-13)
+               원소를 하나씩 보기 전에 배열 길이 상한을 먼저 본다: queue·reviewed는 문장 수 이하, probed는
+               fixture의 learning item 수 이하. 원소마다 서로 다른 문장·표현을 가리키므로 이 상한은 규칙을
+               좁히지 않는다 (Wave 3 보완 결정, 2026-09-13)
     ```
 
 -   **로그인 영역(`private.ts` 그래프) 안의 `localSlot` 호출은 `nc.furigana.v1` 하나뿐이다.** AST로 확인한다.
