@@ -9,15 +9,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from typing import Any
+import logging
+from collections.abc import Iterator, Sequence
+from datetime import datetime
+from typing import Any, Never
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_config
-from app.jobs import persistence, queue
+from app.furigana import RubyComputation, RubyItem
+from app.jobs import observability, persistence, queue
 from app.jobs.persistence import NewSentence, NothingToDo, Provenance
 from app.llm.schemas import ExplanationPayload, ItemPayload, SentencePayload, SpanPayload
 from app.llm.validation import Rejection, RejectionReason
@@ -558,3 +561,182 @@ def test_an_inactive_row_is_not_a_source(db: Session, study_clock: MutableClock)
         )
         is None
     )
+
+
+# --------------------------------------------------------------------------
+# 후리가나 (MVP-02, ADR-021 결정 4, 11_OBSERVABILITY.md)
+#
+# "明日は君に任せる。": 明0 日1 は2 君3 に4 任5 せ6 る7 。8, tappable `任せる` = [5, 8).
+# --------------------------------------------------------------------------
+
+RUBY_LOGGER = "app.jobs"
+
+
+def _records(caplog: pytest.LogCaptureFixture, message: str) -> list[logging.LogRecord]:
+    return [record for record in caplog.records if record.getMessage() == message]
+
+
+def _save_one(db: Session, clock: MutableClock, **kwargs: object) -> Sentence:
+    item = factories.make_learning_item(db)
+    job = _job(db)
+    completion = persistence.save_sentences(
+        db,
+        job=job,
+        sentences=[_new_sentence(item.id, **kwargs)],
+        rejected=[],
+        provenance=_provenance(clock),
+        now=clock.now(),
+    )
+    sentence = db.get(Sentence, completion.stored[0], populate_existing=True)
+    assert sentence is not None
+    return sentence
+
+
+@pytest.mark.integration
+def test_a_stored_sentence_carries_ruby_and_logs_counts_only(
+    db: Session, study_clock: MutableClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO, logger=RUBY_LOGGER):
+        sentence = _save_one(db, study_clock, explanation=_explanation())
+
+    assert sentence.status is SentenceStatus.VALIDATED
+    assert sentence.ruby_json is not None
+    assert sentence.ruby_json["spans"] == [[0, 2, "あした"], [3, 4, "きみ"], [5, 6, "まか"]]
+    assert sentence.ruby_json["computed_at"] == study_clock.now().isoformat().replace("+00:00", "Z")
+    (record,) = _records(caplog, observability.RUBY_COMPUTED)
+    fields = {
+        name: record.__dict__[name]
+        for name in (
+            "sentence_id",
+            "algorithm_version",
+            "spans",
+            "omitted_tappable_boundary",
+            "omitted_numeric",
+            "omitted_no_reading",
+            "corrected_explanation_tokens",
+            "corrected_table_rules",
+        )
+    }
+    assert fields == {
+        "sentence_id": sentence.id,
+        "algorithm_version": 2,
+        "spans": 3,
+        "omitted_tappable_boundary": 0,
+        "omitted_numeric": 0,
+        "omitted_no_reading": 0,
+        "corrected_explanation_tokens": 1,
+        "corrected_table_rules": 1,
+    }
+    # 문장 텍스트·읽기 문자열이 어떤 ruby 로그에도 없다.
+    for ruby_record in caplog.records:
+        if ruby_record.getMessage().startswith("ruby."):
+            rendered = repr(ruby_record.__dict__)
+            for text in ("明日", "任せる", "あした", "まか"):
+                assert text not in rendered
+
+
+@pytest.mark.integration
+def test_the_text_and_spans_are_not_changed_by_ruby(db: Session, study_clock: MutableClock) -> None:
+    sentence = _save_one(db, study_clock, explanation=_explanation())
+
+    span = db.execute(sa.select(SentenceItemSpan)).scalar_one()
+    assert sentence.japanese == JAPANESE
+    assert (span.start_codepoint, span.end_codepoint, span.span_order) == (5, 8, 0)
+
+
+@pytest.mark.integration
+def test_a_reading_mismatch_is_logged_with_the_stored_sentence_item_id(
+    db: Session, study_clock: MutableClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    """계산은 payload 순번으로 하고, 로그는 flush 뒤 실제 `sentence_item_id`로 남긴다."""
+    wrong = ExplanationPayload(**{**_explanation().model_dump(), "reading": "まかせ"})
+    with caplog.at_level(logging.INFO, logger=RUBY_LOGGER):
+        sentence = _save_one(db, study_clock, explanation=wrong)
+
+    sentence_item = db.execute(sa.select(SentenceItem)).scalar_one()
+    (record,) = _records(caplog, observability.RUBY_READING_MISMATCH)
+    assert (record.__dict__["sentence_id"], record.__dict__["sentence_item_id"]) == (
+        sentence.id,
+        sentence_item.id,
+    )
+    assert _records(caplog, observability.RUBY_EXPLANATION_OVERRIDE) == []
+    # 설명 데이터는 고치지 않는다.
+    assert db.execute(sa.select(SentenceItemExplanation.reading)).scalar_one() == "まかせ"
+
+
+@pytest.mark.integration
+def test_a_failed_ruby_computation_still_stores_a_validated_sentence(
+    db: Session,
+    study_clock: MutableClock,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
+        raise RuntimeError("simulated ruby failure")
+
+    monkeypatch.setattr(persistence, "compute_ruby", broken)
+
+    with caplog.at_level(logging.INFO, logger=RUBY_LOGGER):
+        sentence = _save_one(db, study_clock, explanation=_explanation())
+
+    assert sentence.status is SentenceStatus.VALIDATED
+    assert sentence.ruby_json is None
+    assert _count(db, SentenceItemExplanation) == 1
+    (record,) = _records(caplog, observability.RUBY_FAILED)
+    assert record.levelno == logging.WARNING
+    assert record.__dict__["sentence_id"] == sentence.id
+    assert record.__dict__["error"] == "RuntimeError: simulated ruby failure"
+    assert _records(caplog, observability.RUBY_COMPUTED) == []
+
+
+@pytest.mark.integration
+def test_the_ready_invariant_still_rejects_without_any_ruby_log(
+    db: Session, study_clock: MutableClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    """되돌아간 문장에 대해 `ruby.computed`를 남기지 않는다(없는 sentence_id를 가리키게 된다)."""
+    item = factories.make_learning_item(db)
+    job = _job(db)
+    with caplog.at_level(logging.INFO, logger=RUBY_LOGGER):
+        completion = persistence.save_sentences(
+            db,
+            job=job,
+            sentences=[_new_sentence(item.id, explanation=None)],
+            rejected=[],
+            provenance=_provenance(study_clock),
+            now=study_clock.now(),
+        )
+
+    assert completion.stored == ()
+    assert [record for record in caplog.records if record.getMessage().startswith("ruby.")] == []
+
+
+@pytest.mark.integration
+def test_saving_an_explanation_does_not_touch_ruby(
+    db: Session, study_clock: MutableClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`EXPLAIN_ITEM`은 문장·span을 바꾸지 않으므로 ruby를 다시 계산하지 않는다."""
+    item = factories.make_learning_item(db)
+    sentence = factories.make_sentence(db)
+    stored_ruby = {"spans": [[3, 4, "きみ"]], "marker": "unchanged"}
+    sentence.ruby_json = stored_ruby
+    sentence_item = factories.make_sentence_item(db, sentence, item, surface_form=SURFACE)
+    job = _job(db)
+    db.commit()
+
+    def forbidden(*args: object, **kwargs: object) -> Never:
+        raise AssertionError("save_explanation이 ruby를 계산했다")
+
+    monkeypatch.setattr(persistence, "compute_ruby", forbidden)
+
+    persistence.save_explanation(
+        db,
+        job=job,
+        sentence_item_id=sentence_item.id,
+        explanation=_explanation(),
+        provenance=_provenance(study_clock),
+        now=study_clock.now(),
+    )
+
+    reloaded = db.get(Sentence, sentence.id, populate_existing=True)
+    assert reloaded is not None
+    assert reloaded.ruby_json == stored_ruby

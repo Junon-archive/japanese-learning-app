@@ -34,6 +34,14 @@ worker 실행은 at-least-once이고 DB persistence는 idempotent해야 한다
 
 `normalized_hash`에 UNIQUE 제약을 걸지 않는다. 걸면 crash 후 재시도가
 IntegrityError로 죽어 **콘텐츠는 있는데 job은 `failed`인** 더 나쁜 상태가 된다.
+
+## 후리가나 (MVP-02, ADR-021 결정 4)
+
+`_insert_sentence`가 문장 INSERT 직전에 payload의 tappable item(span + `explanation.reading`)으로
+`compute_ruby`를 부른다. validation(08_LLM_SPEC.md의 13항목)은 이미 끝났고 ruby는 검증 항목이
+아니다. **계산이 던지면 `ruby_json = NULL`로 저장을 계속한다** --- 문장은 그대로 `validated`가
+되고 ready를 막지 않는다. `_promote_to_validated`는 `ruby_json`을 보지 않는다. 계산은 요청 로컬
+식별자(payload의 item 순번)로 하고, 로그는 flush 뒤 실제 id로 남긴다.
 """
 
 from __future__ import annotations
@@ -48,7 +56,8 @@ import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.jobs import queue
+from app.furigana import MismatchKind, RubyComputation, RubyItem, compute_ruby
+from app.jobs import observability, queue
 from app.learning.selection import unexplained_sentence_ids
 from app.llm.provider import ProviderRequest, ProviderResult
 from app.llm.schemas import ExplanationPayload, SentencePayload
@@ -62,6 +71,7 @@ from app.models.content import (
 from app.models.enums import ExplanationStatus, LlmTaskType, SentenceSourceType, SentenceStatus
 from app.models.jobs import GenerationJob, PromptVersion
 from app.normalization import normalized_sentence_hash
+from app.render import ItemSpan
 
 logger = logging.getLogger(__name__)
 
@@ -363,6 +373,7 @@ def _insert_sentence(
     now: datetime,
 ) -> int:
     payload = candidate.payload
+    ruby, ruby_error = _compute_ruby(payload, now=now)
     sentence = Sentence(
         japanese=payload.japanese,
         korean_translation=payload.korean_translation,
@@ -375,11 +386,13 @@ def _insert_sentence(
         # `validated`로 올리는 것은 `_promote_to_validated` 하나뿐이다. 그 함수가
         # 같은 트랜잭션에서 Ready invariant를 다시 확인한다.
         status=SentenceStatus.DRAFT,
+        ruby_json=None if ruby is None else ruby.ruby_json,
         created_at=now,
     )
     db.add(sentence)
     db.flush()
 
+    sentence_item_ids: list[int] = []
     for item in payload.items:
         sentence_item = SentenceItem(
             sentence_id=sentence.id,
@@ -390,6 +403,7 @@ def _insert_sentence(
         )
         db.add(sentence_item)
         db.flush()
+        sentence_item_ids.append(sentence_item.id)
         for span in item.spans:
             db.add(
                 SentenceItemSpan(
@@ -418,7 +432,76 @@ def _insert_sentence(
             )
     db.flush()
     _promote_to_validated(db, sentence=sentence)
+    _log_ruby(
+        sentence_id=sentence.id,
+        ruby=ruby,
+        error=ruby_error,
+        sentence_item_ids=sentence_item_ids,
+    )
     return sentence.id
+
+
+def _compute_ruby(
+    payload: SentencePayload, *, now: datetime
+) -> tuple[RubyComputation | None, Exception | None]:
+    """tappable item으로 ruby를 계산한다. 실패하면 `(None, 예외)` --- 저장은 계속한다.
+
+    `RubyItem.sentence_item_id`에는 payload 안의 item **순번**을 넣는다. 아직 DB id가 없고,
+    `item_ref`는 한 문장에서 겹칠 수 있는 요청 라벨이다. 순번은 `_log_ruby`에서 실제 id로 바뀐다.
+    tappable item의 explanation은 validation이 보장한다. 없으면 `_promote_to_validated`가 그
+    문장을 되돌리므로 여기서는 빈 읽기(계층 1 불성립)로만 다룬다.
+    """
+    items = [
+        RubyItem(
+            sentence_item_id=index,
+            spans=tuple(
+                ItemSpan(span.start_codepoint, span.end_codepoint, span.span_order)
+                for span in item.spans
+            ),
+            explanation_reading="" if item.explanation is None else item.explanation.reading,
+        )
+        for index, item in enumerate(payload.items)
+        if item.is_tappable
+    ]
+    try:
+        return compute_ruby(payload.japanese, items, now=now), None
+    except Exception as error:
+        return None, error
+
+
+_MISMATCH_EVENTS: Mapping[MismatchKind, str] = {
+    MismatchKind.READING_MISMATCH: observability.RUBY_READING_MISMATCH,
+    MismatchKind.EXPLANATION_OVERRIDE: observability.RUBY_EXPLANATION_OVERRIDE,
+}
+
+
+def _log_ruby(
+    *,
+    sentence_id: int,
+    ruby: RubyComputation | None,
+    error: Exception | None,
+    sentence_item_ids: Sequence[int],
+) -> None:
+    if ruby is None:
+        if error is not None:
+            observability.log_ruby_failed(sentence_id=sentence_id, error=error)
+        return
+    observability.log_ruby_computed(
+        sentence_id=sentence_id,
+        algorithm_version=int(ruby.ruby_json["algorithm_version"]),
+        spans=len(ruby.spans),
+        omitted_tappable_boundary=ruby.omitted_tappable_boundary,
+        omitted_numeric=ruby.omitted_numeric,
+        omitted_no_reading=ruby.omitted_no_reading,
+        corrected_explanation_tokens=ruby.corrected_explanation_tokens,
+        corrected_table_rules=ruby.corrected_table_rules,
+    )
+    for mismatch in ruby.mismatches:
+        observability.log_ruby_mismatch(
+            event=_MISMATCH_EVENTS[mismatch.kind],
+            sentence_id=sentence_id,
+            sentence_item_id=sentence_item_ids[int(mismatch.sentence_item_id)],
+        )
 
 
 def _promote_to_validated(db: Session, *, sentence: Sentence) -> None:
