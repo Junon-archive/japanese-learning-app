@@ -23,7 +23,7 @@ const SEGMENTS: RenderSegment[] = [
   { text: '。', sentence_item_id: null, ruby: [] },
 ]
 
-/** 서버가 같은 payload에 함께 싣는 `japanese`. */
+/** 서버가 같은 payload에 함께 싣는 `text`. */
 const JAPANESE = '𠮟られてもページをめぐった。'
 
 /** 스텁 document 위에서 만든 노드다. 실제 `HTMLElement`가 아니므로 여기서 좁힌다. */
@@ -40,7 +40,7 @@ afterEach(() => {
 })
 
 describe('joinSegments', () => {
-  it('reproduces `japanese` exactly', () => {
+  it('reproduces `text` exactly', () => {
     expect(joinSegments(SEGMENTS)).toBe(JAPANESE)
   })
 
@@ -58,7 +58,7 @@ describe('renderSentence', () => {
     expect(sentence.children.map((child) => child.textContent)).toEqual(
       SEGMENTS.map((segment) => segment.text),
     )
-    // 이어 붙인 결과가 다시 `japanese`다 --- 자르거나 정규화하지 않았다는 뜻이다.
+    // 이어 붙인 결과가 다시 `text`다 --- 자르거나 정규화하지 않았다는 뜻이다.
     expect(sentence.children.map((child) => child.textContent).join('')).toBe(JAPANESE)
     expect(sentence.getAttribute('aria-label')).toBe(JAPANESE)
   })

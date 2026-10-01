@@ -251,7 +251,7 @@ class Frontend:
 
     `api_url`은 번들에 박힌 `VITE_API_BASE_URL`이다. 이 fixture만 요구한 테스트에서는
     그 포트에 **아무도 listen하지 않는다** --- Public Demo가 정말로 static fixture인지
-    (`#/demo`가 `fetchMe()`보다 먼저 갈리는지) 보려면 그 구성이 필요하다.
+    (`#/ja/demo`가 `fetchMe()`보다 먼저 갈리는지) 보려면 그 구성이 필요하다.
     """
 
     url: str

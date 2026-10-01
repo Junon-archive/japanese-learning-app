@@ -19,7 +19,7 @@ demo는 열려야 한다.
 마지막에 backend가 떠 있는 구성으로 같은 것을 한 번 더 본다(맨 아래 테스트).
 
 진행 규칙(`03_UI_UX_SPEC.md`의 `Demo` > `진행 규칙`): demo는 새 문맥 재등장이 아니라 **같은 문장 다시
-보기**를 체험시킨다. 진도는 `nc.demo.v1`에 남아 새로고침 뒤에도 이어진다. 문장 수는 커밋된 fixture에서,
+보기**를 체험시킨다. 진도는 `nc.demo.ja.v1`에 남아 새로고침 뒤에도 이어진다. 문장 수는 커밋된 fixture에서,
 간격은 `constants.ts`에서 읽는다(`demo_fixture.py`). 휴대폰 viewport로 돈다.
 """
 
@@ -49,7 +49,7 @@ from tests.e2e.demo_fixture import (
 pytestmark = pytest.mark.e2e
 
 PHONE = "iPhone 13"
-DEMO_ROUTE = "#/demo"
+DEMO_ROUTE = "#/ja/demo"
 
 FIXTURE_ID, SENTENCES = read_fixture()
 TOTAL = len(SENTENCES)
@@ -77,7 +77,7 @@ COMPLETE_THANKS = "끝까지 둘러봐 주셔서 고마워요."
 LEARN_KANA = "글자 배우기"
 RESTART = "처음부터 다시"
 RESTART_NOTE = "처음부터 다시 하면 체험 기록이 지워져요."
-KANA_HASH = "#/kana"
+KANA_HASH = "#/ja/kana"
 
 _SETTLE_MS = 300
 
@@ -107,7 +107,7 @@ def _open_demo_from_home(page: Page, frontend_url: str) -> None:
 
 
 def _japanese(index: int) -> str:
-    japanese = SENTENCES[index]["presentation"]["japanese"]
+    japanese = SENTENCES[index]["presentation"]["text"]
     assert isinstance(japanese, str)
     return japanese
 
@@ -162,7 +162,7 @@ def _first_probe_item(self_reported: int) -> tuple[int, int]:
 
 
 def test_demo_opens_with_no_backend_running(frontend: Frontend, page: Page) -> None:
-    """API origin에 아무도 listen하지 않는 상태에서 `#/demo`로 바로 열린다.
+    """API origin에 아무도 listen하지 않는 상태에서 `#/ja/demo`로 바로 열린다.
 
     공개 화면을 열 때 `GET /api/auth/me`를 부르지 않는다(불변식 14). 부르면 여기서 막힌 요청이
     `blocked`에 남는다.
@@ -254,7 +254,7 @@ def test_the_demo_reviews_the_same_sentence_and_asks_a_probe_without_any_request
 ) -> None:
     """카드 -> 설명 시트 -> 인라인 번역 -> 몰랐음 -> 새 문장 `DEMO_REVIEW_AFTER_SENTENCES`개 -> 같은 문장 -> probe.
 
-    새로고침해도 같은 문장과 진행 표시다. 저장은 `nc.demo.v1`(토글을 켜면 `nc.furigana.v1`)뿐이고
+    새로고침해도 같은 문장과 진행 표시다. 저장은 `nc.demo.ja.v1`(토글을 켜면 `nc.furigana.v1`)뿐이고
     sessionStorage와 cookie는 비어 있다. 요청은 0건이다.
     """
     assert REVIEW_AFTER + 1 < PROBE_EVERY, (
@@ -336,7 +336,7 @@ def test_the_demo_reviews_the_same_sentence_and_asks_a_probe_without_any_request
 _COMPLETION_INIT = """(value) => {
     window.__ncHashChanges = [];
     window.addEventListener('hashchange', (event) => { window.__ncHashChanges.push(event.newURL); });
-    if (localStorage.getItem('nc.demo.v1') === null) localStorage.setItem('nc.demo.v1', value);
+    if (localStorage.getItem('nc.demo.ja.v1') === null) localStorage.setItem('nc.demo.ja.v1', value);
 }"""
 
 
@@ -345,7 +345,7 @@ def test_the_completion_screen_leads_to_kana_without_any_request(
 ) -> None:
     """완료 직전 진도(저장 형식에 맞춘 값)를 넣고 마지막 `다음 문장`을 누르면 완료 화면이다.
 
-    `글자 배우기`는 `#/kana`로 간다. 가나 route가 아직 없는 브랜치에서는 router가 곧바로 `#/`로 바꾸므로
+    `글자 배우기`는 `#/ja/kana`로 간다. 가나 route가 아직 없는 브랜치에서는 router가 곧바로 `#/`로 바꾸므로
     URL이 아니라 기록한 `hashchange`의 newURL로 단정한다.
     """
     before_end: dict[str, Any] = {

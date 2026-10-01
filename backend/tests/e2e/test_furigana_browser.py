@@ -112,7 +112,7 @@ def _stored_ruby(stack: E2EStack, learner: flow.Learner) -> tuple[str, list[tupl
     with flow.read_db(stack) as db:
         sentence = db.get(Sentence, presentation.sentence_id)
         assert sentence is not None
-        japanese, ruby_json = sentence.japanese, sentence.ruby_json
+        japanese, ruby_json = sentence.text, sentence.ruby_json
     assert ruby_json is not None, "seed 적재가 이 문장의 ruby를 계산하지 않았다(전제)"
     spans = sorted(ruby_json["spans"], key=lambda span: (span[0], span[1]))
     assert spans, "이 문장에 저장된 읽기가 없다(전제) --- 한자가 있는 fixture 문장이어야 한다"
@@ -297,7 +297,7 @@ def test_the_same_flow_sends_the_same_requests_and_events_with_furigana_on_or_of
 # Demo: 기본 끔, 켜면 fixture의 읽기, 새로고침 유지, 토글 요청 0 (backend 없음)
 # --------------------------------------------------------------------------
 
-DEMO_URL_HASH = "#/demo"
+DEMO_URL_HASH = "#/ja/demo"
 DEMO_CARD_TITLE = "표현 학습 체험해 보기"
 
 
@@ -333,8 +333,8 @@ def test_demo_furigana_is_off_by_default_and_shows_the_fixture_reading_when_on(
     expect(toggle).to_have_attribute("aria-pressed", "true")
     _expect_all(_rts(page), visible=True)
     assert [tuple(pair) for pair in page.evaluate(_RUBY_PAIRS)] == stored
-    assert page.evaluate(_SENTENCE_WITHOUT_RT) == first["japanese"]
-    expect(page.locator(".sentence")).to_have_attribute("aria-label", first["japanese"])
+    assert page.evaluate(_SENTENCE_WITHOUT_RT) == first["text"]
+    expect(page.locator(".sentence")).to_have_attribute("aria-label", first["text"])
     assert page.evaluate("() => window.__ncSentence === document.querySelector('.sentence')")
     assert json.loads(_local_storage(page)[FURIGANA_KEY]) == {"on": True}
 

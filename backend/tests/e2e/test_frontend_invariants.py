@@ -571,9 +571,9 @@ def test_the_server_rejects_a_second_evidence_for_the_same_exposure(
 # --------------------------------------------------------------------------
 
 # 공개 route: 선택 홈, Demo, 가나 학습.
-PUBLIC_ROUTES = ("", "#/demo", "#/kana")
+PUBLIC_ROUTES = ("", "#/ja/demo", "#/ja/kana")
 HOME_HASH = "#/"
-KANA_ROUTE = "#/kana"
+KANA_ROUTE = "#/ja/kana"
 DEMO_CARD_TITLE = "표현 학습 체험해 보기"
 KANA_CARD_TITLE = "글자부터 배우기"
 # 가나 학습 문구(03_UI_UX_SPEC.md의 `화면 문구 표`의 `가나 학습`).
@@ -665,7 +665,7 @@ def test_public_screens_send_nothing_outside_the_frontend_origin(
     )
     page.goto(f"{frontend.url}/{route}")
 
-    if route == "#/demo":
+    if route == "#/ja/demo":
         _operate_demo(page)
         page.locator(".topbar .topbar-brand").click()
         _operate_home(page)
@@ -873,7 +873,7 @@ def test_public_screens_work_when_local_storage_throws(
         _operate_home(page)
         page.goto(f"{frontend.url}/{KANA_ROUTE}")
         _finish_kana_round(page)
-        page.goto(f"{frontend.url}/#/demo")
+        page.goto(f"{frontend.url}/#/ja/demo")
         _operate_demo(page)
         _operate_demo_without_storage(page)
 

@@ -46,7 +46,7 @@ QUIZ_TS = REPO_ROOT / "frontend" / "src" / "kana" / "quiz.ts"
 
 KANA_KEY = "nc.kana.v1"
 FURIGANA_KEY = "nc.furigana.v1"
-KANA_ROUTE = "#/kana"
+KANA_ROUTE = "#/ja/kana"
 KANA_CARD_TITLE = "글자부터 배우기"
 
 # 03 `화면 문구 표`의 `가나 학습`.
@@ -594,7 +594,7 @@ def test_progress_survives_a_reload_and_reset_removes_only_the_kana_key(
 
     -   단어 문항의 정답은 `{로마자} {한글} ({뜻})`이고 같은 화면의 단어 목록과 같다.
     -   퀴즈 중 돌아가면 라운드는 버리고 고른 탭·범위의 표로 간다. 이미 한 응답은 저장돼 있다(W3-2 (2)).
-    -   `#/kana`를 직접 열어도 가나 화면이고, 새로고침 뒤에도 `nc.kana.v1`이 그대로다.
+    -   `#/ja/kana`를 직접 열어도 가나 화면이고, 새로고침 뒤에도 `nc.kana.v1`이 그대로다.
     -   `진도 초기화`는 인라인 확인을 거친다. 취소하면 그대로, 확인하면 `nc.kana.v1`만 없어지고
         `nc.furigana.v1`은 남는다.
     """

@@ -119,6 +119,9 @@ def test_core_e2e_13_steps_in_a_real_browser(e2e_stack: E2EStack, page: Page) ->
     expect(panel.locator(".jp-word")).to_have_text(
         _surface(stack, presentation.sentence_id, focus.id)
     )
+    # 이 시나리오는 일본어 전용이다. 일본어 콘텐츠의 reading은 항상 있다(ADR-023 결정 3의
+    # nullable은 영어 콘텐츠가 null인 경우를 위한 것이고, 영어는 아직 없다).
+    assert stored.reading is not None
     expect(panel.locator(".reading")).to_have_text(stored.reading)
     expect(panel.locator(".meaning")).to_have_text(stored.core_meaning)
     expect(panel.locator(".meaning-context")).to_have_text(stored.meaning_in_context)
@@ -347,7 +350,7 @@ def _surface(stack: E2EStack, sentence_id: int, learning_item_id: int) -> str:
 
 
 def _sentence_text(sentence_id: int) -> sa.Select[tuple[str]]:
-    return sa.select(Sentence.japanese).where(Sentence.id == sentence_id)
+    return sa.select(Sentence.text).where(Sentence.id == sentence_id)
 
 
 def _explanation_of(

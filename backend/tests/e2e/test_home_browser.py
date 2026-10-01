@@ -7,7 +7,7 @@
 -   `로그인`을 누를 때만 `GET /api/auth/me`가 1건 나간다. 401이면 Login, 로그인하면 Study Screen.
     로그인 영역에는 hash가 없으므로 새로고침하면 선택 홈이고, 다시 `로그인`을 누르면 곧바로 Study Screen이다.
     로그아웃하면 선택 홈이다.
--   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 선택 홈(`#/`)이다. `#/kana`는 가나 학습이다
+-   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 선택 홈(`#/`)이다. `#/ja/kana`는 가나 학습이다
     (카드로 들어가도, 직접 열어도). 가나 학습 자체의 흐름은 `test_kana_browser.py`가 본다.
 """
 
@@ -36,8 +36,8 @@ CARDS = [
 LOGGED_OUT_TOAST = "로그아웃했어요."
 LOGOUT_LABEL = "로그아웃"
 HOME_HASH = "#/"
-DEMO_ROUTE = "#/demo"
-KANA_ROUTE = "#/kana"
+DEMO_ROUTE = "#/ja/demo"
+KANA_ROUTE = "#/ja/kana"
 
 # 늦게 나가는 요청이 드러날 때까지 기다리는 시간. 정책값이 아니다.
 _LATE_REQUEST_WINDOW_MS = 2000

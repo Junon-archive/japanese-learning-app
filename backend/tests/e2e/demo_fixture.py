@@ -19,7 +19,7 @@ FIXTURE_SCRIPT = REPO_ROOT / "scripts" / "build_demo_fixture.py"
 FIXTURE_DATA = REPO_ROOT / "frontend" / "src" / "demo" / "fixture-data.ts"
 CONSTANTS = REPO_ROOT / "frontend" / "src" / "demo" / "constants.ts"
 
-DEMO_KEY = "nc.demo.v1"
+DEMO_KEY = "nc.demo.ja.v1"
 FURIGANA_KEY = "nc.furigana.v1"
 
 
