@@ -47,6 +47,7 @@ from app.models.enums import (
     ContextStage,
     EventType,
     ExplicitSignal,
+    Language,
     PresentationRole,
     ReviewReason,
     SentenceStatus,
@@ -198,11 +199,19 @@ def next_presentation(
     # 이번에 보여줄 문장을 찾은 것과 무관하다(09_BACKGROUND_JOBS.md).
     gaps = MaterializationGaps()
     selection = select_next(
-        db, user=user, study_session_id=session.id, now=now, cfg=cfg.learning, gaps=gaps
+        db,
+        user=user,
+        study_session_id=session.id,
+        now=now,
+        cfg=cfg.learning,
+        language=session.language,
+        gaps=gaps,
     )
-    enqueue_materialization_gaps(db, user_id=user.id, gaps=gaps, now=now, cfg=cfg)
+    enqueue_materialization_gaps(
+        db, user_id=user.id, language=session.language, gaps=gaps, now=now, cfg=cfg
+    )
     if selection is None:
-        _request_replenishment(db, user_id=user.id, now=now, cfg=cfg)
+        _request_replenishment(db, user_id=user.id, language=session.language, now=now, cfg=cfg)
         db.commit()
         return None
 
@@ -244,16 +253,19 @@ def next_presentation(
     return view
 
 
-def _request_replenishment(db: Session, *, user_id: int, now: datetime, cfg: AppConfig) -> None:
-    """Pool Fallback 3단계. `select_next`가 None이면 **모든** role의 pool이 비어 있다.
+def _request_replenishment(
+    db: Session, *, user_id: int, language: Language, now: datetime, cfg: AppConfig
+) -> None:
+    """Pool Fallback 3단계. `select_next`가 None이면 **이 language의** 모든 role pool이 비어 있다.
 
-    그래서 role 하나만 enqueue하지 않는다. job의 idempotency key가 `(user, role, UTC
-    날짜)`라서(`app/jobs/replenishment.py`) role을 하나로 좁히면 그날 내내 나머지
-    pool에 대한 생성 요청이 만들어지지 않는다. 억제 창 덕분에 이 호출이 하루에 role당
-    job 1개를 넘기지 못한다.
+    `language`는 그 세션의 language다(09_BACKGROUND_JOBS.md의 `language`). 그래서
+    role 하나만 enqueue하지 않는다. job의 idempotency key가 `(user, language, role,
+    UTC 날짜)`라서(`app/jobs/replenishment.py`) role을 하나로 좁히면 그날 내내 나머지
+    pool에 대한 생성 요청이 만들어지지 않는다. 억제 창 덕분에 이 호출이 하루에
+    `(language, role)`당 job 1개를 넘기지 못한다.
     """
     for role in PresentationRole:
-        enqueue_replenishment(db, user_id=user_id, role=role, now=now, cfg=cfg)
+        enqueue_replenishment(db, user_id=user_id, role=role, language=language, now=now, cfg=cfg)
 
 
 # --------------------------------------------------------------------------

@@ -44,6 +44,7 @@ from app.models.enums import (
     CandidateStatus,
     ContextStage,
     ExplanationStatus,
+    Language,
     PresentationRole,
     ReviewReason,
     SentenceStatus,
@@ -326,11 +327,19 @@ def load_counters(db: Session, *, study_session_id: int) -> SessionCounters:
     return SessionCounters.from_counts(role_counts, reason_counts)
 
 
-def count_backlog(db: Session, *, user_id: int, now: datetime) -> int:
-    """eligible due item 수. deferral 중인 item은 밀린 빚이 아니므로 세지 않는다."""
+def count_backlog(db: Session, *, user_id: int, language: Language, now: datetime) -> int:
+    """eligible due item 수. deferral 중인 item은 밀린 빚이 아니므로 세지 않는다.
+
+    범위는 **세션 언어 안**이다(MVP-03, 06_LEARNING_ENGINE.md의 `Backlog`). 섞어 세면
+    한 언어를 쉬는 동안 쌓인 복습이 다른 언어 세션의 비율을 backlog 모드로 바꾼다
+    (불변식 22).
+    """
     count = db.execute(
-        sa.select(sa.func.count(ReviewState.id)).where(
+        sa.select(sa.func.count(ReviewState.id))
+        .join(LearningItem, LearningItem.id == ReviewState.learning_item_id)
+        .where(
             ReviewState.user_id == user_id,
+            LearningItem.language == language,
             ReviewState.next_review_at <= now,
             sa.or_(ReviewState.deferred_until.is_(None), ReviewState.deferred_until <= now),
         )
@@ -339,9 +348,14 @@ def count_backlog(db: Session, *, user_id: int, now: datetime) -> int:
 
 
 def _load_review_targets(
-    db: Session, *, user_id: int, item_ids: Iterable[int] | None = None
+    db: Session, *, user_id: int, language: Language, item_ids: Iterable[int] | None = None
 ) -> dict[int, _ReviewTarget]:
-    """review ordering에 필요한 값만 모은다. FSRS 컬럼은 읽기만 한다(G5)."""
+    """review ordering에 필요한 값만 모은다. FSRS 컬럼은 읽기만 한다(G5).
+
+    `language`로 `learning_items`를 join해 범위를 좁힌다(MVP-03,
+    06_LEARNING_ENGINE.md의 `언어 범위`). `review_states`에는 language 컬럼이
+    없으므로(불변식 21) item을 거쳐야 한다.
+    """
     statement = (
         sa.select(
             ReviewState.learning_item_id,
@@ -350,6 +364,7 @@ def _load_review_targets(
             UserMastery.comprehension_mastery,
             UserItemLearningState.context_stage,
         )
+        .join(LearningItem, LearningItem.id == ReviewState.learning_item_id)
         .outerjoin(
             UserMastery,
             sa.and_(
@@ -364,7 +379,7 @@ def _load_review_targets(
                 UserItemLearningState.learning_item_id == ReviewState.learning_item_id,
             ),
         )
-        .where(ReviewState.user_id == user_id)
+        .where(ReviewState.user_id == user_id, LearningItem.language == language)
     )
     if item_ids is not None:
         ids = list(dict.fromkeys(item_ids))
@@ -409,9 +424,13 @@ def materialize_candidates(
     user: User,
     now: datetime,
     cfg: LearningConfig,
+    language: Language,
     gaps: MaterializationGaps | None = None,
 ) -> int:
-    """요청한 사용자 **한 명분**의 Ready Pool을 채우고 만든 candidate 수를 돌려준다.
+    """요청한 사용자 **한 명분, 한 언어분**의 Ready Pool을 채우고 만든 candidate 수를 돌려준다.
+
+    `language`는 이 실행의 범위다(MVP-03, 06_LEARNING_ENGINE.md의 `언어 범위`). 다른
+    언어의 content는 조회하지도 candidate로 만들지도 않는다.
 
     role별로 최대 `candidate_materialization_batch_size`개다. 상한이 없으면 첫
     세션 한 번에 seed 전체가 candidate로 복제된다.
@@ -429,12 +448,15 @@ def materialize_candidates(
     for role, plans in (
         (
             PresentationRole.REVIEW,
-            _review_plans(db, user_id=user.id, now=now, cfg=cfg, gaps=gaps),
+            _review_plans(db, user_id=user.id, now=now, cfg=cfg, language=language, gaps=gaps),
         ),
-        (PresentationRole.NEW, _new_plans(db, user_id=user.id, now=now, gaps=gaps)),
+        (
+            PresentationRole.NEW,
+            _new_plans(db, user_id=user.id, now=now, language=language, gaps=gaps),
+        ),
         (
             PresentationRole.EXPLORATION,
-            _exploration_plans(db, user=user, now=now, cfg=cfg, gaps=gaps),
+            _exploration_plans(db, user=user, now=now, cfg=cfg, language=language, gaps=gaps),
         ),
     ):
         created += _create_candidates(
@@ -687,14 +709,20 @@ def _exploration_plans(
     user: User,
     now: datetime,
     cfg: LearningConfig,
+    language: Language,
     gaps: MaterializationGaps | None = None,
 ) -> Iterator[_Plan]:
     """exploration target은 `Exploration Item 선정`의 후보 조건·정렬을 그대로 따른다.
 
+    조건 0(MVP-03): `learning_items.language = 세션 언어`. 다른 언어의 item은 애초에
+    후보 집합에 들어오지 않는다.
+
     `new`와 배타적이다(조건 2가 `is_active_learning_target = false`를 요구한다).
     겹치면 같은 item이 두 category에서 동시에 뽑혀 Category Mix가 무의미해진다.
     """
-    items = list(db.execute(sa.select(LearningItem)).scalars().all())
+    items = list(
+        db.execute(sa.select(LearningItem).where(LearningItem.language == language)).scalars().all()
+    )
     eligible = eligible_exploration_targets(
         db,
         user_id=user.id,
@@ -713,7 +741,12 @@ def _exploration_plans(
 
 
 def _new_plans(
-    db: Session, *, user_id: int, now: datetime, gaps: MaterializationGaps | None = None
+    db: Session,
+    *,
+    user_id: int,
+    now: datetime,
+    language: Language,
+    gaps: MaterializationGaps | None = None,
 ) -> Iterator[_Plan]:
     """`new` = 학습 target인데 **아직 한 번도 target으로 제시되지 않은** item (ADR-013).
 
@@ -725,13 +758,17 @@ def _new_plans(
     문장은 `stage -> sentence` 표의 `anchor` 행과 같다. 승격 시점에 기록된
     `anchor_sentence_id`가 있으면 **사용자가 실제로 만난 그 문장**을 다시 제시한다
     (`_first_unseen_sentence`를 쓰면 그 문맥이 낯선 문장으로 바뀐다).
+
+    `language`로 `learning_items`를 join해 범위를 좁힌다(MVP-03).
     """
     states = (
         db.execute(
             sa.select(UserItemLearningState)
+            .join(LearningItem, LearningItem.id == UserItemLearningState.learning_item_id)
             .where(
                 UserItemLearningState.user_id == user_id,
                 UserItemLearningState.is_active_learning_target.is_(True),
+                LearningItem.language == language,
             )
             .order_by(UserItemLearningState.learning_item_id)
         )
@@ -769,6 +806,7 @@ def _review_plans(
     user_id: int,
     now: datetime,
     cfg: LearningConfig,
+    language: Language,
     gaps: MaterializationGaps | None = None,
 ) -> Iterator[_Plan]:
     """review candidate도 Wave 2가 만든다. 한 item에 reason은 **하나**다.
@@ -777,8 +815,10 @@ def _review_plans(
     같은 item·같은 stage에 두 reason의 candidate를 만들면 대개 같은 문장을 골라
     두 번째가 충돌한다. 어느 reason을 실제로 보여줄지는 `choose_review_reason`이
     정하고, 여기서는 그 선택이 작동할 재료만 만든다.
+
+    `language`는 `_load_review_targets`를 거쳐 범위를 좁힌다(MVP-03).
     """
-    targets = _load_review_targets(db, user_id=user_id)
+    targets = _load_review_targets(db, user_id=user_id, language=language)
     states = {
         state.learning_item_id: state
         for state in db.execute(
@@ -1039,9 +1079,14 @@ def select_next(
     study_session_id: int,
     now: datetime,
     cfg: LearningConfig,
+    language: Language,
     gaps: MaterializationGaps | None = None,
 ) -> Selection | None:
     """다음 presentation으로 쓸 candidate를 고른다. 고를 것이 없으면 None이다.
+
+    `language`는 이 study session의 language다(MVP-03). Ready Pool 조회,
+    materialization, backlog 집계 전부 이 범위 안에서만 돈다
+    (06_LEARNING_ENGINE.md의 `언어 범위`).
 
     **None은 Pool Fallback 3단계(background replenishment job enqueue)를 뜻한다.**
     enqueue 자체를 여기서 하지 않는 이유는 계층이다(ADR-007): `app/jobs/`는 L2이고
@@ -1057,25 +1102,29 @@ def select_next(
     lapse도 실패도 아니고 그대로 due로 남는다.
     """
     counters = load_counters(db, study_session_id=study_session_id)
-    ratios = choose_ratios(count_backlog(db, user_id=user.id, now=now), cfg)
+    ratios = choose_ratios(count_backlog(db, user_id=user.id, language=language, now=now), cfg)
     ranked = rank_categories(ratios, counters)
 
-    selection = _select_for_role(db, user=user, role=ranked[0], counters=counters, now=now, cfg=cfg)
+    selection = _select_for_role(
+        db, user=user, role=ranked[0], counters=counters, now=now, cfg=cfg, language=language
+    )
     if selection is not None:
         return selection
 
     # 0. Candidate Materialization 1회 (LLM 호출 없음). "Ready candidate가 없다"는
     #    대부분 콘텐츠가 없다가 아니라 아직 이 사용자에게 투영되지 않았다는 뜻이다.
-    materialize_candidates(db, user=user, now=now, cfg=cfg, gaps=gaps)
+    materialize_candidates(db, user=user, now=now, cfg=cfg, language=language, gaps=gaps)
 
     # 1. 같은 deficit 순서로 available category를 훑는다(첫 category 재시도 포함).
     for role in ranked:
-        selection = _select_for_role(db, user=user, role=role, counters=counters, now=now, cfg=cfg)
+        selection = _select_for_role(
+            db, user=user, role=role, counters=counters, now=now, cfg=cfg, language=language
+        )
         if selection is not None:
             return selection
 
     # 2. 안전한 기존 anchor reinforcement 재사용.
-    return _reuse_anchor_reinforcement(db, user_id=user.id, now=now, cfg=cfg)
+    return _reuse_anchor_reinforcement(db, user_id=user.id, language=language, now=now, cfg=cfg)
 
 
 def _select_for_role(
@@ -1086,24 +1135,34 @@ def _select_for_role(
     counters: SessionCounters,
     now: datetime,
     cfg: LearningConfig,
+    language: Language,
 ) -> Selection | None:
     if role is PresentationRole.REVIEW:
-        return _select_review(db, user_id=user.id, counters=counters, now=now, cfg=cfg)
+        return _select_review(
+            db, user_id=user.id, language=language, counters=counters, now=now, cfg=cfg
+        )
     if role is PresentationRole.EXPLORATION:
-        return _select_exploration(db, user=user, now=now, cfg=cfg)
-    return _select_new(db, user_id=user.id)
+        return _select_exploration(db, user=user, language=language, now=now, cfg=cfg)
+    return _select_new(db, user_id=user.id, language=language)
 
 
 def _ready_candidates(
-    db: Session, *, user_id: int, role: PresentationRole
+    db: Session, *, user_id: int, role: PresentationRole, language: Language
 ) -> list[UserSentenceCandidate]:
+    """Ready Pool. `sentences`를 join해 `language`로 거른다(MVP-03).
+
+    `user_sentence_candidates`에는 language 컬럼이 없으므로(불변식 21) sentence를
+    거쳐야 한다(06_LEARNING_ENGINE.md의 `언어 범위`).
+    """
     return list(
         db.execute(
             sa.select(UserSentenceCandidate)
+            .join(Sentence, Sentence.id == UserSentenceCandidate.sentence_id)
             .where(
                 UserSentenceCandidate.user_id == user_id,
                 UserSentenceCandidate.status == CandidateStatus.READY,
                 UserSentenceCandidate.presentation_role == role,
+                Sentence.language == language,
             )
             .order_by(UserSentenceCandidate.id)
         )
@@ -1144,6 +1203,7 @@ def _select_review(
     db: Session,
     *,
     user_id: int,
+    language: Language,
     counters: SessionCounters,
     now: datetime,
     cfg: LearningConfig,
@@ -1157,13 +1217,16 @@ def _select_review(
     `reinforcement`와 `context_repair`는 due를 요구하지 않는다. 그것이 FSRS
     interval을 cap하지 않고도 최소 5회 노출을 채우는 유일한 방법이다(불변식 #4).
     """
-    candidates = _ready_candidates(db, user_id=user_id, role=PresentationRole.REVIEW)
+    candidates = _ready_candidates(
+        db, user_id=user_id, role=PresentationRole.REVIEW, language=language
+    )
     if not candidates:
         return None
     targets = _targets_of(db, candidate_ids=[candidate.id for candidate in candidates])
     states = _load_review_targets(
         db,
         user_id=user_id,
+        language=language,
         item_ids=[item_id for items in targets.values() for item_id in items],
     )
 
@@ -1205,7 +1268,7 @@ def _select_review(
 
 
 def _select_exploration(
-    db: Session, *, user: User, now: datetime, cfg: LearningConfig
+    db: Session, *, user: User, language: Language, now: datetime, cfg: LearningConfig
 ) -> Selection | None:
     """Ready Pool의 exploration candidate도 target 조건을 **다시** 확인한다.
 
@@ -1213,7 +1276,9 @@ def _select_exploration(
     최근에 다른 문장에서 노출됐을 수 있다. 만족하지 않으면 건너뛰고 다음
     candidate로 넘어간다.
     """
-    candidates = _ready_candidates(db, user_id=user.id, role=PresentationRole.EXPLORATION)
+    candidates = _ready_candidates(
+        db, user_id=user.id, role=PresentationRole.EXPLORATION, language=language
+    )
     if not candidates:
         return None
     targets = _targets_of(db, candidate_ids=[candidate.id for candidate in candidates])
@@ -1248,9 +1313,11 @@ def _select_exploration(
     return _selection_of(best[1], targets.get(best[1].id, []))
 
 
-def _select_new(db: Session, *, user_id: int) -> Selection | None:
+def _select_new(db: Session, *, user_id: int, language: Language) -> Selection | None:
     """`new`에는 명세가 정한 정렬이 없다. candidate id ASC로 결정론만 확보한다."""
-    candidates = _ready_candidates(db, user_id=user_id, role=PresentationRole.NEW)
+    candidates = _ready_candidates(
+        db, user_id=user_id, role=PresentationRole.NEW, language=language
+    )
     if not candidates:
         return None
     targets = _targets_of(db, candidate_ids=[candidate.id for candidate in candidates])
@@ -1262,7 +1329,7 @@ def _select_new(db: Session, *, user_id: int) -> Selection | None:
 
 
 def _reuse_anchor_reinforcement(
-    db: Session, *, user_id: int, now: datetime, cfg: LearningConfig
+    db: Session, *, user_id: int, language: Language, now: datetime, cfg: LearningConfig
 ) -> Selection | None:
     """Pool Fallback 2: 안전한 기존 anchor 문장을 reinforcement로 다시 쓴다.
 
@@ -1274,7 +1341,7 @@ def _reuse_anchor_reinforcement(
     최소 노출에 아직 도달하지 않은 item만 대상으로 한다. 이미 충분히 본 item을
     다시 보여주느니 콘텐츠 생성을 기다리는 편이 낫다(3단계).
     """
-    targets = _load_review_targets(db, user_id=user_id)
+    targets = _load_review_targets(db, user_id=user_id, language=language)
     anchors = {
         state.learning_item_id: state.anchor_sentence_id
         for state in db.execute(

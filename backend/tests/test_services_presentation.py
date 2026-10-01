@@ -41,6 +41,7 @@ from app.models.enums import (
     CandidateStatus,
     ContextStage,
     EventType,
+    Language,
     PresentationRole,
     ReviewReason,
     SentenceStatus,
@@ -678,7 +679,9 @@ def test_an_empty_pool_returns_none_and_enqueues_replenishment(
     """Scenario E. provider를 부르지 않고 job만 남긴다(10_ERROR_HANDLING.md)."""
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     view = next_presentation(
         db_session, user=user, session_id=started.session.id, now=study_clock.now(), cfg=cfg
@@ -698,7 +701,9 @@ def test_an_empty_pool_does_not_enqueue_twice_in_the_same_day(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     next_presentation(
         db_session, user=user, session_id=started.session.id, now=study_clock.now(), cfg=cfg
     )
@@ -717,7 +722,9 @@ def test_next_on_a_finished_session_is_rejected(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     finish(
         db_session,
         user_id=user.id,

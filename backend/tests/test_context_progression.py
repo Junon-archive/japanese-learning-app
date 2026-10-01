@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 
 from app.config import AppConfig, get_config
 from app.models import LearningItem, ReviewState, SentenceItem, User, UserItemLearningState
-from app.models.enums import ContextStage, ExplicitSignal, PresentationRole, ReviewReason
+from app.models.enums import ContextStage, ExplicitSignal, Language, PresentationRole, ReviewReason
 from app.services import interactions, presentation, study_session
 from tests import factories
 from tests.clock import MutableClock
@@ -114,7 +114,9 @@ def _run_round(
     signal: ExplicitSignal | None,
 ) -> _Shown:
     """세션 하나에서 그 item을 한 번 제시하고 닫는다. 보인 stage와 문장을 돌려준다."""
-    session = study_session.start_or_resume(db, user=user, now=clock.now(), cfg=cfg).session
+    session = study_session.start_or_resume(
+        db, user=user, now=clock.now(), cfg=cfg, language=Language.JA
+    ).session
     view = presentation.next_presentation(
         db, user=user, session_id=session.id, now=clock.now(), cfg=cfg
     )

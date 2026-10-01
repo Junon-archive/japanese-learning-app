@@ -38,30 +38,46 @@ from app.models.enums import ContextStage, GenerationJobStatus, JobType, Languag
 from app.models.jobs import GenerationJob
 
 
-def replenishment_idempotency_key(*, user_id: int, role: PresentationRole, now: datetime) -> str:
-    """`(사용자, role, UTC 날짜)` 하나당 job 하나.
+def replenishment_idempotency_key(
+    *, user_id: int, role: PresentationRole, language: Language, now: datetime
+) -> str:
+    """`(사용자, language, role, UTC 날짜)` 하나당 job 하나.
 
     형식은 명세에 없다. 요구는 둘이다: **결정적**이어야 하고(같은 입력이 같은 키),
     중복 enqueue를 **억제**해야 한다. 그래서 억제 창을 날짜로 둔다.
 
     -   사용자와 role을 넣는 이유: 어느 pool이 비었는지가 생성 요청의 내용이다. role이
         빠지면 review pool이 비어서 만든 job이 new pool의 job을 같은 날 내내 막는다.
-    -   날짜를 넣는 이유: 키가 `(user, role)`뿐이면 job이 completed가 된 뒤에도 영원히
-        재enqueue가 막힌다. 반대로 시각/순번을 넣으면 한 세션에서 Pool Fallback을 열 번
-        만나면 job이 열 개 쌓인다 --- provider 비용이 그대로 열 배가 된다.
+    -   **language를 넣는 이유(MVP-03)**: 빠지면 같은 날 일본어와 영어의 같은 role
+        replenish 중 뒤에 온 쪽이 `ON CONFLICT DO NOTHING`으로 조용히 사라지고, 그
+        언어가 하루 종일 보충되지 않는다(`09_BACKGROUND_JOBS.md`의 `language`).
+    -   날짜를 넣는 이유: 키가 `(user, language, role)`뿐이면 job이 completed가 된
+        뒤에도 영원히 재enqueue가 막힌다. 반대로 시각/순번을 넣으면 한 세션에서 Pool
+        Fallback을 열 번 만나면 job이 열 개 쌓인다 --- provider 비용이 그대로 열 배가
+        된다.
     -   UTC 날짜다. 사용자 local day가 아니다. 이 창은 사용자에게 보이는 경계가 아니라
         생성 비용 억제 장치이고, `user_id`만 받는 이 함수가 timezone을 읽으려면 users를
         조회해야 한다. 억제 창을 좁히려면 이 문자열의 해상도만 올린다.
     """
     return (
-        f"replenish:{JobType.GENERATE_SENTENCE_BATCH.value}:{user_id}:{role.value}:{now:%Y-%m-%d}"
+        f"replenish:{JobType.GENERATE_SENTENCE_BATCH.value}:{user_id}:{language.value}:"
+        f"{role.value}:{now:%Y-%m-%d}"
     )
 
 
 def enqueue_replenishment(
-    db: Session, *, user_id: int, role: PresentationRole, now: datetime, cfg: AppConfig
+    db: Session,
+    *,
+    user_id: int,
+    role: PresentationRole,
+    language: Language,
+    now: datetime,
+    cfg: AppConfig,
 ) -> GenerationJob | None:
     """Pool Fallback 3단계. 이미 억제 창 안에 job이 있으면 아무것도 하지 않고 None이다.
+
+    `language`는 **그 세션의 language**다(09_BACKGROUND_JOBS.md의 `language`). 대상
+    선정이 세션 언어 범위에서 돌므로 한 job의 target item은 전부 같은 언어다.
 
     `ON CONFLICT (idempotency_key) DO NOTHING`으로 판정한다. 먼저 SELECT해서 없으면
     INSERT하는 방식을 쓰지 않는다 --- 그 사이에 끼는 동시 요청이 IntegrityError를 내고
@@ -73,8 +89,11 @@ def enqueue_replenishment(
     return _enqueue(
         db,
         job_type=JobType.GENERATE_SENTENCE_BATCH,
+        language=language,
         payload={"user_id": user_id, "presentation_role": role.value},
-        idempotency_key=replenishment_idempotency_key(user_id=user_id, role=role, now=now),
+        idempotency_key=replenishment_idempotency_key(
+            user_id=user_id, role=role, language=language, now=now
+        ),
         now=now,
         cfg=cfg,
     )
@@ -90,9 +109,12 @@ def explain_item_idempotency_key(*, sentence_item_id: int, now: datetime) -> str
 
 
 def enqueue_explain_item(
-    db: Session, *, sentence_item_id: int, now: datetime, cfg: AppConfig
+    db: Session, *, sentence_item_id: int, language: Language, now: datetime, cfg: AppConfig
 ) -> GenerationJob | None:
     """materialization이 explanation 누락으로 건너뛴 `sentence_item` 하나에 1건.
+
+    `language`는 그 sentence의 language다(09_BACKGROUND_JOBS.md의 `language`). key는
+    바꾸지 않는다 --- `sentence_item_id`가 이미 언어를 유일하게 결정한다.
 
     이미 억제 창 안에 job이 있으면 None이다. 설명이 붙으면 그 문장이 Ready invariant를
     다시 만족하고, **다음 materialization 실행에서** candidate가 된다(08_LLM_SPEC.md).
@@ -100,6 +122,7 @@ def enqueue_explain_item(
     return _enqueue(
         db,
         job_type=JobType.EXPLAIN_ITEM,
+        language=language,
         payload={"sentence_item_id": sentence_item_id},
         idempotency_key=explain_item_idempotency_key(sentence_item_id=sentence_item_id, now=now),
         now=now,
@@ -125,10 +148,15 @@ def enqueue_review_context(
     learning_item_id: int,
     context_stage: ContextStage,
     anchor_sentence_id: int,
+    language: Language,
     now: datetime,
     cfg: AppConfig,
 ) -> GenerationJob | None:
     """`(item, stage)` 하나당 1건. anchor는 payload에 실린다(09_BACKGROUND_JOBS.md).
+
+    `language`는 그 `learning_item`의 language다(09_BACKGROUND_JOBS.md의
+    `language`). key는 바꾸지 않는다 --- `learning_item_id`가 이미 언어를 유일하게
+    결정한다.
 
     quarantined anchor를 걸러내는 것은 트리거 지점이다(`learning/selection.py`의
     `_record_review_context_gap`, 불변식 #7). 여기서 다시 조회하면 같은 판정이 두
@@ -137,6 +165,7 @@ def enqueue_review_context(
     return _enqueue(
         db,
         job_type=JobType.GENERATE_REVIEW_CONTEXT,
+        language=language,
         payload={
             "user_id": user_id,
             "learning_item_id": learning_item_id,
@@ -155,9 +184,18 @@ def enqueue_review_context(
 
 
 def enqueue_materialization_gaps(
-    db: Session, *, user_id: int, gaps: MaterializationGaps, now: datetime, cfg: AppConfig
+    db: Session,
+    *,
+    user_id: int,
+    language: Language,
+    gaps: MaterializationGaps,
+    now: datetime,
+    cfg: AppConfig,
 ) -> None:
     """materialization이 올린 gap을 job으로 바꾼다. 호출부의 트랜잭션에 INSERT만 얹는다.
+
+    `language`는 그 materialization 실행의 범위였던 언어다(MVP-03). 그 실행이 검사한
+    모든 문장·item이 이 언어이므로, 여기서 enqueue하는 job도 전부 같은 언어다.
 
     `app/learning/`(L1)이 이 모듈(L2)을 import할 수 없으므로 materialization은 사실만
     모아 올리고 enqueue는 여기서 일어난다(ADR-015). `services/`가 materialization을
@@ -165,7 +203,9 @@ def enqueue_materialization_gaps(
     job도 함께 사라져야 한다(09_BACKGROUND_JOBS.md).
     """
     for sentence_item_id in gaps.unexplained_sentence_item_ids:
-        enqueue_explain_item(db, sentence_item_id=sentence_item_id, now=now, cfg=cfg)
+        enqueue_explain_item(
+            db, sentence_item_id=sentence_item_id, language=language, now=now, cfg=cfg
+        )
     for gap in gaps.review_contexts:
         enqueue_review_context(
             db,
@@ -173,6 +213,7 @@ def enqueue_materialization_gaps(
             learning_item_id=gap.learning_item_id,
             context_stage=gap.context_stage,
             anchor_sentence_id=gap.anchor_sentence_id,
+            language=language,
             now=now,
             cfg=cfg,
         )
@@ -182,6 +223,7 @@ def _enqueue(
     db: Session,
     *,
     job_type: JobType,
+    language: Language,
     payload: dict[str, Any],
     idempotency_key: str,
     now: datetime,
@@ -196,8 +238,7 @@ def _enqueue(
     statement = (
         pg_insert(GenerationJob)
         .values(
-            # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
-            language=Language.JA.value,
+            language=language.value,
             job_type=job_type,
             status=GenerationJobStatus.QUEUED,
             payload_json=payload,
