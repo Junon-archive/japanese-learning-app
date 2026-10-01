@@ -177,11 +177,13 @@ def test_unconsumed_candidate_uniqueness_is_a_partial_index(db_engine: Engine) -
 
 @pytest.mark.integration
 def test_active_prompt_version_uniqueness_is_a_partial_index(db_engine: Engine) -> None:
-    """04_DB_SPEC.md: `UNIQUE (task_type) WHERE active`.
+    """04_DB_SPEC.md: `UNIQUE (task_type, language) WHERE active` (MVP-03).
 
-    전체 unique면 task_type당 행이 하나뿐이라 version 이력을 남길 수 없고,
-    index가 아예 없으면 task당 active가 둘이 되어 어느 prompt로 생성했는지가
-    사후에 결정 불가능해진다. 거부/허용 동작은 test_db_constraints.py가 본다.
+    전체 unique면 조합당 행이 하나뿐이라 version 이력을 남길 수 없고,
+    index가 아예 없으면 조합당 active가 둘이 되어 어느 prompt로 생성했는지가
+    사후에 결정 불가능해진다. `language`가 빠지면 반대로 한 언어만 active일 수 있어
+    다른 언어의 job이 전부 dead_letter가 된다(ADR-023 결정 5). 거부/허용 동작은
+    test_db_constraints.py와 test_language_scope.py가 본다.
     """
     with db_engine.connect() as connection:
         definition = connection.scalar(
@@ -192,7 +194,7 @@ def test_active_prompt_version_uniqueness_is_a_partial_index(db_engine: Engine) 
         )
     assert definition is not None, "uq_prompt_versions_active가 없다"
     assert definition.startswith("CREATE UNIQUE INDEX"), definition
-    assert "(task_type)" in definition, definition
+    assert "(task_type, language)" in definition, definition
     # WHERE 절이 없으면 전체 unique이고 inactive 이력 행이 서로 충돌한다.
     assert " WHERE " in definition, definition
     assert definition.split(" WHERE ", 1)[1].strip() == "active", definition
@@ -302,13 +304,20 @@ def test_sentences_is_global_content(db_engine: Engine) -> None:
 
 
 @pytest.mark.integration
-def test_ruby_json_is_a_nullable_jsonb_without_default_or_check(db_engine: Engine) -> None:
-    """ADR-021 결정 2 / 04_DB_SPEC.md의 `ruby_json`: JSONB, NULL 허용, default 없음, CHECK 없음.
+def test_ruby_json_is_a_nullable_jsonb_without_default_and_japanese_only(
+    db_engine: Engine,
+) -> None:
+    """04_DB_SPEC.md의 `ruby_json`: JSONB, NULL 허용, default 없음, **언어 CHECK만** 있다.
 
     NULL이 "미계산"이고 backfill 대상 조건(`ruby_json IS NULL`)이다. NOT NULL이면 계산 실패를
     기록할 수 없어 문장 저장이 막히고(실패가 ready를 막으면 안 된다), default가 있으면
-    기존·새 문장이 "계산했고 읽기 없음"과 구별되지 않아 backfill 대상에서 사라진다. 무결성은
-    다른 테이블과 대조해야 하므로 CHECK로 두지 않는다(`app/render.py`의 검증이 맡는다).
+    기존·새 문장이 "계산했고 읽기 없음"과 구별되지 않아 backfill 대상에서 사라진다.
+
+    CHECK는 **정확히 하나**이고 그것은 언어 CHECK다(MVP-03, 불변식 23). ruby **내용**의
+    무결성(원문 길이 안, 겹침 없음, tappable 경계 안)은 여전히 CHECK로 두지 않는다 --- 다른
+    컬럼·테이블과 대조해야 하므로 CHECK로 표현되지 않고, `app/render.py`의 검증이 계산·표시
+    시점에 둘 다 본다. 반면 `language = 'ja' OR ruby_json IS NULL`은 같은 행의 컬럼 하나만
+    보므로 DB가 막는다 --- 영어 문장에 ruby가 붙는 것은 어떤 경로로도 정상이 아니다.
     """
     with db_engine.connect() as connection:
         rows = list(
@@ -329,7 +338,7 @@ def test_ruby_json_is_a_nullable_jsonb_without_default_or_check(db_engine: Engin
         for row in _check_constraints(db_engine)
         if row.table_name == "sentences" and row.column_name == "ruby_json"
     ]
-    assert checks == []
+    assert checks == ["ck_sentences_ruby_json_ja_only"]
 
 
 @pytest.mark.integration

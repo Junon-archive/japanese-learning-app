@@ -9,6 +9,23 @@ from __future__ import annotations
 import enum
 
 
+class Language(enum.StrEnum):
+    """학습 대상 언어. 콘텐츠 엔티티의 축이다 (ADR-023 결정 1).
+
+    `learning_items` / `sentences` / `study_sessions` / `prompt_versions` /
+    `generation_jobs`가 이 값을 갖는다. **사용자별 학습 테이블에는 두지 않는다** ---
+    `learning_item_id`(또는 `sentence_id`)가 이미 언어를 결정하므로 같은 값을 두 곳에 두면
+    한쪽만 고쳐지는 순간 갈라진다(불변식 21).
+
+    **세 번째 언어를 위한 구조를 지금 만들지 않는다.** BCP 47 전체를 허용하거나 `languages`
+    테이블을 두는 것은 지금 쓰지 않는 유연성이고, CHECK에 값을 더하는 migration은 나중에도
+    싸다.
+    """
+
+    JA = "ja"
+    EN = "en"
+
+
 class LearningItemType(enum.StrEnum):
     WORD = "word"
     GRAMMAR = "grammar"

@@ -15,6 +15,7 @@ from app.models.enums import (
     ContextStage,
     EventType,
     ExposureModality,
+    Language,
     PresentationRole,
     ReviewReason,
 )
@@ -25,6 +26,10 @@ class StudySession(Base):
 
     id: Mapped[int] = bigint_pk()
     user_id: Mapped[int] = mapped_column(sa.BigInteger, sa.ForeignKey("users.id"), nullable=False)
+    # 한 세션은 한 언어다(불변식 22, ADR-023 결정 7). 세션이 시작될 때 정해지고 바뀌지
+    # 않는다. 파생으로 둘 수 없다 --- 시작 시점에는 presentation이 아직 없다.
+    # `policy_snapshot_json`에 따로 넣지 않는다. 같은 행의 컬럼이다.
+    language: Mapped[Language] = mapped_column(enum_column(Language, "language"), nullable=False)
     started_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     last_activity_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))

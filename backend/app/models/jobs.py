@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, bigint_pk, created_at_column, enum_column
-from app.models.enums import GenerationJobStatus, JobType, LlmTaskType
+from app.models.enums import GenerationJobStatus, JobType, Language, LlmTaskType
 
 
 class GenerationJob(Base):
@@ -19,6 +19,11 @@ class GenerationJob(Base):
     __tablename__ = "generation_jobs"
 
     id: Mapped[int] = bigint_pk()
+    # enqueue가 job의 언어를 고정한다(MVP-03). worker는 claim한 job의
+    # `(job_type, language)`로 prompt_versions의 active 행을 읽는다. target item을 join해
+    # 파생할 수도 있지만 그러면 "한 job의 target item이 서로 다른 언어"라는 상태를 DB가
+    # 막지 못한다.
+    language: Mapped[Language] = mapped_column(enum_column(Language, "language"), nullable=False)
     job_type: Mapped[JobType] = mapped_column(enum_column(JobType, "job_type"), nullable=False)
     status: Mapped[GenerationJobStatus] = mapped_column(
         enum_column(GenerationJobStatus, "status"), nullable=False
@@ -54,6 +59,11 @@ class PromptVersion(Base):
     task_type: Mapped[LlmTaskType] = mapped_column(
         enum_column(LlmTaskType, "task_type"), nullable=False
     )
+    # prompt 본문이 언어별이므로 registry도 언어별이다(MVP-03, ADR-023 결정 5). 컬럼이
+    # 따로 있는데 version 문자열에도 언어가 들어가는 이유는
+    # `sentences.provenance_json.prompt_version`이 문자열 하나이고 그 값만으로 어느
+    # prompt였는지 알 수 있어야 하기 때문이다.
+    language: Mapped[Language] = mapped_column(enum_column(Language, "language"), nullable=False)
     version: Mapped[str] = mapped_column(sa.Text, nullable=False)
     provider: Mapped[str] = mapped_column(sa.Text, nullable=False)
     model: Mapped[str] = mapped_column(sa.Text, nullable=False)
@@ -64,12 +74,13 @@ class PromptVersion(Base):
     )
 
     __table_args__ = (
-        sa.UniqueConstraint("task_type", "version"),
-        # active는 task_type당 최대 하나이며 **partial** unique로 강제한다
-        # (04_DB_SPEC.md의 active 유일성). "가장 최근 행이 active"로 추론하면 옛
-        # version으로 되돌리는 rollback이 불가능해진다. 전체 unique로 만들면
-        # inactive 이력 행을 task_type당 하나밖에 둘 수 없어 version 이력 자체가
-        # 사라진다.
+        sa.UniqueConstraint("task_type", "language", "version"),
+        # active는 **(task_type, language)당** 최대 하나이며 **partial** unique로
+        # 강제한다(04_DB_SPEC.md의 active 유일성). 같은 task_type이라도 언어가 다르면
+        # 둘 다 active일 수 있다 --- 그렇지 않으면 한 언어의 prompt만 쓸 수 있다.
+        # "가장 최근 행이 active"로 추론하면 옛 version으로 되돌리는 rollback이
+        # 불가능해진다. 전체 unique로 만들면 inactive 이력 행을 조합당 하나밖에 둘 수
+        # 없어 version 이력 자체가 사라진다.
         #
         # 이름은 uq_user_sentence_candidates_active와 같은 방식으로 짧게 고정한다.
         # Index는 ix convention(`ix_%(column_0_label)s`)을 타므로 이름을 주지 않으면
@@ -78,6 +89,7 @@ class PromptVersion(Base):
         sa.Index(
             "uq_prompt_versions_active",
             "task_type",
+            "language",
             unique=True,
             postgresql_where=sa.text("active"),
         ),
