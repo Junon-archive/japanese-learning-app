@@ -413,7 +413,7 @@ def build_state(
     )
     ok(login)
     cookie = session_cookie(login)
-    started = ok(call(api, "POST", "/api/study/session", cookie=cookie))
+    started = ok(call(api, "POST", "/api/study/session", cookie=cookie, body={"language": "ja"}))
     assert started["resumed"] is False
     session_id = started["session"]["session_id"]
 
@@ -526,7 +526,9 @@ def assert_state_survived(
     idle_timeout = cfg.session.study_session_idle_timeout_minutes * 60
     assert time.monotonic() - before.last_activity < idle_timeout
 
-    resumed = ok(call(api, "POST", "/api/study/session", cookie=before.cookie))
+    resumed = ok(
+        call(api, "POST", "/api/study/session", cookie=before.cookie, body={"language": "ja"})
+    )
     assert resumed["resumed"] is True
     assert resumed["session"]["session_id"] == before.session_id
     assert resumed["timed_out_session_id"] is None

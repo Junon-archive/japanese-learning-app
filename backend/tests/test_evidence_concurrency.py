@@ -198,7 +198,7 @@ def _evidence_event_types(db: Session, *, presentation_id: int, learning_item_id
 
 
 def _open_presentation(api: StudyApi) -> Mapping[str, Any]:
-    started = api.client.post("/api/study/session")
+    started = api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200, started.text
     session_id = started.json()["session"]["session_id"]
     shown = api.client.post(f"/api/study/session/{session_id}/next")

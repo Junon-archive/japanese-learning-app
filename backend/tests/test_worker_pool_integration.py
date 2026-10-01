@@ -154,7 +154,7 @@ def _drain(
 
 
 def _start(api: StudyApi) -> int:
-    response = api.client.post("/api/study/session")
+    response = api.client.post("/api/study/session", json={"language": "ja"})
     assert response.status_code == 200, response.text
     session_id = response.json()["session"]["session_id"]
     assert isinstance(session_id, int)

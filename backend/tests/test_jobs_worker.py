@@ -586,7 +586,7 @@ def test_a_study_session_keeps_running_while_the_ceiling_is_reached(
     handled = _run_once(committed_db, provider=provider, runner=FakeRunner(), cfg=cfg, now=now)
     assert handled is False
 
-    started = committed_api.client.post("/api/study/session")
+    started = committed_api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200, started.text
     session_id = started.json()["session"]["session_id"]
     presented = committed_api.client.post(f"/api/study/session/{session_id}/next")
