@@ -73,6 +73,12 @@ class SeedSummary:
     explanations: int
     # 후리가나 계산 누계. CLI가 `format_summary_lines`로 출력한다(11_OBSERVABILITY.md).
     ruby: RubySummary
+    # 증분 적재 요약(04_DB_SPEC.md의 `증분 적재`). 비-incremental 모드는 전량이
+    # inserted이고 skipped는 0이다.
+    items_inserted: int
+    items_skipped: int
+    sentences_inserted: int
+    sentences_skipped: int
 
 
 @dataclass(frozen=True)
@@ -104,7 +110,6 @@ class _Item:
     difficulty_label: str | None
     topic_tags: list[str] | None
     frequency_rank: int | None
-    seed_order: int
 
 
 @dataclass(frozen=True)
@@ -185,7 +190,10 @@ def _tags(mapping: dict[str, object], where: str) -> list[str] | None:
 
 
 def _parse_items(path: Path) -> list[_Item]:
-    """seed_order는 파일 내 행 순서대로 1부터 1씩 증가한다(06_LEARNING_ENGINE.md).
+    """`metadata_json.seed_order`는 여기서 매기지 않는다. `load_seed`가 적재 순서대로
+
+    (기본 모드는 파일 내 행 순서, 증분 모드는 그 언어의 기존 최대값 다음부터) 매긴다
+    (06_LEARNING_ENGINE.md, 04_DB_SPEC.md의 `증분 적재`).
 
     learning_item은 `items.yaml` 한 파일에만 존재하므로 "파일명 오름차순"은
     이 파일의 행 순서로 축약된다. item 파일이 늘어나면 파일명 오름차순으로
@@ -218,7 +226,6 @@ def _parse_items(path: Path) -> list[_Item]:
                 difficulty_label=_optional_text(mapping, "difficulty_label", where),
                 topic_tags=_tags(mapping, where),
                 frequency_rank=_optional_int(mapping, "frequency_rank", where),
-                seed_order=index + 1,
             )
         )
     return items
@@ -365,30 +372,93 @@ def _reject_if_already_seeded(session: Session) -> None:
         )
 
 
-def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary:
+def _existing_item_seed_ids(session: Session) -> dict[str, int]:
+    """DB에 이미 있는 `learning_items.seed_id` -> id. 증분 적재의 "이미 있다" 판정이다."""
+    rows = session.execute(
+        sa.select(LearningItem.seed_id, LearningItem.id).where(LearningItem.seed_id.is_not(None))
+    ).all()
+    return {str(seed_id): item_id for seed_id, item_id in rows}
+
+
+def _existing_sentence_seed_ids(session: Session) -> set[str]:
+    """DB에 이미 있는 `sentences.seed_id`. 증분 적재의 "이미 있다" 판정이다."""
+    rows = session.scalars(sa.select(Sentence.seed_id).where(Sentence.seed_id.is_not(None))).all()
+    return {str(seed_id) for seed_id in rows}
+
+
+def _max_seed_order(session: Session, *, language: Language) -> int:
+    """이 언어의 기존 `learning_items.metadata_json.seed_order` 최댓값. 없으면 0.
+
+    증분 적재가 이어 붙이는 시작점이다(`04_DB_SPEC.md`의 `증분 적재`) --- 재사용하면
+    exploration 정렬의 tie-break가 충돌한다.
+    """
+    rows = session.scalars(
+        sa.select(LearningItem.metadata_json).where(
+            LearningItem.language == language,
+            LearningItem.origin == LearningItemOrigin.SEED,
+        )
+    ).all()
+    orders = [
+        value["seed_order"]
+        for value in rows
+        if isinstance(value, dict) and isinstance(value.get("seed_order"), int)
+    ]
+    return max(orders, default=0)
+
+
+def load_seed(
+    session: Session,
+    seed_dir: Path,
+    *,
+    now: datetime,
+    language: Language = Language.JA,
+    incremental: bool = False,
+) -> SeedSummary:
     """seed 디렉터리를 적재하고 요약을 돌려준다. commit은 호출자가 한다.
 
     `now`는 호출자(CLI 진입점)가 읽은 값이다. 여기서 시계를 읽지 않고, 이 적재로
     생기는 모든 `created_at` / `generated_at`이 **같은 순간**을 갖는다 (ADR-007).
+
+    `incremental=False`(기본)는 빈 DB 전용이다 --- `origin = seed` 행이 하나라도 있으면
+    거부한다. `incremental=True`는 파일의 `seed_id` 중 DB에 없는 것만 INSERT하고 이미
+    있는 것은 건너뛴다. 기존 행은 고치지 않는다(`04_DB_SPEC.md`의 `증분 적재`).
     """
     items = _parse_items(seed_dir / ITEMS_FILE)
     sentences = _parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items})
-    _reject_if_already_seeded(session)
+
+    if incremental:
+        existing_item_ids = _existing_item_seed_ids(session)
+        existing_sentence_ids = _existing_sentence_seed_ids(session)
+        seed_order = _max_seed_order(session, language=language)
+    else:
+        _reject_if_already_seeded(session)
+        existing_item_ids = {}
+        existing_sentence_ids = set()
+        seed_order = 0
 
     spans = 0
     explanations = 0
     ruby = RubySummary()
+    items_inserted = 0
+    items_skipped = 0
+    sentences_inserted = 0
+    sentences_skipped = 0
 
     # 검증은 위에서 끝났지만 적재 중 DB 제약 위반이 나도 부분 적재가 남지 않게 한다.
     with session.begin_nested():
         item_ids: dict[str, int] = {}
         for item in items:
-            metadata: dict[str, Any] = {"seed_order": item.seed_order}
+            if item.seed_id in existing_item_ids:
+                # 이미 있는 item은 고치지 않는다. 문장이 가리킬 id만 가져온다.
+                item_ids[item.seed_id] = existing_item_ids[item.seed_id]
+                items_skipped += 1
+                continue
+            seed_order += 1
+            metadata: dict[str, Any] = {"seed_order": seed_order}
             if item.frequency_rank is not None:
                 metadata["frequency_rank"] = item.frequency_rank
             row = LearningItem(
-                # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
-                language=Language.JA,
+                language=language,
                 type=item.type,
                 lemma=item.lemma,
                 reading=item.reading,
@@ -396,24 +466,29 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
                 difficulty_label=item.difficulty_label,
                 topic_tags=item.topic_tags,
                 origin=LearningItemOrigin.SEED,
+                seed_id=item.seed_id,
                 metadata_json=metadata,
                 created_at=now,
             )
             session.add(row)
             session.flush()
             item_ids[item.seed_id] = row.id
+            items_inserted += 1
 
         for sentence in sentences:
+            if sentence.seed_id in existing_sentence_ids:
+                sentences_skipped += 1
+                continue
             sentence_row = Sentence(
-                # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
-                language=Language.JA,
+                language=language,
                 text=sentence.text,
                 korean_translation=sentence.korean_translation,
                 source_type=SentenceSourceType.SEED,
                 source_id=sentence.seed_id,
-                normalized_hash=normalized_sentence_hash(sentence.text),
+                seed_id=sentence.seed_id,
+                normalized_hash=normalized_sentence_hash(sentence.text, language.value),
                 status=SentenceStatus.VALIDATED,
-                ruby_json=_compute_ruby_json(sentence, ruby, now=now),
+                ruby_json=_compute_ruby_json(sentence, ruby, now=now, language=language),
                 created_at=now,
             )
             session.add(sentence_row)
@@ -456,6 +531,7 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
                     )
                 )
                 explanations += 1
+            sentences_inserted += 1
         session.flush()
 
     return SeedSummary(
@@ -464,18 +540,28 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
         spans=spans,
         explanations=explanations,
         ruby=ruby,
+        items_inserted=items_inserted,
+        items_skipped=items_skipped,
+        sentences_inserted=sentences_inserted,
+        sentences_skipped=sentences_skipped,
     )
 
 
 def _compute_ruby_json(
-    sentence: _Sentence, summary: RubySummary, *, now: datetime
+    sentence: _Sentence, summary: RubySummary, *, now: datetime, language: Language = Language.JA
 ) -> dict[str, Any] | None:
     """tappable item의 span과 `explanation.reading`으로 계산한다. 실패하면 None(= 미계산).
+
+    `language != ja`이면 계산 자체를 건너뛴다(ADR-024 결정 6) --- 영어 문장에는
+    후리가나가 없고 분석기를 부르지 않는다. 이 경우는 "계산 실패"가 아니므로
+    `summary`에 기록하지 않는다.
 
     예외를 여기서 삼키는 이유: 후리가나는 표시 보조이고 계산 실패가 적재를 막지 않는다
     (10_ERROR_HANDLING.md의 `후리가나 계산 실패`). backfill이 NULL 행을 다시 시도한다.
     불일치 보고의 식별자는 seed의 `seed_id`와 `item_seed_id`다(아직 DB id가 없다).
     """
+    if language is not Language.JA:
+        return None
     items = [
         RubyItem(
             sentence_item_id=item.item_seed_id,
