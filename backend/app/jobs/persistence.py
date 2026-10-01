@@ -344,7 +344,7 @@ def _store_one(
     그 답은 상태와 무관하다. `quarantined`를 빼면 사용자가 격리한 문장의 복제가
     저장되고(불변식 #7), `retired`를 빼면 재실행 idempotency가 상태 변화에 흔들린다.
     """
-    digest = normalized_sentence_hash(candidate.payload.text)
+    digest = normalized_sentence_hash(candidate.payload.text, job.language.value)
     existing = db.execute(
         sa.select(Sentence.id, Sentence.generation_job_id)
         .where(Sentence.normalized_hash == digest)

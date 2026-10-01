@@ -58,6 +58,7 @@ def find_duplicate(
     *,
     similarity_threshold: float,
     skip_similarity: bool,
+    language: str = "ja",
 ) -> Rejection | None:
     """검사 11과 12. 통과하면 None이다.
 
@@ -71,8 +72,12 @@ def find_duplicate(
     한 batch 안의 문장끼리도 중복일 수 있다. 그 처리는 호출자가 통과시킨 문장을
     `corpus`에 이어 붙이며 다음 문장을 검사하는 것으로 한다 --- 여기서 batch를
     통째로 받으면 "이미 저장된 것"과 "방금 통과한 것"의 경계가 흐려진다.
+
+    `language`는 `normalized_sentence_text`로 그대로 전달한다(ADR-024 결정 6). `corpus`는
+    호출자가 이미 같은 언어로 좁혀서 넘긴다(`08_LLM_SPEC.md`의 `duplicate 비교 corpus`) ---
+    여기서는 다시 거르지 않는다.
     """
-    digest = normalized_sentence_hash(text)
+    digest = normalized_sentence_hash(text, language)
     for existing in corpus:
         if existing.normalized_hash == digest:
             return Rejection(
@@ -84,7 +89,7 @@ def find_duplicate(
         return None
 
     for existing in corpus:
-        ratio = similarity_ratio(text, existing.text)
+        ratio = similarity_ratio(text, existing.text, language)
         if ratio > similarity_threshold:
             return Rejection(
                 RejectionReason.DUPLICATE_SIMILARITY,

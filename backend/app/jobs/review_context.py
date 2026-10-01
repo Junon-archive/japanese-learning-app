@@ -112,7 +112,7 @@ def prepare(
         request=request,
         provenance=provenance,
         policy=sentence_policy(cfg),
-        corpus=load_corpus(db, exclude_job_id=job.id),
+        corpus=load_corpus(db, exclude_job_id=job.id, language=job.language),
         requested_refs=frozenset({_LABEL}),
         new_refs=new_item_refs(db, user_id=user.id, item_ids=item_ids),
         item_ids=item_ids,
@@ -120,6 +120,7 @@ def prepare(
         skip_similarity=skip_similarity,
         # lineage는 stage에서 나온다. `near_original`만 anchor의 자식이다.
         parent_sentence_id=anchor.id if stage is ContextStage.NEAR_ORIGINAL else None,
+        language=job.language,
     )
 
 
