@@ -7,7 +7,8 @@
 규칙 세 가지가 이 파일의 모양을 정한다.
 
 1.  모든 field가 required다. "없음"은 field 생략이 아니라 `null`이며, `null`을
-    허용하는 것은 `explanation`(item 단위)과 `explanation.example_translation`
+    허용하는 것은 `explanation`(item 단위), `explanation.example_translation`,
+    그리고 `explanation.reading`(MVP-03: `language = 'en'`에서 항상 `null`)
     뿐이다. strict structured output이 optional field를 잘 다루지 못한다.
 2.  **모델이 우리 쪽 식별자를 만들지 않는다.** `sentence_id` / `learning_item_id`
     / `sentence_item_id`가 스키마에 없고, item 지시는 요청 로컬 라벨 `item_ref`
@@ -47,11 +48,16 @@ class SpanPayload(BaseModel):
 
 
 class ExplanationPayload(BaseModel):
-    """contextual explanation. `example_translation`만 `null`을 허용한다."""
+    """contextual explanation. `example_translation`과 `reading`이 `null`을 허용한다.
+
+    `reading`은 `language = 'ja'`에서 non-null이고 `'en'`에서 `null`이다(MVP-03).
+    영어에 발음 표기를 하지 않는다. 스키마는 둘 다 허용하고 강제는
+    `app.llm.validation`의 검사 14가 언어별로 한다.
+    """
 
     model_config = _STRICT
 
-    reading: str
+    reading: str | None
     core_meaning: str
     meaning_in_context: str
     nuance: str
