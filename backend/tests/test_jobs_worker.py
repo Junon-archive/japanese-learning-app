@@ -110,7 +110,12 @@ def _cfg(**sections: dict[str, Any]) -> AppConfig:
 
 def _activate_prompt_versions(db: Session) -> None:
     for template in PROMPT_TEMPLATES.values():
-        factories.make_prompt_version(db, task_type=template.task_type, version=template.version)
+        factories.make_prompt_version(
+            db,
+            task_type=template.task_type,
+            version=template.version,
+            language=template.language,
+        )
 
 
 def _queued_job(

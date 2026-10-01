@@ -35,6 +35,7 @@ import itertools
 from dataclasses import dataclass
 
 from app.llm.schemas import ExplanationPayload, ItemPayload, SentencePayload, SpanPayload
+from app.models.enums import Language
 from app.render import (
     ItemSpan,
     RenderSpanError,
@@ -64,6 +65,7 @@ class RejectionReason(enum.StrEnum):
     DUPLICATE_HASH = "duplicate_hash"  # 11
     DUPLICATE_SIMILARITY = "duplicate_similarity"  # 12
     UNKNOWN_ITEM_REF = "unknown_item_ref"  # 13
+    READING_LANGUAGE_MISMATCH = "reading_language_mismatch"  # 14 (MVP-03)
 
 
 @dataclass(frozen=True)
@@ -115,9 +117,9 @@ class SentencePolicy:
 
 
 # explanation에서 비어 있으면 안 되는 field. `example_translation`만 null 허용이다
-# (`08_LLM_SPEC.md`의 `Ready invariant와 같은 범위`).
+# (`08_LLM_SPEC.md`의 `Ready invariant와 같은 범위`). `reading`은 이 목록에 없다 ---
+# 언어에 따라 필수 여부가 다르므로(검사 14) 일괄 취급하지 않는다.
 REQUIRED_EXPLANATION_FIELDS = (
-    "reading",
     "core_meaning",
     "meaning_in_context",
     "nuance",
@@ -131,12 +133,14 @@ def validate_sentence(
     requested_refs: frozenset[str],
     new_refs: frozenset[str],
     policy: SentencePolicy,
+    language: Language,
 ) -> ValidatedSentence | Rejection:
-    """문장 하나에 검사 2~10과 13을 건다. 첫 실패에서 멈춘다.
+    """문장 하나에 검사 2~10·13·14를 건다. 첫 실패에서 멈춘다.
 
     `requested_refs`는 이 요청이 보낸 `item_ref` 집합, `new_refs`는 그중 이
     사용자에게 신규인 것(검사 10). 둘 다 worker가 요청을 만들 때 이미 알고 있는
-    값이며 응답에서 읽지 않는다.
+    값이며 응답에서 읽지 않는다. `language`는 검사 14(`reading`의 언어별 요구)가
+    쓴다.
     """
     text = payload.text
 
@@ -189,19 +193,26 @@ def validate_sentence(
     if overlap is not None:
         return overlap
 
-    for item in items:  # 9
-        rejection = _validate_tappable_explanation(item)
+    for item in items:  # 9, 14
+        rejection = _validate_tappable_explanation(item, language)
         if rejection is not None:
             return rejection
 
     return ValidatedSentence(payload.model_copy(update={"items": items}))
 
 
-def validate_explanation(payload: ExplanationPayload) -> ValidatedExplanation | Rejection:
-    """`EXPLAIN_ITEM` 응답에 검사 9의 field 조건을 건다."""
+def validate_explanation(
+    payload: ExplanationPayload, *, language: Language
+) -> ValidatedExplanation | Rejection:
+    """`EXPLAIN_ITEM` 응답에 검사 9의 field 조건과 검사 14를 건다."""
     missing = _missing_explanation_fields(payload)
     if missing is not None:
         return Rejection(RejectionReason.MISSING_EXPLANATION, missing)
+    if _reading_language_mismatch(payload.reading, language):
+        return Rejection(
+            RejectionReason.READING_LANGUAGE_MISMATCH,
+            f"reading={payload.reading!r} is invalid for language={language.value!r}",
+        )
     return ValidatedExplanation(payload)
 
 
@@ -336,13 +347,16 @@ def _reject_cross_item_overlap(text: str, items: tuple[ItemPayload, ...]) -> Rej
 # --------------------------------------------------------------------------
 
 
-def _validate_tappable_explanation(item: ItemPayload) -> Rejection | None:
-    """검사 9의 범위는 target만이 아니라 `is_tappable = true`인 **모든** item이다.
+def _validate_tappable_explanation(item: ItemPayload, language: Language) -> Rejection | None:
+    """검사 9·14의 범위는 target만이 아니라 `is_tappable = true`인 **모든** item이다.
 
     Ready invariant와 같은 범위다(`08_LLM_SPEC.md`의
     `Ready invariant와 같은 범위`). 약한 해석(target only)을 쓰면 생성 validation은
     통과했는데 candidate는 될 수 없는 문장이 조용히 쌓이고, 어느 지표에도 실패로
     잡히지 않아 pool이 비는 이유가 보이지 않는다.
+
+    검사 9(`missing_explanation`)와 검사 14(`reading_language_mismatch`)는 별개
+    사유 코드다 --- 섞지 않는다.
     """
     if not item.is_tappable:
         return None
@@ -354,6 +368,12 @@ def _validate_tappable_explanation(item: ItemPayload) -> Rejection | None:
     missing = _missing_explanation_fields(item.explanation)
     if missing is not None:
         return Rejection(RejectionReason.MISSING_EXPLANATION, f"{item.item_ref}: {missing}")
+    if _reading_language_mismatch(item.explanation.reading, language):
+        return Rejection(
+            RejectionReason.READING_LANGUAGE_MISMATCH,
+            f"{item.item_ref}: reading={item.explanation.reading!r} "
+            f"is invalid for language={language.value!r}",
+        )
     return None
 
 
@@ -364,3 +384,13 @@ def _missing_explanation_fields(explanation: ExplanationPayload) -> str | None:
     if empty:
         return f"empty explanation fields: {empty}"
     return None
+
+
+def _reading_language_mismatch(reading: str | None, language: Language) -> bool:
+    """검사 14: `language = 'ja'`는 non-empty `reading`을, `'en'`은 `null`을 요구한다.
+
+    스키마가 둘 다 허용하므로(`app.llm.schemas`) 강제는 여기다.
+    """
+    if language is Language.JA:
+        return reading is None or not reading.strip()
+    return reading is not None

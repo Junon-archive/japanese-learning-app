@@ -102,6 +102,20 @@ def test_null_is_allowed_only_where_the_spec_allows_it() -> None:
         )
 
 
+def test_reading_may_be_null() -> None:
+    """`language = 'en'`에서 `explanation.reading`은 `null`이다 (MVP-03).
+
+    스키마는 두 언어를 둘 다 허용하고, 강제는 `app.llm.validation`의 검사 14가
+    한다(`08_LLM_SPEC.md`의 `Structured Output 스키마`).
+    """
+    parsed = parse_sentence_batch(
+        batch(items=[{**ITEM, "explanation": {**EXPLANATION, "reading": None}}])
+    )
+    explanation = parsed.sentences[0].items[0].explanation
+    assert explanation is not None
+    assert explanation.reading is None
+
+
 def test_unknown_difficulty_label_is_rejected_at_parsing() -> None:
     with pytest.raises(SchemaParseError):
         parse_sentence_batch(batch(difficulty_label="native"))

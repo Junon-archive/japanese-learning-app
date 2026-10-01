@@ -1139,7 +1139,10 @@ def test_scenario_e_the_enqueued_job_refills_the_pool(
         for template in PROMPT_TEMPLATES.values():
             if template.task_type is LlmTaskType.GENERATE_SENTENCE_BATCH:
                 factories.make_prompt_version(
-                    setup, task_type=template.task_type, version=template.version
+                    setup,
+                    task_type=template.task_type,
+                    version=template.version,
+                    language=template.language,
                 )
         setup.commit()
 

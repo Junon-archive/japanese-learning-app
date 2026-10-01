@@ -24,6 +24,7 @@ from app.models.enums import (
     ExplanationStatus,
     GenerationJobStatus,
     JobType,
+    Language,
     LlmTaskType,
 )
 from app.models.jobs import GenerationJob
@@ -243,3 +244,68 @@ def test_a_payload_without_a_sentence_item_id_is_a_dead_letter(
 
     assert status is DEAD_LETTER
     assert _reload(db, job).last_error == "invalid_payload"
+
+
+# --------------------------------------------------------------------------
+# 언어별 prompt 선택 (MVP-03, ADR-023 결정 5)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_a_missing_active_prompt_version_is_scoped_to_its_language(
+    db: Session, study_clock: MutableClock
+) -> None:
+    """ja에만 active 행이 있어도 en job은 그것을 쓸 수 없다 --- 그 언어의 job만
+    `dead_letter`이고 다른 언어는 영향받지 않는다(`08_LLM_SPEC.md`)."""
+    sentence_item = _unexplained_item(db)
+    _prompt_version(db)  # ja만 등록한다.
+    job = _job(db, sentence_item_id=sentence_item.id)
+    job.language = Language.EN
+    db.commit()
+    provider = RecordingProvider(responses=[])
+
+    status = _run(db, job, provider, study_clock)
+
+    assert status is DEAD_LETTER
+    assert provider.call_count == 0
+    assert _reload(db, job).last_error == "no_active_prompt_version"
+
+
+@pytest.mark.integration
+def test_the_jobs_language_picks_the_matching_active_row_when_both_languages_are_active(
+    db: Session, study_clock: MutableClock
+) -> None:
+    """`active_provenance`가 `language`로 좁히지 않으면 두 active 행을 만나
+    `MultipleResultsFound`를 던진다(`jobs/persistence.py`의 `active_provenance`)."""
+    sentence_item = _unexplained_item(db)
+    factories.make_prompt_version(
+        db,
+        task_type=LlmTaskType.EXPLAIN_ITEM,
+        version=explain_item_prompt.VERSION,
+        language=Language.JA,
+        model="ja-model",
+    )
+    factories.make_prompt_version(
+        db,
+        task_type=LlmTaskType.EXPLAIN_ITEM,
+        version="explain_item_en_v1",
+        language=Language.EN,
+        model="en-model",
+    )
+    job = _job(db, sentence_item_id=sentence_item.id)
+    job.language = Language.EN
+    db.commit()
+    provider = RecordingProvider(
+        responses=[json.dumps(explanation_payload(reading=None), ensure_ascii=False)]
+    )
+
+    status = _run(db, job, provider, study_clock)
+
+    assert status is COMPLETED
+    assert provider.calls[0].model == "en-model"
+    explanation = db.execute(sa.select(SentenceItemExplanation)).scalar_one()
+    assert (explanation.provider, explanation.model, explanation.prompt_version) == (
+        "stub",
+        "en-model",
+        "explain_item_en_v1",
+    )

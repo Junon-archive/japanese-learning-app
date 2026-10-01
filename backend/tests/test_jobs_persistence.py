@@ -28,6 +28,7 @@ from app.models.content import Sentence, SentenceItem, SentenceItemExplanation, 
 from app.models.enums import (
     ExplanationStatus,
     GenerationJobStatus,
+    Language,
     LlmTaskType,
     SentenceSourceType,
     SentenceStatus,
@@ -533,7 +534,10 @@ def test_the_active_prompt_version_row_is_the_only_source_of_model_and_provider(
     db.commit()
 
     provenance = persistence.active_provenance(
-        db, task_type=LlmTaskType.GENERATE_SENTENCE_BATCH, now=study_clock.now()
+        db,
+        task_type=LlmTaskType.GENERATE_SENTENCE_BATCH,
+        language=Language.JA,
+        now=study_clock.now(),
     )
 
     assert provenance == Provenance(
@@ -557,7 +561,10 @@ def test_an_inactive_row_is_not_a_source(db: Session, study_clock: MutableClock)
 
     assert (
         persistence.active_provenance(
-            db, task_type=LlmTaskType.GENERATE_SENTENCE_BATCH, now=study_clock.now()
+            db,
+            task_type=LlmTaskType.GENERATE_SENTENCE_BATCH,
+            language=Language.JA,
+            now=study_clock.now(),
         )
         is None
     )

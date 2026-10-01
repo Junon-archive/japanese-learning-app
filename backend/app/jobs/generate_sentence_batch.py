@@ -121,7 +121,7 @@ class SentencePlan:
     def _screen(
         self, sentences: Sequence[SentencePayload]
     ) -> tuple[list[NewSentence], list[Rejection]]:
-        """검사 2~13. 통과한 문장은 다음 문장의 비교 corpus에 이어 붙인다."""
+        """검사 2~10·13·14. 통과한 문장은 다음 문장의 비교 corpus에 이어 붙인다."""
         corpus = list(self.corpus)
         accepted: list[NewSentence] = []
         rejected: list[Rejection] = []
@@ -132,6 +132,7 @@ class SentencePlan:
                 requested_refs=self.requested_refs,
                 new_refs=self.new_refs,
                 policy=self.policy,
+                language=self.language,
             )
             if isinstance(checked, Rejection):
                 rejected.append(checked)
@@ -173,7 +174,9 @@ def prepare(
     if user is None:
         return queue.PermanentReason.MISSING_REFERENCE
 
-    provenance = persistence.active_provenance(db, task_type=TASK_TYPE, now=now)
+    provenance = persistence.active_provenance(
+        db, task_type=TASK_TYPE, language=job.language, now=now
+    )
     if provenance is None:
         return queue.PermanentReason.NO_ACTIVE_PROMPT_VERSION
 
@@ -190,7 +193,9 @@ def prepare(
         ),
         preferred_targets_per_sentence=cfg.learning.preferred_new_items_per_sentence,
         max_targets_per_sentence=cfg.learning.max_new_items_per_sentence,
-        max_sentence_length_chars=cfg.content.max_sentence_length_chars,
+        max_sentence_length_chars=getattr(
+            cfg.content.max_sentence_length_chars, job.language.value
+        ),
         avoid_examples=tuple(
             example
             for item in targets
@@ -202,6 +207,7 @@ def prepare(
     try:
         request = build_sentence_batch_request(
             request_input,
+            language=job.language,
             model=provenance.model,
             prompt_version=provenance.prompt_version,
         )
@@ -213,7 +219,7 @@ def prepare(
     return SentencePlan(
         request=request,
         provenance=provenance,
-        policy=sentence_policy(cfg),
+        policy=sentence_policy(cfg, job.language),
         corpus=load_corpus(db, exclude_job_id=job.id, language=job.language),
         requested_refs=requested_refs(request_input.targets),
         new_refs=new_item_refs(db, user_id=user.id, item_ids=item_ids),
@@ -230,10 +236,14 @@ def prepare(
 # --------------------------------------------------------------------------
 
 
-def sentence_policy(cfg: AppConfig) -> SentencePolicy:
-    """검사 3·5·10의 정책값. 숫자는 전부 config에서 온다."""
+def sentence_policy(cfg: AppConfig, language: Language) -> SentencePolicy:
+    """검사 3·5·10의 정책값. 숫자는 전부 config에서 온다.
+
+    검사 3의 길이 상한은 `content.max_sentence_length_chars[<job의 language>]`다
+    (MVP-03, ADR-024 결정 6). 언어별 맵이므로 길이 상한만 `language`로 가른다.
+    """
     return SentencePolicy(
-        max_sentence_length_chars=cfg.content.max_sentence_length_chars,
+        max_sentence_length_chars=getattr(cfg.content.max_sentence_length_chars, language.value),
         max_targets_per_sentence=cfg.learning.max_new_items_per_sentence,
         max_new_items_per_sentence=cfg.learning.max_new_items_per_sentence,
     )

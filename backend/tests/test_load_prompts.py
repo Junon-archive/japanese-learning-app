@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db import get_engine
 from app.jobs.worker import WorkerStartupError, check_active_prompt_versions
 from app.llm.prompts import PROMPT_TEMPLATES
-from app.models.enums import LlmTaskType
+from app.models.enums import Language, LlmTaskType
 from app.models.jobs import PromptVersion
 from app.settings import get_settings
 from tests import factories
@@ -38,9 +38,15 @@ EXIT_FAILED = 2
 MODEL = "operator-chosen-model"
 PROVIDER = "openai"
 
-# registry의 key가 (task_type, version)이다. 그 pair 목록이 곧 이 매핑이다.
-REGISTRY_VERSIONS = dict(PROMPT_TEMPLATES.keys())
-ALL_REGISTRY_VERSIONS = {version for _, version in PROMPT_TEMPLATES}
+# registry의 key가 (task_type, language, version)이다. `--language`를 생략하면 ja가
+# 기본값이므로(하위 호환), 대부분의 기존 단언은 ja만 본다.
+REGISTRY_VERSIONS = {
+    task: version for task, language, version in PROMPT_TEMPLATES if language is Language.JA
+}
+EN_REGISTRY_VERSIONS = {
+    task: version for task, language, version in PROMPT_TEMPLATES if language is Language.EN
+}
+ALL_REGISTRY_VERSIONS = {version for _, _, version in PROMPT_TEMPLATES}
 
 
 @pytest.fixture
@@ -158,6 +164,58 @@ def test_only_the_requested_task_is_registered(
 
 
 # --------------------------------------------------------------------------
+# --language (MVP-03, ADR-023 결정 5)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_language_defaults_to_japanese(
+    load_prompts: ModuleType, cli_db: sessionmaker[Session]
+) -> None:
+    """`--language`를 생략하면 ja다 --- 기존 배포 스크립트와의 하위 호환."""
+    assert _run(load_prompts) == EXIT_OK
+
+    rows = _rows(cli_db)
+    assert {row.language for row in rows} == {Language.JA}
+    assert {row.task_type: row.version for row in rows} == REGISTRY_VERSIONS
+
+
+@pytest.mark.integration
+def test_language_argument_registers_english_rows(
+    load_prompts: ModuleType, cli_db: sessionmaker[Session]
+) -> None:
+    assert _run(load_prompts, "--language", "en") == EXIT_OK
+
+    rows = _rows(cli_db)
+    assert {row.language for row in rows} == {Language.EN}
+    assert {row.task_type: row.version for row in rows} == EN_REGISTRY_VERSIONS
+
+
+@pytest.mark.integration
+def test_registering_english_does_not_deactivate_the_japanese_row(
+    load_prompts: ModuleType, cli_db: sessionmaker[Session]
+) -> None:
+    """active 유일성은 `(task_type, language)`다. 언어가 다르면 같은 task_type이라도
+    서로 다른 active 자리이므로, 영어 등록이 일본어 active를 내리면 안 된다."""
+    assert _run(load_prompts) == EXIT_OK
+    ja_rows_before = {(row.task_type, row.id): row.active for row in _rows(cli_db)}
+
+    assert _run(load_prompts, "--language", "en") == EXIT_OK
+
+    rows = _rows(cli_db)
+    ja_rows_after = {
+        (row.task_type, row.id): row.active for row in rows if row.language is Language.JA
+    }
+    assert ja_rows_after == ja_rows_before
+    assert all(row.active for row in rows)
+
+
+def test_an_unknown_language_is_refused(load_prompts: ModuleType) -> None:
+    with pytest.raises(SystemExit):
+        load_prompts.main(["--provider", PROVIDER, "--model", MODEL, "--language", "fr"])
+
+
+# --------------------------------------------------------------------------
 # idempotency와 active 유일성
 # --------------------------------------------------------------------------
 
@@ -198,8 +256,8 @@ def test_activating_a_new_version_deactivates_the_previous_one(
 ) -> None:
     """기존 active를 먼저 내리지 않으면 `uq_prompt_versions_active`가 터진다.
 
-    partial unique(`UNIQUE (task_type) WHERE active`)는 즉시 검사되므로, 순서가
-    뒤집히면 이 테스트가 IntegrityError로 실패한다.
+    partial unique(`UNIQUE (task_type, language) WHERE active`)는 즉시 검사되므로,
+    순서가 뒤집히면 이 테스트가 IntegrityError로 실패한다.
     """
     task = LlmTaskType.GENERATE_SENTENCE_BATCH
     with cli_db() as setup:
@@ -262,15 +320,15 @@ def test_an_ambiguous_registry_requires_an_explicit_version(
     task = LlmTaskType.EXPLAIN_ITEM
     monkeypatch.setitem(
         PROMPT_TEMPLATES,
-        (task, "explain_item_v99"),
-        PROMPT_TEMPLATES[task, REGISTRY_VERSIONS[task]],
+        (task, Language.JA, "explain_item_v99"),
+        PROMPT_TEMPLATES[task, Language.JA, REGISTRY_VERSIONS[task]],
     )
 
     with pytest.raises(load_prompts.PromptRegistrationError, match="several prompt versions"):
-        load_prompts.resolve_version(task, None)
+        load_prompts.resolve_version(task, Language.JA, None)
 
     # 명시하면 등록할 수 있다. 위 거부가 "전부 거부"로 굳으면 rollback이 불가능해진다.
-    assert load_prompts.resolve_version(task, "explain_item_v99") == "explain_item_v99"
+    assert load_prompts.resolve_version(task, Language.JA, "explain_item_v99") == "explain_item_v99"
 
 
 # --------------------------------------------------------------------------
