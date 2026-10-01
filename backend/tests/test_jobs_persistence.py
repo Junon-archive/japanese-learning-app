@@ -769,6 +769,85 @@ def test_a_failed_ruby_computation_still_stores_a_validated_sentence(
 
 
 @pytest.mark.integration
+def test_an_english_job_never_calls_the_analyzer_and_stores_no_ruby(
+    db: Session,
+    study_clock: MutableClock,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """후리가나는 일본어 전용이다(불변식 23). `_insert_sentence`가 `job.language`를
+
+    보지 않고 매 문장마다 `compute_ruby`를 불렀다면, 한자가 없는 영어 문장에서도
+    `compute_ruby`가 예외 없이 빈 spans의 `RubyComputation`을 돌려줄 수 있고, 그
+    비-NULL `ruby_json`이 `ck_sentences_ruby_json_ja_only` CHECK를 위반해 저장이
+    `IntegrityError`로 실패한다(Wave 3에서 실제로 재현된 회귀). 분석기를 아예
+    부르지 않는지까지 증명해야 "우연히 None이 나왔다"와 구분된다.
+    """
+
+    def must_not_be_called(
+        text: str, items: Sequence[RubyItem], *, now: datetime
+    ) -> RubyComputation:
+        raise AssertionError("영어 job에서 compute_ruby가 호출되면 안 된다")
+
+    monkeypatch.setattr(persistence, "compute_ruby", must_not_be_called)
+
+    item = factories.make_learning_item(db, language=Language.EN, lemma="pick up")
+    job = _job(db)
+    job.language = Language.EN
+    db.commit()
+
+    text = "Can you pick it up later?"
+    start = text.index("pick it up")
+    payload = SentencePayload(
+        text=text,
+        korean_translation="나중에 그걸 가져가 줄 수 있어?",
+        difficulty_label=StartingLevel.BEGINNER,
+        items=(
+            ItemPayload(
+                item_ref="it0",
+                surface_form="pick it up",
+                is_tappable=True,
+                spans=(
+                    SpanPayload(
+                        start_codepoint=start,
+                        end_codepoint=start + len("pick it up"),
+                        span_order=0,
+                    ),
+                ),
+                explanation=ExplanationPayload(
+                    reading=None,
+                    core_meaning="나중에 가져가다",
+                    meaning_in_context="나중에 그걸 가져가 줄 수 있어?",
+                    nuance="친구 사이의 가벼운 부탁",
+                    example_sentence="I'll pick it up tomorrow.",
+                    example_translation="내일 가져갈게.",
+                ),
+            ),
+        ),
+    )
+    new_sentence = NewSentence(payload=payload, item_ids={"it0": item.id}, parent_sentence_id=None)
+
+    with caplog.at_level(logging.INFO, logger=RUBY_LOGGER):
+        completion = persistence.save_sentences(
+            db,
+            job=job,
+            sentences=[new_sentence],
+            rejected=[],
+            provenance=_provenance(study_clock),
+            now=study_clock.now(),
+        )
+
+    sentence = db.get(Sentence, completion.stored[0], populate_existing=True)
+    assert sentence is not None
+    assert sentence.language is Language.EN
+    assert sentence.status is SentenceStatus.VALIDATED
+    assert sentence.ruby_json is None
+    assert db.scalar(sa.select(Sentence.id).where(Sentence.ruby_json.is_(None))) == sentence.id
+    assert _records(caplog, observability.RUBY_COMPUTED) == []
+    assert _records(caplog, observability.RUBY_FAILED) == []
+
+
+@pytest.mark.integration
 def test_the_ready_invariant_still_rejects_without_any_ruby_log(
     db: Session, study_clock: MutableClock, caplog: pytest.LogCaptureFixture
 ) -> None:

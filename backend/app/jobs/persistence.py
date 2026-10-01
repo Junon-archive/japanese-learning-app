@@ -70,6 +70,7 @@ from app.models.content import (
 )
 from app.models.enums import (
     ExplanationStatus,
+    Language,
     LlmTaskType,
     SentenceSourceType,
     SentenceStatus,
@@ -384,7 +385,14 @@ def _insert_sentence(
     now: datetime,
 ) -> int:
     payload = candidate.payload
-    ruby, ruby_error = _compute_ruby(payload, now=now)
+    # 후리가나는 일본어 전용이다(불변식 23). 영어 job에서 분석기를 부르면 한자가
+    # 없는 영어 문장에서도 compute_ruby가 예외 없이 빈 spans의 RubyComputation을
+    # 돌려줄 수 있고, 그 비-NULL ruby_json이 `ck_sentences_ruby_json_ja_only`
+    # CHECK(language = 'ja' OR ruby_json IS NULL)를 위반해 저장이 IntegrityError로
+    # 실패한다. 그래서 일본어 job에서만 계산한다.
+    ruby, ruby_error = (
+        _compute_ruby(payload, now=now) if job.language == Language.JA else (None, None)
+    )
     sentence = Sentence(
         # job의 language를 그대로 쓴다 (ADR-023 결정 1). generated 문장은 그 job이
         # 생성 대상으로 삼은 언어와 같아야 한다 --- 다른 값을 쓰면 한 job의 결과물이
