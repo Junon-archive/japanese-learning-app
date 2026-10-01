@@ -61,6 +61,7 @@ from app.schemas.study import (
     ResourceId,
     RubyPartPayload,
     SelfReportRequest,
+    StartSessionRequest,
     StartSessionResponse,
     StudySessionPayload,
     TappableItemPayload,
@@ -168,13 +169,21 @@ def read_open_session(current_user: CurrentUser, db: Db) -> OpenSessionResponse:
 
 
 @router.post("/session")
-def start_session(current_user: CurrentUser, db: Db, now: Now, cfg: Config) -> StartSessionResponse:
-    """idle timeout 이내면 resume, 초과면 새 session이다. body를 받지 않는다.
+def start_session(
+    payload: StartSessionRequest, current_user: CurrentUser, db: Db, now: Now, cfg: Config
+) -> StartSessionResponse:
+    """idle timeout 이내면 resume, 초과면 새 session이다.
+
+    `language`는 필수 body 필드다(05_API_SPEC.md의 `세션 언어와 409`). 열린 session이
+    있고 그 session의 language가 다르면 service가 던지는
+    `SessionLanguageMismatchError`가 app 레벨 handler를 거쳐 409로 나간다(`app.main`).
 
     `client_event_id`를 받지 않는 이유는 `session_started`의 key가 session id 기반
     server 발급이기 때문이다(ADR-008).
     """
-    started = study_session.start_or_resume(db, user=current_user, now=now, cfg=cfg)
+    started = study_session.start_or_resume(
+        db, user=current_user, now=now, cfg=cfg, language=payload.language
+    )
     return StartSessionResponse(
         session=_session_payload(started.session),
         resumed=started.resumed,
@@ -414,6 +423,7 @@ def flag_content(
 def _session_payload(session: StudySession) -> StudySessionPayload:
     return StudySessionPayload(
         session_id=session.id,
+        language=session.language,
         started_at=session.started_at,
         last_activity_at=session.last_activity_at,
         ended_at=session.ended_at,
