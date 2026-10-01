@@ -2,6 +2,9 @@
 
 DB는 테스트 pgserver의 일회용 DB, 백업은 `tmp_path`다. 대상 DB에는 seed(`seed_min`)와 학습 기록
 몇 행을 넣고 `ruby_json`을 NULL로 되돌려 "migration 직후, backfill 전" 상태를 만든다.
+
+MVP-03: 대상 조회가 `language = 'ja'`를 더한다(ADR-024 결정 6). 영어 문장은 `ruby_json`이 항상
+NULL이므로 그 필터가 없으면 전부 "계산 실패"로 집계된다.
 """
 
 from __future__ import annotations
@@ -29,7 +32,15 @@ from app.jobs import persistence
 from app.jobs.persistence import NewSentence, Provenance
 from app.llm.schemas import ExplanationPayload, ItemPayload, SentencePayload, SpanPayload
 from app.models.content import Sentence
-from app.models.enums import CandidateStatus, ExplanationStatus, StartingLevel
+from app.models.enums import (
+    CandidateStatus,
+    ExplanationStatus,
+    Language,
+    SentenceSourceType,
+    SentenceStatus,
+    StartingLevel,
+)
+from app.normalization import normalized_sentence_hash
 from app.services.seed_loader import load_seed
 from app.settings import get_settings
 from tests import db_support, factories
@@ -173,6 +184,50 @@ def test_dry_run_writes_nothing_and_prints_the_target_first(
     password = target_db.password
     if password:
         assert str(password) not in out
+
+
+def _insert_english_sentence(dsn: URL) -> int:
+    """`ruby_json IS NULL`인 영어 문장 하나. 대상 조회가 이것을 걸러야 한다."""
+    engine = sa.create_engine(dsn, poolclass=NullPool)
+    try:
+        with Session(engine) as session:
+            text = "Let's go."
+            sentence = Sentence(
+                language=Language.EN,
+                text=text,
+                korean_translation="가자.",
+                source_type=SentenceSourceType.SEED,
+                normalized_hash=normalized_sentence_hash(text, "en"),
+                status=SentenceStatus.VALIDATED,
+                ruby_json=None,
+                created_at=datetime.now(UTC),
+            )
+            session.add(sentence)
+            session.commit()
+            return int(sentence.id)
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.integration
+def test_english_sentences_are_not_targets_and_stay_null(
+    target_db: URL, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """MVP-03: 대상 조회는 `language = 'ja'`만 본다(ADR-024 결정 6).
+
+    필터가 없으면 영어 문장은 ruby가 있을 수 없으므로 항상 계산이 "실패"로 잡히고,
+    `--apply`도 그 문장은 건드리지 않아야 한다.
+    """
+    english_id = _insert_english_sentence(target_db)
+
+    code = _run(_apply(tmp_path))
+
+    out = capsys.readouterr().out
+    assert code == EXIT_OK, out
+    assert "sentences with ruby_json IS NULL: 2" in out, out
+    assert "sentences=2 computed=2 failed=0" in out
+    assert "updated 2 of 2 sentences" in out
+    assert _ruby(target_db)[english_id] is None
 
 
 @pytest.mark.integration
