@@ -17,6 +17,8 @@
 9.  **Reveal on Demand** --- 번역과 reading은 필요할 때.
 10. **Personal App + Public Demo** --- 실사용 데이터는 private, 방문자는
     fixture로 체험. 언어마다 demo가 하나씩 있다(`spec/mvp-03-english/00_SCOPE.md`).
+    계정은 소유자와 소수의 지인용이며 회원가입은 없다. 계정끼리 학습 기록을 공유하지 않지만
+    **LLM 사용량 한도는 공유한다**(`mvp-01-core/04_DB_SPEC.md`의 `계정 수와 공유 범위`).
 11. **Non-punitive Habit Design** --- streak/overdue 부채감으로 압박하지
     않는다.
 12. **One Engine, Many Languages** --- 학습 알고리즘은 언어를 모른다. 언어는

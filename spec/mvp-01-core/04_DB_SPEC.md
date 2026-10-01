@@ -31,6 +31,33 @@
 Public signup은 없다. 계정은 seed/admin CLI 또는 초기 setup 절차로
 생성한다.
 
+### 계정 수와 공유 범위 (확정)
+
+**계정은 소유자와 소수의 지인용이다.** 하나로 제한하지 않는다. 회원가입은 계속 없고
+(`03_UI_UX_SPEC.md`의 `Login`) 계정은 CLI로만 만든다.
+
+``` text
+계정마다 따로인 것   user_mastery, review_states, user_item_learning_state, item_exposures,
+                     user_sentence_candidates, study_presentations, study_sessions, learning_events
+                     -> 진도·mastery·FSRS·세션이 완전히 갈린다. 서로의 기록을 볼 수 없다
+모든 계정이 공유하는 것  learning_items, sentences, sentence_items, sentence_item_explanations
+                     (global content. 같은 문장 풀을 각자의 진도로 본다)
+                     prompt_versions, config (학습 정책값)
+                     **LLM 사용량 한도** --- 아래
+```
+
+-   **학습 대상 언어와 계정은 별개 축이다.** 계정을 언어별로 나누지 않는다. 한 계정이 두
+    언어를 다 쓰고, 계정이 둘이면 각자 두 언어를 쓴다(ADR-023 결정 1, 사용자 결정 2026-10-01).
+-   **`daily_request_limit` / `daily_token_limit`은 계정별이 아니라 전역이다.** 두 번째 계정이
+    학습하면 소유자의 provider 키로 생성이 돌고 같은 하루 한도를 쓴다. **한도에 걸리면 모든
+    계정이 함께 멈춘다**(`09_BACKGROUND_JOBS.md`의 `Cost Guard`). 비용을 계정별로 나누거나
+    제한하는 수단은 MVP에 없고 만들지 않는다 --- 지인 몇 명 규모에서 그 장치의 복잡도가 이익보다
+    크다.
+-   **계정을 추가해도 따로 할 설정이 없다.** 첫 세션에서 그 사용자 몫의 candidate가 기존
+    global content에서 만들어진다(`06_LEARNING_ENGINE.md`의 `Candidate Materialization`).
+-   계정 삭제·비활성화 절차는 정하지 않았다. `users.is_active`가 있지만 그것을 쓰는 운영
+    절차가 없다.
+
 password 요구사항(최소 길이 등)의 canonical 정의는
 `spec/04_SECURITY_AND_DATA.md`의 `Password 요구사항 (MVP 확정)`이며 계정
 생성 경로에서 검증한다. **`users`와 `auth_sessions` 어느 쪽에도 로그인 실패
