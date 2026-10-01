@@ -26,6 +26,7 @@ from app.models.enums import (
     ContentFlagReason,
     ContextStage,
     ExplicitSignal,
+    Language,
     LearningItemType,
     PresentationRole,
     ReviewReason,
@@ -137,6 +138,17 @@ class ClientEventRequest(BaseModel):
         return value
 
 
+class StartSessionRequest(BaseModel):
+    """`POST /api/study/session`의 요청 body (05_API_SPEC.md의 `세션 언어와 409`).
+
+    `language`에 기본값을 두지 않는다. 기본값이 있으면 언어를 빠뜨린 요청이 조용히
+    일본어 세션을 연다. 허용값 밖이거나 필드가 없으면 422다(pydantic이 `Language`
+    enum 검증으로 그대로 해 준다).
+    """
+
+    language: Language
+
+
 class SelfReportRequest(ClientEventRequest):
     sentence_item_id: ResourceId
     value: ExplicitSignal
@@ -165,6 +177,7 @@ class ContentFlagRequest(ClientEventRequest):
 
 class StudySessionPayload(BaseModel):
     session_id: int
+    language: Language
     started_at: UtcTimestamp
     last_activity_at: UtcTimestamp
     ended_at: UtcTimestamp | None

@@ -34,6 +34,7 @@ from app.models.enums import (
     ContextStage,
     GenerationJobStatus,
     JobType,
+    Language,
     LlmTaskType,
     PresentationRole,
     ReviewReason,
@@ -164,7 +165,9 @@ def _jobs(db: Session, *, job_type: JobType | None = None) -> list[GenerationJob
 
 def _start_session(db: Session, user: User, *, now: MutableClock, cfg: AppConfig) -> int:
     """`POST /api/study/session`의 service 진입점. materialization을 1회 돌린다."""
-    started = study_session_service.start_or_resume(db, user=user, now=now.now(), cfg=cfg)
+    started = study_session_service.start_or_resume(
+        db, user=user, now=now.now(), cfg=cfg, language=Language.JA
+    )
     return started.session.id
 
 
@@ -392,7 +395,7 @@ def test_the_request_path_enqueues_without_touching_a_provider(
     )
 
     with no_outbound_network():
-        started = study_api.client.post("/api/study/session")
+        started = study_api.client.post("/api/study/session", json={"language": "ja"})
         assert started.status_code == 200, started.text
         session_id = started.json()["session"]["session_id"]
         following = study_api.client.post(f"/api/study/session/{session_id}/next")
@@ -498,7 +501,7 @@ def test_a_gap_that_only_appears_mid_session_is_still_ordered_from_next(
         db_session, user, item, stage=ContextStage.VARIED, now=study_api.clock, cfg=cfg
     )
 
-    started = study_api.client.post("/api/study/session")
+    started = study_api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200, started.text
     session_id = started.json()["session"]["session_id"]
 
@@ -584,7 +587,7 @@ def test_the_ordered_explanation_makes_the_skipped_sentence_ready(
         setup.commit()
         item_id = item.id
 
-    started = committed_api.client.post("/api/study/session")
+    started = committed_api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200, started.text
     session_id = started.json()["session"]["session_id"]
 

@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import LearningConfig
 from app.learning.selection import MaterializationGaps, Selection, select_next
+from app.models.enums import Language
 from app.models.study import StudyPresentation
 from app.models.user import User
 from app.services import presentation as presentation_service
@@ -93,12 +94,19 @@ def _install_race(monkeypatch: pytest.MonkeyPatch) -> None:
         study_session_id: int,
         now: datetime,
         cfg: LearningConfig,
+        language: Language,
         gaps: MaterializationGaps | None = None,
     ) -> Selection | None:
         with suppress(threading.BrokenBarrierError):
             barrier.wait(timeout=RACE_TIMEOUT_SECONDS)
         return real_select_next(
-            db, user=user, study_session_id=study_session_id, now=now, cfg=cfg, gaps=gaps
+            db,
+            user=user,
+            study_session_id=study_session_id,
+            now=now,
+            cfg=cfg,
+            language=language,
+            gaps=gaps,
         )
 
     monkeypatch.setattr(presentation_service, "select_next", racing_select_next)
@@ -127,7 +135,7 @@ def test_concurrent_next_requests_open_only_one_presentation(
     """
     _seed_ready_sentences(committed_db)
 
-    started = committed_api.client.post("/api/study/session")
+    started = committed_api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200, started.text
     session_id = started.json()["session"]["session_id"]
 

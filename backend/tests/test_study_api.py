@@ -134,8 +134,8 @@ def _seed_ready_sentence(db: Session, user: User) -> Sentence:
     return sentence
 
 
-def _start(api: TestClient) -> int:
-    response = api.post("/api/study/session")
+def _start(api: TestClient, *, language: str = "ja") -> int:
+    response = api.post("/api/study/session", json={"language": language})
     assert response.status_code == 200
     session_id = response.json()["session"]["session_id"]
     assert isinstance(session_id, int)
@@ -610,7 +610,7 @@ def test_starting_a_session_maps_a_service_error_instead_of_500(
 
     monkeypatch.setattr("app.services.study_session.start_or_resume", boom)
 
-    response = api.post("/api/study/session")
+    response = api.post("/api/study/session", json={"language": "ja"})
 
     assert response.status_code == 409
     assert "Internal Server Error" not in response.text
@@ -716,7 +716,7 @@ def test_a_client_cannot_brick_the_idle_timeout_with_a_v5_key(
     assert preempt.status_code == 422
 
     study_clock.advance(timedelta(minutes=cfg.session.study_session_idle_timeout_minutes + 1))
-    restarted = api.post("/api/study/session")
+    restarted = api.post("/api/study/session", json={"language": "ja"})
 
     assert restarted.status_code == 200
     body = restarted.json()
@@ -1192,3 +1192,123 @@ def test_reading_the_open_session_returns_null_when_there_is_none(
 
     assert response.status_code == 200
     assert response.json() == {"session": None}
+
+
+# --------------------------------------------------------------------------
+# 세션 언어와 409 (MVP-03, 05_API_SPEC.md의 `세션 언어와 409`)
+# --------------------------------------------------------------------------
+
+
+def test_starting_a_session_without_language_answers_422(
+    api: TestClient, db_session: Session
+) -> None:
+    _login(api, db_session)
+
+    response = api.post("/api/study/session", json={})
+
+    assert response.status_code == 422
+
+
+def test_starting_a_session_with_an_unknown_language_answers_422(
+    api: TestClient, db_session: Session
+) -> None:
+    _login(api, db_session)
+
+    response = api.post("/api/study/session", json={"language": "fr"})
+
+    assert response.status_code == 422
+
+
+def test_starting_a_session_with_no_open_session_creates_one_with_that_language(
+    api: TestClient, db_session: Session
+) -> None:
+    _login(api, db_session)
+
+    response = api.post("/api/study/session", json={"language": "en"})
+
+    assert response.status_code == 200
+    assert response.json()["session"]["language"] == "en"
+
+
+def test_the_same_language_resumes_the_same_session(api: TestClient, db_session: Session) -> None:
+    _login(api, db_session)
+    first = api.post("/api/study/session", json={"language": "ja"})
+    assert first.status_code == 200
+
+    second = api.post("/api/study/session", json={"language": "ja"})
+
+    assert second.status_code == 200
+    assert second.json()["resumed"] is True
+    assert second.json()["session"]["session_id"] == first.json()["session"]["session_id"]
+
+
+def test_a_different_language_answers_409_and_leaves_the_open_session_untouched(
+    api: TestClient, db_session: Session
+) -> None:
+    """09번 불변식: 조용히 닫지 않는다. `ended_at`이 DB에서 직접 봐도 NULL이다."""
+    user = _login(api, db_session)
+    first = api.post("/api/study/session", json={"language": "ja"})
+    assert first.status_code == 200
+    open_session_id = first.json()["session"]["session_id"]
+
+    response = api.post("/api/study/session", json={"language": "en"})
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["error"] == "session_language_mismatch"
+    assert body["open_session"]["id"] == open_session_id
+    assert body["open_session"]["language"] == "ja"
+
+    db_session.expire_all()
+    reloaded = db_session.execute(
+        sa.select(StudySession).where(StudySession.user_id == user.id)
+    ).scalar_one()
+    assert reloaded.id == open_session_id
+    assert reloaded.ended_at is None
+
+
+def test_a_different_language_after_finish_succeeds(api: TestClient, db_session: Session) -> None:
+    _login(api, db_session)
+    first = api.post("/api/study/session", json={"language": "ja"})
+    assert first.status_code == 200
+    session_id = first.json()["session"]["session_id"]
+
+    finished = api.post(f"/api/study/session/{session_id}/finish")
+    assert finished.status_code == 200
+
+    response = api.post("/api/study/session", json={"language": "en"})
+
+    assert response.status_code == 200
+    assert response.json()["session"]["language"] == "en"
+    assert response.json()["session"]["session_id"] != session_id
+
+
+def test_a_different_language_after_idle_timeout_starts_a_new_session_not_409(
+    api: TestClient, db_session: Session, study_clock: MutableClock
+) -> None:
+    cfg = get_config()
+    _login(api, db_session)
+    first = api.post("/api/study/session", json={"language": "ja"})
+    assert first.status_code == 200
+    first_id = first.json()["session"]["session_id"]
+
+    study_clock.advance(timedelta(minutes=cfg.session.study_session_idle_timeout_minutes + 1))
+    response = api.post("/api/study/session", json={"language": "en"})
+
+    assert response.status_code == 200
+    assert response.json()["timed_out_session_id"] == first_id
+    assert response.json()["session"]["language"] == "en"
+    assert response.json()["session"]["session_id"] != first_id
+
+
+def test_reading_the_open_session_includes_its_language(
+    api: TestClient, db_session: Session
+) -> None:
+    _login(api, db_session)
+    started = api.post("/api/study/session", json={"language": "en"})
+    assert started.status_code == 200
+
+    response = api.get("/api/study/session")
+
+    assert response.status_code == 200
+    assert response.json()["session"]["language"] == "en"

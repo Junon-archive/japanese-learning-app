@@ -130,7 +130,9 @@ def _learn() -> tuple[int, int]:
     try:
         with TestClient(app, base_url="https://testserver", headers={"Origin": ORIGIN}) as client:
             ok(client.post("/api/auth/login", json={"login_id": LOGIN_ID, "password": PASSWORD}))
-            session_id = ok(client.post("/api/study/session"))["session"]["session_id"]
+            session_id = ok(client.post("/api/study/session", json={"language": "ja"}))["session"][
+                "session_id"
+            ]
             presentation = ok(client.post(f"/api/study/session/{session_id}/next"))["presentation"]
             assert presentation is not None, "seed에서 Ready Pool이 만들어지지 않았다"
             presentation_id = presentation["presentation_id"]

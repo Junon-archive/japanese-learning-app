@@ -469,7 +469,7 @@ def test_a_generated_sentence_becomes_a_candidate_on_the_next_materialization(
 
     assert has_ready_sentence(db, learning_item_id=item.id)
     created = materialize_candidates(
-        db, user=user, now=study_clock.now(), cfg=get_config().learning
+        db, user=user, now=study_clock.now(), cfg=get_config().learning, language=Language.JA
     )
     db.commit()
     assert created == 1

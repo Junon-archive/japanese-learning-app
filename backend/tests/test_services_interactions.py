@@ -41,6 +41,7 @@ from app.models.enums import (
     EventType,
     ExplanationStatus,
     ExplicitSignal,
+    Language,
     PresentationRole,
 )
 from app.services.content_flag import flag_content
@@ -989,7 +990,9 @@ def test_interactions_alone_keep_the_session_from_timing_out(
             cfg=cfg,
         )
 
-    resumed = start_or_resume(db_session, user=scene.user, now=study_clock.now(), cfg=cfg)
+    resumed = start_or_resume(
+        db_session, user=scene.user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     assert resumed.resumed is True
     assert resumed.session.id == scene.study_session.id
     assert resumed.timed_out_session_id is None

@@ -70,7 +70,6 @@ from app.models.content import (
 )
 from app.models.enums import (
     ExplanationStatus,
-    Language,
     LlmTaskType,
     SentenceSourceType,
     SentenceStatus,
@@ -387,8 +386,10 @@ def _insert_sentence(
     payload = candidate.payload
     ruby, ruby_error = _compute_ruby(payload, now=now)
     sentence = Sentence(
-        # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
-        language=Language.JA,
+        # job의 language를 그대로 쓴다 (ADR-023 결정 1). generated 문장은 그 job이
+        # 생성 대상으로 삼은 언어와 같아야 한다 --- 다른 값을 쓰면 한 job의 결과물이
+        # 자기 자신이 속한 언어와 다른 언어의 콘텐츠를 만들 수 있다.
+        language=job.language,
         text=payload.text,
         korean_translation=payload.korean_translation,
         source_type=SentenceSourceType.GENERATED,

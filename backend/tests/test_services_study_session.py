@@ -35,6 +35,7 @@ from app.models.enums import (
 )
 from app.services.events import server_client_event_id
 from app.services.study_session import (
+    SessionLanguageMismatchError,
     StudySessionClosedError,
     StudySessionNotFoundError,
     build_policy_snapshot,
@@ -178,7 +179,9 @@ def test_a_new_session_takes_its_target_minutes_from_config(
     cfg = get_config()
     user = factories.make_user(db_session)
 
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     assert started.resumed is False
     assert started.timed_out_session_id is None
@@ -194,7 +197,9 @@ def test_starting_a_session_records_session_started_with_the_server_key(
 ) -> None:
     user = factories.make_user(db_session)
 
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=get_config())
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=get_config(), language=Language.JA
+    )
 
     events = _events(db_session, user_id=user.id, event_type=EventType.SESSION_STARTED)
     assert len(events) == 1
@@ -215,7 +220,9 @@ def test_a_session_start_materializes_the_ready_pool_for_that_user(
     user = factories.make_user(db_session)
     _seed_new_item_content(db_session, user)
 
-    start_or_resume(db_session, user=user, now=study_clock.now(), cfg=get_config())
+    start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=get_config(), language=Language.JA
+    )
 
     ready = db_session.execute(
         sa.select(sa.func.count())
@@ -234,10 +241,14 @@ def test_returning_exactly_at_the_idle_limit_resumes_the_same_session(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    first = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    first = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     study_clock.advance(timedelta(minutes=cfg.session.study_session_idle_timeout_minutes))
-    second = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    second = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     assert second.resumed is True
     assert second.session.id == first.session.id
@@ -251,13 +262,17 @@ def test_one_second_past_the_idle_limit_starts_a_new_session(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    first = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    first = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     last_activity_at = first.session.last_activity_at
 
     study_clock.advance(
         timedelta(minutes=cfg.session.study_session_idle_timeout_minutes, seconds=1)
     )
-    second = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    second = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     assert second.resumed is False
     assert second.session.id != first.session.id
@@ -280,13 +295,15 @@ def test_a_timed_out_session_leaves_its_unfinished_presentation_alone(
     """
     cfg = get_config()
     user = factories.make_user(db_session)
-    first = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    first = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     presentation = _presentation_for(db_session, user, first.session)
 
     study_clock.advance(
         timedelta(minutes=cfg.session.study_session_idle_timeout_minutes, seconds=1)
     )
-    start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA)
 
     assert presentation.completed_at is None
     assert _events(db_session, user_id=user.id, event_type=EventType.SENTENCE_COMPLETED) == []
@@ -299,12 +316,108 @@ def test_one_users_open_session_is_not_resumed_by_another(
     cfg = get_config()
     user_a = factories.make_user(db_session)
     user_b = factories.make_user(db_session)
-    started_a = start_or_resume(db_session, user=user_a, now=study_clock.now(), cfg=cfg)
+    started_a = start_or_resume(
+        db_session, user=user_a, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
-    started_b = start_or_resume(db_session, user=user_b, now=study_clock.now(), cfg=cfg)
+    started_b = start_or_resume(
+        db_session, user=user_b, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     assert started_b.session.id != started_a.session.id
     assert started_b.resumed is False
+
+
+# --------------------------------------------------------------------------
+# session language (MVP-03, 05_API_SPEC.md의 `세션 언어와 409`)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_a_new_session_is_created_with_the_requested_language(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    cfg = get_config()
+    user = factories.make_user(db_session)
+
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.EN
+    )
+
+    assert started.resumed is False
+    assert started.session.language == Language.EN
+
+
+@pytest.mark.integration
+def test_the_same_language_resumes_the_same_session(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    cfg = get_config()
+    user = factories.make_user(db_session)
+    first = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
+
+    second = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
+
+    assert second.resumed is True
+    assert second.session.id == first.session.id
+
+
+@pytest.mark.integration
+def test_a_different_language_raises_and_changes_nothing(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """`SessionLanguageMismatchError`를 던지고 열린 session을 그대로 둔다 (불변식 22).
+
+    조용히 닫지 않는다 --- `ended_at`이 그대로 NULL이고, `touch()`도 materialization도
+    돌지 않았으므로 `last_activity_at`도 바뀌지 않는다.
+    """
+    cfg = get_config()
+    user = factories.make_user(db_session)
+    first = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
+    last_activity_before = first.session.last_activity_at
+
+    study_clock.advance(timedelta(seconds=30))
+    with pytest.raises(SessionLanguageMismatchError) as excinfo:
+        start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.EN)
+
+    assert excinfo.value.open_session.id == first.session.id
+
+    db_session.expire_all()
+    reloaded = db_session.get(StudySession, first.session.id)
+    assert reloaded is not None
+    assert reloaded.ended_at is None
+    assert reloaded.language == Language.JA
+    assert reloaded.last_activity_at == last_activity_before
+
+
+@pytest.mark.integration
+def test_a_different_language_after_idle_timeout_starts_a_new_session(
+    db_session: Session, study_clock: MutableClock
+) -> None:
+    """idle timeout을 넘긴 session은 언어 불일치 분기에 닿지 않는다 --- 그냥 새 session이다."""
+    cfg = get_config()
+    user = factories.make_user(db_session)
+    first = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
+
+    study_clock.advance(
+        timedelta(minutes=cfg.session.study_session_idle_timeout_minutes, seconds=1)
+    )
+    second = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.EN
+    )
+
+    assert second.resumed is False
+    assert second.session.id != first.session.id
+    assert second.session.language == Language.EN
+    assert second.timed_out_session_id == first.session.id
 
 
 # --------------------------------------------------------------------------
@@ -318,7 +431,9 @@ def test_finishing_closes_the_session_and_the_open_presentation(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     presentation = _presentation_for(db_session, user, started.session)
 
     study_clock.advance(timedelta(seconds=30))
@@ -345,7 +460,9 @@ def test_finishing_closes_the_session_and_the_open_presentation(
 def test_finishing_twice_changes_nothing(db_session: Session, study_clock: MutableClock) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     first = finish(
         db_session, user_id=user.id, session_id=started.session.id, now=study_clock.now(), cfg=cfg
     )
@@ -369,7 +486,9 @@ def test_finishing_someone_elses_session_is_not_found(
     cfg = get_config()
     owner = factories.make_user(db_session)
     other = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=owner, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=owner, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     with pytest.raises(StudySessionNotFoundError):
         finish(
@@ -392,7 +511,9 @@ def test_extending_adds_the_configured_minutes(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     session = extend(
         db_session,
@@ -413,7 +534,9 @@ def test_resending_the_same_extend_does_not_extend_twice(
     """client 발급 key의 존재 이유다. 재전송이 `+5분`을 한 번 더 주면 그 UUID는 장식이다."""
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     client_event_id = uuid.uuid4()
 
     extend(
@@ -444,7 +567,9 @@ def test_a_second_deliberate_extension_uses_a_second_key(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
 
     for _ in range(2):
         session = extend(
@@ -465,7 +590,9 @@ def test_a_finished_session_cannot_be_extended(
 ) -> None:
     cfg = get_config()
     user = factories.make_user(db_session)
-    started = start_or_resume(db_session, user=user, now=study_clock.now(), cfg=cfg)
+    started = start_or_resume(
+        db_session, user=user, now=study_clock.now(), cfg=cfg, language=Language.JA
+    )
     finish(
         db_session, user_id=user.id, session_id=started.session.id, now=study_clock.now(), cfg=cfg
     )

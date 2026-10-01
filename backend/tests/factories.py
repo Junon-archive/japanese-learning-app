@@ -86,18 +86,24 @@ def make_user(session: Session, *, login_id: str | None = None) -> User:
 def make_learning_item(
     session: Session,
     *,
+    language: Language = Language.JA,
     lemma: str | None = None,
     difficulty_label: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> LearningItem:
     """`difficulty_label` / `metadata`는 exploration 정렬(06_LEARNING_ENGINE.md)의
     입력이므로 기본을 NULL/빈 값으로 둔다 --- factory가 정렬 기준을 몰래 정해 두면
-    "정렬이 그 값을 본다"는 단정이 거짓 통과한다."""
+    "정렬이 그 값을 본다"는 단정이 거짓 통과한다.
+
+    `language`는 기본이 `ja`다(MVP-01 호출부 대다수). 다른 언어 content를 만드는
+    호출자(MVP-03의 언어 범위 테스트)만 명시한다. `reading`은 영어에서 NULL이어야
+    하므로(ADR-023 결정 3) 영어를 요청하면 그 기본값도 같이 바뀐다.
+    """
     item = LearningItem(
-        language=Language.JA,
+        language=language,
         type=LearningItemType.EXPRESSION,
         lemma="任せる" if lemma is None else lemma,
-        reading="まかせる",
+        reading=None if language is not Language.JA else "まかせる",
         default_meaning="맡기다",
         difficulty_label=difficulty_label,
         origin=LearningItemOrigin.SEED,
@@ -112,6 +118,7 @@ def make_learning_item(
 def make_sentence(
     session: Session,
     *,
+    language: Language = Language.JA,
     text: str | None = None,
     korean_translation: str | None = None,
     parent_sentence_id: int | None = None,
@@ -131,7 +138,7 @@ def make_sentence(
     """
     body = "それは君に任せる。" if text is None else text
     sentence = Sentence(
-        language=Language.JA,
+        language=language,
         text=body,
         korean_translation=(
             "그건 너에게 맡길게." if korean_translation is None else korean_translation
@@ -139,7 +146,9 @@ def make_sentence(
         source_type=SentenceSourceType.SEED,
         parent_sentence_id=parent_sentence_id,
         normalized_hash=(
-            normalized_sentence_hash(body) if normalized_hash is None else normalized_hash
+            normalized_sentence_hash(body, language.value)
+            if normalized_hash is None
+            else normalized_hash
         ),
         status=SentenceStatus.VALIDATED,
         created_at=NOW,
@@ -153,6 +162,7 @@ def make_ready_sentence(
     session: Session,
     items: Sequence[LearningItem],
     *,
+    language: Language = Language.JA,
     surfaces: Sequence[str] | None = None,
     parent_sentence_id: int | None = None,
 ) -> Sentence:
@@ -164,10 +174,15 @@ def make_ready_sentence(
 
     tappable item마다 `validated` explanation을 둔다. 하나라도 빠지면 이 문장은
     애초에 candidate가 되지 못한다.
+
+    `language`는 `items`의 language와 같아야 한다(호출자 책임) --- sentence와 그
+    item들의 언어가 갈리는 상태는 어떤 프로덕션 경로로도 정상이 아니다.
     """
     chosen = [item.lemma for item in items] if surfaces is None else list(surfaces)
     text = "".join(chosen)
-    sentence = make_sentence(session, text=text, parent_sentence_id=parent_sentence_id)
+    sentence = make_sentence(
+        session, language=language, text=text, parent_sentence_id=parent_sentence_id
+    )
     cursor = 0
     for item, surface in zip(items, chosen, strict=True):
         sentence_item = make_sentence_item(session, sentence, item, surface_form=surface)
@@ -177,10 +192,12 @@ def make_ready_sentence(
     return sentence
 
 
-def make_study_session(session: Session, user: User, *, target_minutes: int) -> StudySession:
+def make_study_session(
+    session: Session, user: User, *, target_minutes: int, language: Language = Language.JA
+) -> StudySession:
     """`target_minutes`는 config(default_session_minutes)에서 와야 하므로 필수 인자다."""
     study_session = StudySession(
-        language=Language.JA,
+        language=language,
         user_id=user.id,
         started_at=NOW,
         last_activity_at=NOW,

@@ -54,6 +54,7 @@ from app.models.enums import (
     ExplanationStatus,
     ExplicitSignal,
     ExposureModality,
+    Language,
     PresentationRole,
     ReviewReason,
     SentenceStatus,
@@ -574,7 +575,7 @@ def test_backlog_counts_only_eligible_due_items(db_session: Session) -> None:
         deferred_until=clock.now() + timedelta(hours=12),
     )
 
-    assert count_backlog(db_session, user_id=user.id, now=clock.now()) == 1
+    assert count_backlog(db_session, user_id=user.id, now=clock.now(), language=Language.JA) == 1
 
 
 # --------------------------------------------------------------------------
@@ -594,7 +595,7 @@ def test_a_seed_only_user_gets_exploration_candidates_only(db_session: Session) 
     _ready_sentence(db_session, [second])
 
     created = materialize_candidates(
-        db_session, user=user, now=clock.now(), cfg=get_config().learning
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
     )
 
     candidates = _candidates_of(db_session, user)
@@ -615,7 +616,9 @@ def test_the_first_target_of_a_new_item_is_marked_new(db_session: Session) -> No
     item = factories.make_learning_item(db_session)
     _ready_sentence(db_session, [item])
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     target = db_session.execute(
@@ -637,9 +640,15 @@ def test_running_materialization_twice_does_not_duplicate_candidates(
     _ready_sentence(db_session, [item])
     cfg = get_config().learning
 
-    first = materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    first = materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=cfg, language=Language.JA
+    )
     second = materialize_candidates(
-        db_session, user=user, now=clock.advance(timedelta(minutes=1)), cfg=cfg
+        db_session,
+        user=user,
+        now=clock.advance(timedelta(minutes=1)),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     assert (first, second) == (1, 0)
@@ -658,7 +667,7 @@ def test_a_sentence_without_a_validated_explanation_never_becomes_ready(
     _ready_sentence(db_session, [item], explained=False)
 
     created = materialize_candidates(
-        db_session, user=user, now=clock.now(), cfg=get_config().learning
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
     )
 
     assert created == 0
@@ -675,7 +684,7 @@ def test_a_quarantined_sentence_never_becomes_ready(db_session: Session) -> None
     db_session.flush()
 
     created = materialize_candidates(
-        db_session, user=user, now=clock.now(), cfg=get_config().learning
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
     )
 
     assert created == 0
@@ -690,7 +699,9 @@ def test_one_run_creates_at_most_the_configured_batch_size(db_session: Session) 
     for _ in range(cfg.candidate_materialization_batch_size + 2):
         _ready_sentence(db_session, [factories.make_learning_item(db_session)])
 
-    created = materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    created = materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=cfg, language=Language.JA
+    )
 
     assert created == cfg.candidate_materialization_batch_size
 
@@ -708,7 +719,9 @@ def test_items_sharing_a_sentence_become_targets_of_one_candidate(
     ]
     _ready_sentence(db_session, items)
 
-    created = materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    created = materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=cfg, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     assert created == 1
@@ -727,7 +740,9 @@ def test_an_active_learning_target_becomes_new_and_not_exploration(
     _ready_sentence(db_session, [item])
     _learning_state(db_session, user, item, active=True)
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     assert candidate.presentation_role is NEW
@@ -752,7 +767,9 @@ def test_a_promoted_item_stays_new_until_it_has_been_shown(db_session: Session) 
     _learning_state(db_session, user, item, active=True, anchor_sentence_id=anchor.id)
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     assert candidate.presentation_role is NEW
@@ -772,7 +789,9 @@ def test_the_first_exposure_moves_an_item_from_new_to_review(db_session: Session
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
     _expose(db_session, user, item, clock.now())
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     assert candidate.presentation_role is REVIEW
@@ -790,7 +809,9 @@ def test_a_due_item_gets_an_fsrs_due_candidate(db_session: Session) -> None:
     # 이미 한 번 제시된 적이 있어야 `review`다. 0건이면 그 item은 `new`의 몫이다.
     _expose(db_session, user, item, clock.now())
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     assert candidate.presentation_role is REVIEW
@@ -810,7 +831,9 @@ def test_an_item_below_the_minimum_exposures_gets_a_reinforcement_candidate(
     _schedule(db_session, user, item, next_review_at=clock.now() + timedelta(days=30))
     _expose(db_session, user, item, clock.now())
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user)
     assert candidate.review_reason is REINFORCEMENT
@@ -842,7 +865,7 @@ def test_reinforcement_follows_the_injected_minimum_exposures(
     for _ in range(exposures):
         _expose(db_session, user, item, clock.now())
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg, language=Language.JA)
 
     reasons = [
         candidate.review_reason for candidate in _candidates_of(db_session, user, role=REVIEW)
@@ -861,7 +884,9 @@ def test_the_anchor_sentence_is_recorded_when_it_was_missing(db_session: Session
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
     _expose(db_session, user, item, clock.now())
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     assert state.anchor_sentence_id == sentence.id
 
@@ -887,7 +912,9 @@ def test_a_quarantined_anchor_is_replaced_and_the_item_keeps_learning(
     anchor.status = SentenceStatus.QUARANTINED
     db_session.flush()
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user, role=REVIEW)
     assert state.anchor_sentence_id == replacement.id
@@ -917,7 +944,9 @@ def test_a_quarantined_anchor_is_replaced_at_the_near_original_stage(
     anchor.status = SentenceStatus.QUARANTINED
     db_session.flush()
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user, role=REVIEW)
     assert state.anchor_sentence_id == replacement.id
@@ -943,7 +972,7 @@ def test_an_anchor_awaiting_explanation_repair_is_not_replaced(db_session: Sessi
     _expose(db_session, user, item, clock.now())
 
     created = materialize_candidates(
-        db_session, user=user, now=clock.now(), cfg=get_config().learning
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
     )
 
     assert created == 0
@@ -989,7 +1018,9 @@ def test_a_fully_exposed_item_that_is_not_due_gets_no_review_candidate(
         )
     db_session.flush()
 
-    created = materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    created = materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=cfg, language=Language.JA
+    )
 
     assert created == 0
 
@@ -1039,7 +1070,9 @@ def test_context_repair_follows_a_failure_at_a_higher_stage(db_session: Session)
     _exposure(db_session, user, item, presentation, stage=ContextStage.VARIED, now=clock.now())
     db_session.flush()
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user, role=REVIEW)
     assert candidate.review_reason is CONTEXT_REPAIR
@@ -1121,7 +1154,9 @@ def test_a_repaired_stage_stops_asking_for_context_repair(db_session: Session) -
     )
     db_session.flush()
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user, role=REVIEW)
     assert candidate.review_reason is REINFORCEMENT
@@ -1141,6 +1176,7 @@ def _select(
         study_session_id=study_session.id,
         now=now,
         cfg=get_config().learning,
+        language=Language.JA,
     )
 
 
@@ -1187,7 +1223,9 @@ def test_an_exploration_candidate_whose_target_no_longer_qualifies_is_skipped(
     _ready_sentence(db_session, [seen])
     _ready_sentence(db_session, [untouched])
     study_session = _study_session(db_session, user)
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
     _expose(db_session, user, seen, clock.now())
 
     selection = _select(db_session, user, study_session, clock.now())
@@ -1205,7 +1243,9 @@ def test_a_promoted_target_is_no_longer_offered_as_exploration(db_session: Sessi
     item = factories.make_learning_item(db_session)
     _ready_sentence(db_session, [item])
     study_session = _study_session(db_session, user)
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
     # candidate를 만든 뒤에 사용자가 이 item을 클릭해 학습 target으로 승격시켰다.
     _learning_state(db_session, user, item, active=True)
 
@@ -1364,7 +1404,12 @@ def test_anchor_reuse_fallback_follows_the_injected_minimum_exposures(
     study_session = _study_session(db_session, user)
 
     selection = select_next(
-        db_session, user=user, study_session_id=study_session.id, now=clock.now(), cfg=cfg
+        db_session,
+        user=user,
+        study_session_id=study_session.id,
+        now=clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     if not headroom:
@@ -1413,16 +1458,24 @@ def test_select_next_follows_the_injected_category_ratios(
     _learning_state(db_session, user, promoted, active=True)
     untouched = factories.make_learning_item(db_session)
     _ready_sentence(db_session, [untouched])
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg)
+    materialize_candidates(db_session, user=user, now=clock.now(), cfg=cfg, language=Language.JA)
     study_session = _study_session(db_session, user)
 
     # 전제: 세 pool이 모두 있고 backlog 세트로 바뀌지 않았다. 둘 중 하나라도 깨지면
     # 아래 단정은 ratio가 아니라 pool 유무나 backlog를 보게 된다.
     assert {c.presentation_role for c in _candidates_of(db_session, user)} == set(ALL_ROLES)
-    assert count_backlog(db_session, user_id=user.id, now=clock.now()) < cfg.backlog_threshold
+    assert (
+        count_backlog(db_session, user_id=user.id, now=clock.now(), language=Language.JA)
+        < cfg.backlog_threshold
+    )
 
     selection = select_next(
-        db_session, user=user, study_session_id=study_session.id, now=clock.now(), cfg=cfg
+        db_session,
+        user=user,
+        study_session_id=study_session.id,
+        now=clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     assert selection is not None
@@ -1862,7 +1915,9 @@ def test_materialization_and_the_tie_break_start_the_ladder_at_the_same_stage(
     _schedule(db_session, user, item, next_review_at=clock.now() - timedelta(days=1))
     _expose(db_session, user, item, clock.now())
 
-    materialize_candidates(db_session, user=user, now=clock.now(), cfg=get_config().learning)
+    materialize_candidates(
+        db_session, user=user, now=clock.now(), cfg=get_config().learning, language=Language.JA
+    )
 
     (candidate,) = _candidates_of(db_session, user, role=REVIEW)
     assert candidate.context_stage is INITIAL_CONTEXT_STAGE, (

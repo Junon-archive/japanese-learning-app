@@ -40,6 +40,19 @@ class StudySessionClosedError(Exception):
     """이미 끝난 session은 연장할 수 없다 (HTTP 409)."""
 
 
+class SessionLanguageMismatchError(Exception):
+    """열린 session이 있는데 다른 language로 `POST /session`을 호출했다 (HTTP 409).
+
+    **아무것도 바꾸지 않는다** --- 열린 session을 닫지 않고 `touch()`도 materialization도
+    부르지 않는다(05_API_SPEC.md의 `세션 언어와 409`). `open_session`은 client가 보여줄
+    "그 언어로 진행 중인 세션"의 id와 language다.
+    """
+
+    def __init__(self, open_session: StudySession) -> None:
+        super().__init__("open session language does not match the requested language")
+        self.open_session = open_session
+
+
 @dataclass(frozen=True)
 class SessionStart:
     """`POST /api/study/session`의 결과.
@@ -111,13 +124,21 @@ def get_open_session(db: Session, *, user_id: int) -> StudySession | None:
     ).scalar_one_or_none()
 
 
-def start_or_resume(db: Session, *, user: User, now: datetime, cfg: AppConfig) -> SessionStart:
+def start_or_resume(
+    db: Session, *, user: User, now: datetime, cfg: AppConfig, language: Language
+) -> SessionStart:
     """`POST /api/study/session`. idle timeout 이내면 resume, 초과면 새 session이다.
 
-    session을 만들거나 resume한 직후 Candidate Materialization을 **이 사용자 한 명분**
-    실행한다(05_API_SPEC.md). seed만 적재된 신규 사용자의 Ready Pool이 이 시점에
-    채워진다. LLM을 부르지 않는다 --- 이미 validated인 콘텐츠를 사용자에게 투영하는
-    결정론적 DB 연산이다(불변식 #1).
+    **한 세션은 한 언어다**(불변식 22, ADR-023 결정 7). 열린 session이 있고 idle
+    timeout 이내인데 그 session의 language가 요청한 language와 다르면
+    `SessionLanguageMismatchError`를 던진다 --- 조용히 닫지 않는다. idle timeout을
+    넘긴 session은 이 분기에 닿지 않는다(아래에서 바로 만료 처리된다).
+
+    session을 만들거나 resume한 직후 Candidate Materialization을 **이 사용자 한 명분,
+    이 session의 language 범위**에서 실행한다(05_API_SPEC.md,
+    06_LEARNING_ENGINE.md의 `언어 범위`). seed만 적재된 신규 사용자의 Ready Pool이 이
+    시점에 채워진다. LLM을 부르지 않는다 --- 이미 validated인 콘텐츠를 사용자에게
+    투영하는 결정론적 DB 연산이다(불변식 #1).
     """
     open_session = get_open_session(db, user_id=user.id)
     timed_out_session_id: int | None = None
@@ -125,16 +146,17 @@ def start_or_resume(db: Session, *, user: User, now: datetime, cfg: AppConfig) -
     if open_session is not None:
         idle = now - open_session.last_activity_at
         if idle <= timedelta(minutes=cfg.session.study_session_idle_timeout_minutes):
+            if open_session.language != language:
+                raise SessionLanguageMismatchError(open_session)
             touch(open_session, now=now, cfg=cfg.session)
-            _materialize(db, user=user, now=now, cfg=cfg)
+            _materialize(db, user=user, now=now, cfg=cfg, language=language)
             db.commit()
             return SessionStart(session=open_session, resumed=True, timed_out_session_id=None)
         _expire_idle_session(db, session=open_session, now=now)
         timed_out_session_id = open_session.id
 
     session = StudySession(
-        # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
-        language=Language.JA,
+        language=language,
         user_id=user.id,
         started_at=now,
         last_activity_at=now,
@@ -157,13 +179,18 @@ def start_or_resume(db: Session, *, user: User, now: datetime, cfg: AppConfig) -
         ),
         now=now,
     )
-    _materialize(db, user=user, now=now, cfg=cfg)
+    _materialize(db, user=user, now=now, cfg=cfg, language=language)
     db.commit()
     return SessionStart(session=session, resumed=False, timed_out_session_id=timed_out_session_id)
 
 
-def _materialize(db: Session, *, user: User, now: datetime, cfg: AppConfig) -> None:
+def _materialize(
+    db: Session, *, user: User, now: datetime, cfg: AppConfig, language: Language
+) -> None:
     """Candidate Materialization과 그것이 남긴 gap job을 **같은 트랜잭션**에서 처리한다.
+
+    `language`는 이 session의 language다. materialization과 그것이 남기는 job 모두
+    그 범위 밖으로 나가지 않는다(06_LEARNING_ENGINE.md의 `언어 범위`).
 
     materialization은 콘텐츠가 모자라 만들지 못한 candidate의 사유를 올린다. 그것을
     `EXPLAIN_ITEM` / `GENERATE_REVIEW_CONTEXT`로 바꾸는 것이 이 한 줄이다 --- 없으면
@@ -172,8 +199,10 @@ def _materialize(db: Session, *, user: User, now: datetime, cfg: AppConfig) -> N
     부르지 않는다(불변식 #1).
     """
     gaps = MaterializationGaps()
-    materialize_candidates(db, user=user, now=now, cfg=cfg.learning, gaps=gaps)
-    enqueue_materialization_gaps(db, user_id=user.id, gaps=gaps, now=now, cfg=cfg)
+    materialize_candidates(db, user=user, now=now, cfg=cfg.learning, language=language, gaps=gaps)
+    enqueue_materialization_gaps(
+        db, user_id=user.id, language=language, gaps=gaps, now=now, cfg=cfg
+    )
 
 
 def finish(

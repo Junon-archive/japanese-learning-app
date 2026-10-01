@@ -87,7 +87,7 @@ def _json(response: httpx2.Response) -> dict[str, Any]:
 
 
 def _start_session(api: StudyApi) -> int:
-    payload = _json(api.client.post("/api/study/session"))
+    payload = _json(api.client.post("/api/study/session", json={"language": "ja"}))
     session_id = payload["session"]["session_id"]
     # ADR-005: id는 문자열로 감싸지 않는다.
     assert isinstance(session_id, int)

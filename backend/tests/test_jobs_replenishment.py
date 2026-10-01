@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.config import get_config
 from app.jobs.replenishment import enqueue_replenishment, replenishment_idempotency_key
 from app.models import GenerationJob
-from app.models.enums import GenerationJobStatus, JobType, PresentationRole
+from app.models.enums import GenerationJobStatus, JobType, Language, PresentationRole
 from tests import factories
 from tests.clock import MutableClock
 
@@ -32,8 +32,12 @@ def test_the_key_is_deterministic() -> None:
     """결정적이지 않으면 ON CONFLICT가 아무것도 막지 못한다."""
     clock = MutableClock()
 
-    first = replenishment_idempotency_key(user_id=1, role=REVIEW, now=clock.now())
-    second = replenishment_idempotency_key(user_id=1, role=REVIEW, now=clock.now())
+    first = replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now(), language=Language.JA
+    )
+    second = replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now(), language=Language.JA
+    )
 
     assert first == second
 
@@ -41,12 +45,30 @@ def test_the_key_is_deterministic() -> None:
 def test_the_key_separates_user_role_and_day() -> None:
     """셋 중 하나라도 빠지면 억제 창이 남의 job까지 막거나 영원히 재enqueue를 막는다."""
     clock = MutableClock()
-    base = replenishment_idempotency_key(user_id=1, role=REVIEW, now=clock.now())
+    base = replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now(), language=Language.JA
+    )
 
-    assert base != replenishment_idempotency_key(user_id=2, role=REVIEW, now=clock.now())
-    assert base != replenishment_idempotency_key(user_id=1, role=NEW, now=clock.now())
     assert base != replenishment_idempotency_key(
-        user_id=1, role=REVIEW, now=clock.now() + timedelta(days=1)
+        user_id=2, role=REVIEW, now=clock.now(), language=Language.JA
+    )
+    assert base != replenishment_idempotency_key(
+        user_id=1, role=NEW, now=clock.now(), language=Language.JA
+    )
+    assert base != replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now() + timedelta(days=1), language=Language.JA
+    )
+
+
+def test_the_key_separates_language() -> None:
+    """MVP-03: 빠지면 같은 날 같은 role의 다른 언어 replenish가 서로를 지운다."""
+    clock = MutableClock()
+    base = replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now(), language=Language.JA
+    )
+
+    assert base != replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now(), language=Language.EN
     )
 
 
@@ -54,9 +76,11 @@ def test_the_key_ignores_the_time_of_day() -> None:
     """시각이 들어가면 한 세션에서 Pool Fallback을 만날 때마다 job이 하나씩 쌓인다."""
     clock = MutableClock()
 
-    morning = replenishment_idempotency_key(user_id=1, role=REVIEW, now=clock.now())
+    morning = replenishment_idempotency_key(
+        user_id=1, role=REVIEW, now=clock.now(), language=Language.JA
+    )
     evening = replenishment_idempotency_key(
-        user_id=1, role=REVIEW, now=clock.now() + timedelta(hours=6)
+        user_id=1, role=REVIEW, now=clock.now() + timedelta(hours=6), language=Language.JA
     )
 
     assert morning == evening
@@ -79,7 +103,12 @@ def test_the_first_call_queues_a_sentence_batch_job(
     user = factories.make_user(db_session)
 
     job = enqueue_replenishment(
-        db_session, user_id=user.id, role=REVIEW, now=study_clock.now(), cfg=cfg
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     assert job is not None
@@ -92,6 +121,8 @@ def test_the_first_call_queues_a_sentence_batch_job(
     assert job.created_at == study_clock.now()
     assert job.started_at is None
     assert job.payload_json == {"user_id": user.id, "presentation_role": REVIEW.value}
+    # payload에 language를 넣지 않는다 --- 컬럼으로 있다(09_BACKGROUND_JOBS.md).
+    assert job.language == Language.JA
 
 
 @pytest.mark.integration
@@ -103,11 +134,21 @@ def test_calling_again_in_the_same_window_leaves_one_job(
     user = factories.make_user(db_session)
 
     first = enqueue_replenishment(
-        db_session, user_id=user.id, role=REVIEW, now=study_clock.now(), cfg=cfg
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
     study_clock.advance(timedelta(minutes=3))
     second = enqueue_replenishment(
-        db_session, user_id=user.id, role=REVIEW, now=study_clock.now(), cfg=cfg
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     assert first is not None
@@ -121,12 +162,47 @@ def test_each_role_gets_its_own_job(db_session: Session, study_clock: MutableClo
     cfg = get_config()
     user = factories.make_user(db_session)
 
-    enqueue_replenishment(db_session, user_id=user.id, role=REVIEW, now=study_clock.now(), cfg=cfg)
+    enqueue_replenishment(
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
+    )
     other = enqueue_replenishment(
-        db_session, user_id=user.id, role=NEW, now=study_clock.now(), cfg=cfg
+        db_session, user_id=user.id, role=NEW, now=study_clock.now(), cfg=cfg, language=Language.JA
     )
 
     assert other is not None
+    assert _count_jobs(db_session) == 2
+
+
+@pytest.mark.integration
+def test_each_language_gets_its_own_job(db_session: Session, study_clock: MutableClock) -> None:
+    """MVP-03: 일본어 role replenish가 같은 날 영어의 같은 role을 막으면 안 된다."""
+    cfg = get_config()
+    user = factories.make_user(db_session)
+
+    enqueue_replenishment(
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
+    )
+    other = enqueue_replenishment(
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.EN,
+    )
+
+    assert other is not None
+    assert other.language == Language.EN
     assert _count_jobs(db_session) == 2
 
 
@@ -137,10 +213,20 @@ def test_two_users_do_not_share_one_job(db_session: Session, study_clock: Mutabl
     user_b = factories.make_user(db_session)
 
     enqueue_replenishment(
-        db_session, user_id=user_a.id, role=REVIEW, now=study_clock.now(), cfg=cfg
+        db_session,
+        user_id=user_a.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
     other = enqueue_replenishment(
-        db_session, user_id=user_b.id, role=REVIEW, now=study_clock.now(), cfg=cfg
+        db_session,
+        user_id=user_b.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     assert other is not None
@@ -153,10 +239,22 @@ def test_the_next_day_can_queue_again(db_session: Session, study_clock: MutableC
     cfg = get_config()
     user = factories.make_user(db_session)
 
-    enqueue_replenishment(db_session, user_id=user.id, role=REVIEW, now=study_clock.now(), cfg=cfg)
+    enqueue_replenishment(
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
+    )
     study_clock.advance(timedelta(days=1))
     tomorrow = enqueue_replenishment(
-        db_session, user_id=user.id, role=REVIEW, now=study_clock.now(), cfg=cfg
+        db_session,
+        user_id=user.id,
+        role=REVIEW,
+        now=study_clock.now(),
+        cfg=cfg,
+        language=Language.JA,
     )
 
     assert tomorrow is not None

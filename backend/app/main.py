@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import health
 from app.api.router import ROOT_DEPENDENCIES, assert_fail_closed, install_routes
+from app.services.study_session import SessionLanguageMismatchError
 from app.settings import get_settings
 
 # OpenAPI/docs는 private API 표면을 그대로 드러낸다. 05_API_SPEC.md에서 인증 없이
@@ -68,6 +69,36 @@ async def _validation_error_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+async def _session_language_mismatch_handler(request: Request, exc: Exception) -> JSONResponse:
+    """`05_API_SPEC.md`의 `세션 언어와 409`가 못박은 정확한 body 모양.
+
+    다른 409는 전부 `HTTPException`의 기본 `{"detail": "..."}` 모양을 쓰지만, 이
+    응답은 client가 바로 읽는 구조화된 값(`open_session.id`/`language`)이고
+    spec이 top-level 키(`error`/`open_session`)를 그대로 못박았다. 그래서 `detail`
+    문자열로 접지 않고 app 레벨 handler로 따로 뺀다(`_validation_error_handler`와
+    같은 패턴).
+    """
+    if not isinstance(exc, SessionLanguageMismatchError):  # pragma: no cover - 이 handler는
+        # `app.add_exception_handler`가 그 타입에만 걸어 둔다.
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=jsonable_encoder({"detail": "Internal Server Error"}),
+        )
+    open_session = exc.open_session
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content=jsonable_encoder(
+            {
+                "error": "session_language_mismatch",
+                "open_session": {
+                    "id": open_session.id,
+                    "language": open_session.language,
+                },
+            }
+        ),
+    )
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """부팅 시점에 라우팅 표면을 한 번 더 전수 검사한다.
@@ -97,6 +128,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
+    app.add_exception_handler(SessionLanguageMismatchError, _session_language_mismatch_handler)
 
     origins = _validated_cors_origins(settings.cors_origins)
     if origins:

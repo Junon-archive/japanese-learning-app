@@ -65,6 +65,7 @@ from app.models.enums import (
     EventType,
     ExplicitSignal,
     JobType,
+    Language,
     LlmTaskType,
     PresentationRole,
     ReviewReason,
@@ -123,8 +124,10 @@ def _cfg(**sections: dict[str, Any]) -> AppConfig:
 # --------------------------------------------------------------------------
 
 
-def _start(db: Session, user: User, *, now: datetime, cfg: AppConfig) -> StudySession:
-    return study_session.start_or_resume(db, user=user, now=now, cfg=cfg).session
+def _start(
+    db: Session, user: User, *, now: datetime, cfg: AppConfig, language: Language = Language.JA
+) -> StudySession:
+    return study_session.start_or_resume(db, user=user, now=now, cfg=cfg, language=language).session
 
 
 def _next(
@@ -828,6 +831,7 @@ def test_scenario_c_reinforcement_stays_available_below_the_minimum(
         study_session_id=first.session_id,
         now=clock.now(),
         cfg=cfg.learning,
+        language=Language.JA,
     )
     assert selection is not None
     assert selection.presentation_role is PresentationRole.REVIEW
@@ -1062,7 +1066,7 @@ def test_scenario_e_an_empty_pool_answers_two_hundred_with_no_presentation(
     provider를 부르지 않는다 --- 그 대신 replenishment job만 남는다.
     """
     study_api.use_config(_cfg())
-    started = study_api.client.post("/api/study/session")
+    started = study_api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200
     session_id = started.json()["session"]["session_id"]
 
@@ -1091,7 +1095,7 @@ def test_scenario_e_another_available_category_carries_the_session(
     item = factories.make_learning_item(db_session)
     factories.make_ready_sentence(db_session, [item])
 
-    started = study_api.client.post("/api/study/session")
+    started = study_api.client.post("/api/study/session", json={"language": "ja"})
     session_id = started.json()["session"]["session_id"]
     with no_outbound_network():
         response = study_api.client.post(f"/api/study/session/{session_id}/next")
@@ -1146,7 +1150,7 @@ def test_scenario_e_the_enqueued_job_refills_the_pool(
                 )
         setup.commit()
 
-    started = committed_api.client.post("/api/study/session")
+    started = committed_api.client.post("/api/study/session", json={"language": "ja"})
     assert started.status_code == 200, started.text
     session_id = started.json()["session"]["session_id"]
 
@@ -1665,7 +1669,9 @@ def test_scenario_h_flagged_content_is_quarantined_and_never_selected_again(
 
     # 다른 사용자의 Ready Pool에도 같은 문장의 candidate가 있다. sentences는 global
     # content이므로 신고한 사람만 격리하면 남의 pool에 quarantine된 문장이 남는다.
-    materialize_candidates(db_session, user=other, now=clock.now(), cfg=cfg.learning)
+    materialize_candidates(
+        db_session, user=other, now=clock.now(), cfg=cfg.learning, language=Language.JA
+    )
     other_candidates = db_session.execute(
         sa.select(UserSentenceCandidate).where(
             UserSentenceCandidate.user_id == other.id,

@@ -92,7 +92,7 @@ origin, login_id, password = sys.argv[1:4]
 app = create_app()
 with TestClient(app, base_url="https://testserver", headers={"Origin": origin}) as client:
     login = client.post("/api/auth/login", json={"login_id": login_id, "password": password})
-    started = client.post("/api/study/session")
+    started = client.post("/api/study/session", json={"language": "ja"})
     session_id = started.json()["session"]["session_id"]
     following = client.post("/api/study/session/%d/next" % session_id)
 
@@ -153,7 +153,7 @@ def test_all_pools_empty_session_makes_no_outbound_connection(
     study_api.use_config(_cfg())
 
     with no_outbound_network(), no_provider_module_import():
-        started = _json(study_api.client.post("/api/study/session"))
+        started = _json(study_api.client.post("/api/study/session", json={"language": "ja"}))
         session_id = started["session"]["session_id"]
         response = study_api.client.post(f"/api/study/session/{session_id}/next")
 
@@ -188,7 +188,7 @@ def test_full_core_flow_makes_no_provider_call(study_api: StudyApi, db_session: 
     sentence = factories.make_ready_sentence(db_session, [item])
 
     with no_outbound_network(), no_provider_module_import():
-        started = _json(study_api.client.post("/api/study/session"))
+        started = _json(study_api.client.post("/api/study/session", json={"language": "ja"}))
         session_id = started["session"]["session_id"]
 
         shown = _json(study_api.client.post(f"/api/study/session/{session_id}/next"))[
@@ -296,7 +296,7 @@ def test_request_path_never_reaches_the_worker_runner(
     factories.make_ready_sentence(db_session, [item])
 
     client = study_api.client
-    started = _json(client.post("/api/study/session"))
+    started = _json(client.post("/api/study/session", json={"language": "ja"}))
     session_id = started["session"]["session_id"]
     shown = _json(client.post(f"/api/study/session/{session_id}/next"))["presentation"]
     assert shown is not None
