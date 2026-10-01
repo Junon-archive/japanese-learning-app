@@ -33,7 +33,7 @@ from app.llm.prompts import PromptTemplate, template_for
 from app.llm.provider import LlmError, ProviderRequest
 from app.llm.schemas import ExplanationPayload, SentenceBatchPayload, SpanPayload, json_schema
 from app.llm.validation import RejectionReason
-from app.models.enums import ContextStage, LlmTaskType
+from app.models.enums import ContextStage, Language, LlmTaskType
 
 SENTENCE_BATCH_SCHEMA_NAME = "sentence_batch"
 EXPLANATION_SCHEMA_NAME = "explanation"
@@ -115,9 +115,9 @@ def item_ref(index: int) -> str:
 
 
 def build_sentence_batch_request(
-    payload: SentenceBatchInput, *, model: str, prompt_version: str
+    payload: SentenceBatchInput, *, language: Language, model: str, prompt_version: str
 ) -> ProviderRequest:
-    template = template_for(LlmTaskType.GENERATE_SENTENCE_BATCH, prompt_version)
+    template = template_for(LlmTaskType.GENERATE_SENTENCE_BATCH, language, prompt_version)
     context = {
         "learner_level": payload.learner_level,
         "preferred_targets_per_sentence": payload.preferred_targets_per_sentence,
@@ -131,9 +131,9 @@ def build_sentence_batch_request(
 
 
 def build_review_context_request(
-    payload: ReviewContextInput, *, model: str, prompt_version: str
+    payload: ReviewContextInput, *, language: Language, model: str, prompt_version: str
 ) -> ProviderRequest:
-    template = template_for(LlmTaskType.GENERATE_REVIEW_CONTEXT, prompt_version)
+    template = template_for(LlmTaskType.GENERATE_REVIEW_CONTEXT, language, prompt_version)
     context = {
         "learner_level": payload.learner_level,
         "context_stage": payload.context_stage.value,
@@ -148,9 +148,9 @@ def build_review_context_request(
 
 
 def build_explain_item_request(
-    payload: ExplainItemInput, *, model: str, prompt_version: str
+    payload: ExplainItemInput, *, language: Language, model: str, prompt_version: str
 ) -> ProviderRequest:
-    template = template_for(LlmTaskType.EXPLAIN_ITEM, prompt_version)
+    template = template_for(LlmTaskType.EXPLAIN_ITEM, language, prompt_version)
     context = {
         "learner_level": payload.learner_level,
         "text": payload.text,
