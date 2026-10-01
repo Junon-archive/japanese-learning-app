@@ -20,7 +20,7 @@ def corpus(*sentences: str) -> tuple[CorpusSentence, ...]:
     return tuple(
         CorpusSentence(
             sentence_id=index,
-            japanese=japanese,
+            text=japanese,
             normalized_hash=normalized_sentence_hash(japanese),
         )
         for index, japanese in enumerate(sentences, start=1)

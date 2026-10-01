@@ -68,7 +68,13 @@ from app.models.content import (
     SentenceItemExplanation,
     SentenceItemSpan,
 )
-from app.models.enums import ExplanationStatus, LlmTaskType, SentenceSourceType, SentenceStatus
+from app.models.enums import (
+    ExplanationStatus,
+    Language,
+    LlmTaskType,
+    SentenceSourceType,
+    SentenceStatus,
+)
 from app.models.jobs import GenerationJob, PromptVersion
 from app.normalization import normalized_sentence_hash
 from app.render import ItemSpan
@@ -338,7 +344,7 @@ def _store_one(
     그 답은 상태와 무관하다. `quarantined`를 빼면 사용자가 격리한 문장의 복제가
     저장되고(불변식 #7), `retired`를 빼면 재실행 idempotency가 상태 변화에 흔들린다.
     """
-    digest = normalized_sentence_hash(candidate.payload.japanese)
+    digest = normalized_sentence_hash(candidate.payload.text)
     existing = db.execute(
         sa.select(Sentence.id, Sentence.generation_job_id)
         .where(Sentence.normalized_hash == digest)
@@ -375,7 +381,9 @@ def _insert_sentence(
     payload = candidate.payload
     ruby, ruby_error = _compute_ruby(payload, now=now)
     sentence = Sentence(
-        japanese=payload.japanese,
+        # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
+        language=Language.JA,
+        text=payload.text,
         korean_translation=payload.korean_translation,
         source_type=SentenceSourceType.GENERATED,
         difficulty_json={"label": payload.difficulty_label.value},
@@ -469,7 +477,7 @@ def _compute_ruby(
         if item.is_tappable
     ]
     try:
-        return compute_ruby(payload.japanese, items, now=now), None
+        return compute_ruby(payload.text, items, now=now), None
     except Exception as error:
         return None, error
 

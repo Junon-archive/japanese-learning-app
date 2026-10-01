@@ -57,7 +57,7 @@ def _prompt_version(db: Session) -> None:
 def _unexplained_item(db: Session) -> SentenceItem:
     """explanation만 없는 문장 하나. 그래서 아직 candidate가 될 수 없다."""
     item = factories.make_learning_item(db, lemma=SURFACE)
-    sentence = factories.make_sentence(db, japanese=JAPANESE)
+    sentence = factories.make_sentence(db, text=JAPANESE)
     sentence_item = factories.make_sentence_item(db, sentence, item, surface_form=SURFACE)
     start = JAPANESE.index(SURFACE)
     factories.make_span(db, sentence_item, start=start, end=start + len(SURFACE))
@@ -147,7 +147,7 @@ def test_the_request_carries_the_sentence_the_surface_and_the_spans(
 
     context = json.loads(provider.calls[0].context)
     start = JAPANESE.index(SURFACE)
-    assert context["japanese"] == JAPANESE
+    assert context["text"] == JAPANESE
     assert context["surface_form"] == SURFACE
     assert context["spans"] == [
         {"start_codepoint": start, "end_codepoint": start + len(SURFACE), "span_order": 0}

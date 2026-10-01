@@ -101,7 +101,7 @@ def prepare(
         request = build_explain_item_request(
             ExplainItemInput(
                 learner_level=_learner_level(sentence),
-                japanese=sentence.japanese,
+                text=sentence.text,
                 surface_form=sentence_item.surface_form,
                 spans=_spans(db, sentence_item_id=sentence_item_id),
             ),

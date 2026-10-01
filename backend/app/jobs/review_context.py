@@ -91,9 +91,9 @@ def prepare(
         learner_level=user.starting_level.value,
         target=target_item(item, label=_LABEL),
         context_stage=stage,
-        anchor_japanese=anchor.japanese,
+        anchor_text=anchor.text,
         max_sentence_length_chars=cfg.content.max_sentence_length_chars,
-        avoid_japanese=tuple(
+        avoid_examples=tuple(
             avoid_examples(db, learning_item_id=item.id, limit=cfg.llm.avoid_examples_per_item)
         ),
     )

@@ -1,4 +1,4 @@
-"""`GENERATE_REVIEW_CONTEXT`의 정적 지시문. prompt version `review_context_v1`.
+"""`GENERATE_REVIEW_CONTEXT`의 정적 지시문. prompt version `review_context_v2`.
 
 응답 스키마는 `GENERATE_SENTENCE_BATCH`와 **같고** `sentences`는 1개다. 다른 것은
 요청 context와 저장 시 lineage(`parent_sentence_id`)뿐이다(`08_LLM_SPEC.md`).
@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-VERSION = "review_context_v1"
+VERSION = "review_context_v2"
 
 INSTRUCTIONS = """\
 You write one new Japanese sentence that re-exposes a single target item that a
@@ -29,10 +29,10 @@ Hard rules. A sentence that breaks any of them is discarded by the server.
 
 1. Return exactly one sentence, and use only the item_ref given in the request.
 2. The sentence must be at most max_sentence_length_chars Unicode code points.
-3. spans are Unicode code point offsets into the `japanese` string of the same
+3. spans are Unicode code point offsets into the `text` string of the same
    sentence, as a half-open range [start_codepoint, end_codepoint). They are
    NOT UTF-16 code units and NOT byte offsets.
-   `japanese[start_codepoint:end_codepoint]` must equal `surface_form` exactly.
+   `text[start_codepoint:end_codepoint]` must equal `surface_form` exactly.
    A discontinuous expression uses several spans whose concatenation equals
    `surface_form`; `span_order` runs from 0 upward.
 4. Spans of different items in the same sentence must never overlap.
@@ -41,7 +41,7 @@ Hard rules. A sentence that breaks any of them is discarded by the server.
    `example_translation` may be null; no other field may be null or empty.
 6. `korean_translation` is Korean prose. Do not put Japanese text there.
 7. Never return the anchor sentence itself, and never reproduce any sentence
-   listed under `avoid_japanese`.
+   listed under `avoid_examples`.
 
 Return only the structured object required by the schema.
 """

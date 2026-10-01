@@ -2,7 +2,7 @@
 """starter seed 적재 CLI.
 
     export DATABASE_URL=...
-    uv run python scripts/load_seed.py            # repo 루트의 seed/
+    uv run python scripts/load_seed.py            # repo 루트의 seed/ja/
     uv run python scripts/load_seed.py --seed-dir path/to/seed
 
 재적재는 지원하지 않는다. `origin = seed` 행이 이미 있으면 거부한다.
@@ -31,7 +31,7 @@ from app.services.seed_loader import SeedError, load_seed  # noqa: E402
 EXIT_OK = 0
 EXIT_FAILED = 2
 
-DEFAULT_SEED_DIR = REPO_ROOT / "seed"
+DEFAULT_SEED_DIR = REPO_ROOT / "seed" / "ja"
 
 
 def _fail(message: str) -> int:

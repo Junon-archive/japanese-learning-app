@@ -25,6 +25,7 @@ from app.models import LearningItem, User, UserItemLearningState
 from app.models.enums import (
     CandidateStatus,
     ContextStage,
+    Language,
     LearningItemOrigin,
     LearningItemType,
     StartingLevel,
@@ -44,6 +45,7 @@ def _item(
 ) -> LearningItem:
     """세션에 붙지 않은 transient row. 정렬은 DB를 보지 않는다."""
     item = LearningItem(
+        language=Language.JA,
         type=LearningItemType.WORD,
         lemma="x",
         reading="x",

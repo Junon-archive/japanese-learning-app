@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.config import AppConfig
 from app.learning.selection import MaterializationGaps
-from app.models.enums import ContextStage, GenerationJobStatus, JobType, PresentationRole
+from app.models.enums import ContextStage, GenerationJobStatus, JobType, Language, PresentationRole
 from app.models.jobs import GenerationJob
 
 
@@ -196,6 +196,8 @@ def _enqueue(
     statement = (
         pg_insert(GenerationJob)
         .values(
+            # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
+            language=Language.JA.value,
             job_type=job_type,
             status=GenerationJobStatus.QUEUED,
             payload_json=payload,

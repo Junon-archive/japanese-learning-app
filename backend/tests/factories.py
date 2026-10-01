@@ -44,6 +44,7 @@ from app.models.enums import (
     ExposureModality,
     GenerationJobStatus,
     JobType,
+    Language,
     LearningItemOrigin,
     LearningItemType,
     LlmTaskType,
@@ -93,6 +94,7 @@ def make_learning_item(
     입력이므로 기본을 NULL/빈 값으로 둔다 --- factory가 정렬 기준을 몰래 정해 두면
     "정렬이 그 값을 본다"는 단정이 거짓 통과한다."""
     item = LearningItem(
+        language=Language.JA,
         type=LearningItemType.EXPRESSION,
         lemma="任せる" if lemma is None else lemma,
         reading="まかせる",
@@ -110,12 +112,12 @@ def make_learning_item(
 def make_sentence(
     session: Session,
     *,
-    japanese: str | None = None,
+    text: str | None = None,
     korean_translation: str | None = None,
     parent_sentence_id: int | None = None,
     normalized_hash: str | None = None,
 ) -> Sentence:
-    """`normalized_hash`는 기본으로 `japanese`에서 계산한다.
+    """`normalized_hash`는 기본으로 `text`에서 계산한다.
 
     자리 채우기 값(고유하지만 본문과 무관한 문자열)을 넣으면 duplicate 검사
     (`08_LLM_SPEC.md` 11번, `jobs/persistence._store_one`)가 **발화할 수 없는 조건**이
@@ -123,20 +125,21 @@ def make_sentence(
     통과한다. 프로덕션 경로(seed 적재, 생성)는 둘 다 `normalized_sentence_hash`로
     이 열을 채우므로 factory도 같은 함수를 쓴다.
 
-    같은 `japanese`로 만든 두 행은 hash가 같다. 그것이 실제 DB 상태다
+    같은 `text`로 만든 두 행은 hash가 같다. 그것이 실제 DB 상태다
     (`normalized_hash`에 UNIQUE가 없다 --- ADR-015). hash가 달라야 하는 테스트는
     `normalized_hash`를 명시한다.
     """
-    text = "それは君に任せる。" if japanese is None else japanese
+    body = "それは君に任せる。" if text is None else text
     sentence = Sentence(
-        japanese=text,
+        language=Language.JA,
+        text=body,
         korean_translation=(
             "그건 너에게 맡길게." if korean_translation is None else korean_translation
         ),
         source_type=SentenceSourceType.SEED,
         parent_sentence_id=parent_sentence_id,
         normalized_hash=(
-            normalized_sentence_hash(text) if normalized_hash is None else normalized_hash
+            normalized_sentence_hash(body) if normalized_hash is None else normalized_hash
         ),
         status=SentenceStatus.VALIDATED,
         created_at=NOW,
@@ -163,8 +166,8 @@ def make_ready_sentence(
     애초에 candidate가 되지 못한다.
     """
     chosen = [item.lemma for item in items] if surfaces is None else list(surfaces)
-    japanese = "".join(chosen)
-    sentence = make_sentence(session, japanese=japanese, parent_sentence_id=parent_sentence_id)
+    text = "".join(chosen)
+    sentence = make_sentence(session, text=text, parent_sentence_id=parent_sentence_id)
     cursor = 0
     for item, surface in zip(items, chosen, strict=True):
         sentence_item = make_sentence_item(session, sentence, item, surface_form=surface)
@@ -177,6 +180,7 @@ def make_ready_sentence(
 def make_study_session(session: Session, user: User, *, target_minutes: int) -> StudySession:
     """`target_minutes`는 config(default_session_minutes)에서 와야 하므로 필수 인자다."""
     study_session = StudySession(
+        language=Language.JA,
         user_id=user.id,
         started_at=NOW,
         last_activity_at=NOW,
@@ -372,6 +376,7 @@ def make_generation_job(
 ) -> GenerationJob:
     """`max_attempts`는 config(max_job_attempts)에서 오므로 필수 인자다."""
     job = GenerationJob(
+        language=Language.JA,
         job_type=JobType.GENERATE_SENTENCE_BATCH,
         status=GenerationJobStatus.QUEUED,
         idempotency_key=idempotency_key,
@@ -483,6 +488,7 @@ def make_prompt_version(
     `model` 문자열도 여기서 오고 코드에 박히지 않는다.
     """
     row = PromptVersion(
+        language=Language.JA,
         task_type=task_type,
         version=version,
         provider=provider,

@@ -79,12 +79,12 @@ def item(
 
 def sentence(
     *,
-    japanese: str = JAPANESE,
+    text: str = JAPANESE,
     korean_translation: str = "고양이를 좋아합니다.",
     items: tuple[ItemPayload, ...] = (),
 ) -> SentencePayload:
     return SentencePayload(
-        japanese=japanese,
+        text=text,
         korean_translation=korean_translation,
         difficulty_label=StartingLevel.BEGINNER,
         items=items if items else (item(),),
@@ -112,7 +112,7 @@ def accepted(result: ValidatedSentence | Rejection) -> SentencePayload:
 
 
 def test_a_well_formed_sentence_is_accepted() -> None:
-    assert accepted(check(sentence())).japanese == JAPANESE
+    assert accepted(check(sentence())).text == JAPANESE
 
 
 # --------------------------------------------------------------------------
@@ -127,13 +127,13 @@ def test_1_schema_parse_failed() -> None:
 
 
 # --------------------------------------------------------------------------
-# 2  empty_japanese
+# 2  empty_text
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("japanese", ["", "   ", "　"])
-def test_2_empty_japanese(japanese: str) -> None:
-    assert reason(check(sentence(japanese=japanese))) is RejectionReason.EMPTY_JAPANESE
+@pytest.mark.parametrize("text", ["", "   ", "　"])
+def test_2_empty_text(text: str) -> None:
+    assert reason(check(sentence(text=text))) is RejectionReason.EMPTY_TEXT
 
 
 # --------------------------------------------------------------------------
@@ -154,7 +154,7 @@ def test_3_sentence_too_long_uses_the_configured_limit() -> None:
         max_targets_per_sentence=2,
         max_new_items_per_sentence=2,
     )
-    assert accepted(check(sentence(), policy=exact)).japanese == JAPANESE
+    assert accepted(check(sentence(), policy=exact)).text == JAPANESE
 
 
 # --------------------------------------------------------------------------
@@ -173,7 +173,7 @@ def test_4_missing_translation() -> None:
 
 def test_5_no_target_at_all() -> None:
     payload = SentencePayload(
-        japanese=JAPANESE,
+        text=JAPANESE,
         korean_translation="고양이를 좋아합니다.",
         difficulty_label=StartingLevel.BEGINNER,
         items=(),
@@ -211,7 +211,7 @@ def test_6_surface_form_is_not_the_text_the_spans_cover() -> None:
 def test_6_two_occurrences_are_not_repaired() -> None:
     """후보가 둘이면 어느 것이 의도였는지 알 수 없으므로 보정하지 않는다."""
     payload = sentence(
-        japanese="猫と猫",
+        text="猫と猫",
         items=(item(surface_form="猫", span_ranges=((1, 2),)),),
     )
     assert reason(check(payload)) is RejectionReason.SURFACE_NOT_FOUND
@@ -225,7 +225,7 @@ def test_6_two_occurrences_are_not_repaired() -> None:
 def test_7_span_ends_past_the_sentence() -> None:
     """보정이 손댈 수 없는 형태로 둔다 --- 그래야 7번 자체가 검사된다."""
     payload = sentence(
-        japanese="猫と猫",
+        text="猫と猫",
         items=(item(surface_form="猫", span_ranges=((0, 99),)),),
     )
     assert reason(check(payload)) is RejectionReason.SPAN_OUT_OF_RANGE
@@ -234,7 +234,7 @@ def test_7_span_ends_past_the_sentence() -> None:
 def test_7_utf16_offsets_leave_a_lone_surrogate_behind() -> None:
     """offset을 UTF-16 code unit으로 적어 넣은 응답의 흔적을 거부한다."""
     payload = sentence(
-        japanese="猫\ud83dです",
+        text="猫\ud83dです",
         items=(item(surface_form="猫", span_ranges=((0, 1),)),),
     )
     assert reason(check(payload)) is RejectionReason.SPAN_OUT_OF_RANGE
@@ -292,7 +292,7 @@ def test_8_non_tappable_items_do_not_create_ambiguity() -> None:
         )
     )
     result = check(payload, requested=frozenset({"it0", "it1"}))
-    assert accepted(result).japanese == JAPANESE
+    assert accepted(result).text == JAPANESE
 
 
 def test_8_spans_inside_one_item_may_not_overlap_either() -> None:
@@ -405,7 +405,7 @@ def test_10_counts_new_items_only() -> None:
 
     # 같은 문장이라도 신규가 하나뿐이면 통과한다.
     ok = check(payload, requested=requested, new=frozenset({"it0"}), policy=policy)
-    assert accepted(ok).japanese == JAPANESE
+    assert accepted(ok).text == JAPANESE
 
 
 # --------------------------------------------------------------------------

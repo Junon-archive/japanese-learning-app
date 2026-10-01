@@ -1,7 +1,7 @@
 # Core E2E Scenario 전용 fixture (12_TEST_PLAN.md). sentences.
 # 왜 실 `seed/`가 아닌지는 같은 디렉터리의 items.yaml 머리말에 있다.
 #
-# start_codepoint / end_codepoint는 `japanese`의 Unicode code point index이며
+# start_codepoint / end_codepoint는 `text`의 Unicode code point index이며
 # 반열린 구간 [start, end)다. byte offset도 UTF-16 code unit도 아니다.
 # loader가 실제 문자열과 대조해 검증하므로 손으로 센 값이 틀리면 적재가 통째로
 # 실패한다.
@@ -10,7 +10,7 @@
 # 보여줄 것이 없으므로 loader가 거부한다.
 
 - seed_id: sn_0001
-  japanese: この仕事、田中さんに任せてもいい？
+  text: この仕事、田中さんに任せてもいい？
   korean_translation: 이 일, 다나카 씨에게 맡겨도 될까?
   items:
     - item_seed_id: it_shigoto
@@ -53,7 +53,7 @@
         example_translation: 여기 앉아도 될까요?
 
 - seed_id: sn_0002
-  japanese: ちょっと手伝ってもらえますか？
+  text: ちょっと手伝ってもらえますか？
   korean_translation: 좀 도와주실 수 있나요?
   items:
     - item_seed_id: it_chotto
@@ -83,7 +83,7 @@
         example_translation: 이사를 도와줘서 고마워.
 
 - seed_id: sn_0003
-  japanese: お疲れ様でした。あとは私に任せてください。
+  text: お疲れ様でした。あとは私に任せてください。
   korean_translation: 수고하셨습니다. 나머지는 저에게 맡겨 주세요.
   items:
     - item_seed_id: it_otsukaresama
@@ -114,7 +114,7 @@
 
 # 불연속 span 예시. 「気が乗る」가 「気が全然乗らない」로 갈라진다.
 - seed_id: sn_0004
-  japanese: 今日はなぜか気が全然乗らない。
+  text: 今日はなぜか気が全然乗らない。
   korean_translation: 오늘은 왠지 전혀 마음이 내키지 않는다.
   items:
     - item_seed_id: it_kiganoru

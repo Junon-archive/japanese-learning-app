@@ -427,7 +427,7 @@ def _presentation_payload(view: presentation.PresentationView) -> PresentationPa
     return PresentationPayload(
         presentation_id=view.presentation_id,
         sentence_id=view.sentence_id,
-        japanese=view.japanese,
+        text=view.text,
         render_segments=[
             RenderSegmentPayload(
                 text=segment.text,

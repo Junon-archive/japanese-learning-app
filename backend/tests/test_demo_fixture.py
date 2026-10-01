@@ -31,7 +31,7 @@ from app.schemas.study import ExplanationResponse, PresentationPayload
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
-SEED_DIR = REPO_ROOT / "seed"
+SEED_DIR = REPO_ROOT / "seed" / "ja"
 COMMITTED = REPO_ROOT / "frontend" / "src" / "demo" / "fixture-data.ts"
 CONFIG_PATH = REPO_ROOT / "config" / "default.yaml"
 
@@ -107,12 +107,12 @@ def _explanation(seed_id: str) -> dict[str, Any]:
 
 
 def _sentence_entry(seed_id: str, item_ids: Sequence[str]) -> dict[str, Any]:
-    japanese = "と".join(WORDS[item_id][0] for item_id in item_ids) + "。"
+    text = "と".join(WORDS[item_id][0] for item_id in item_ids) + "。"
     items = []
     cursor = 0
     for item_id in item_ids:
         surface = WORDS[item_id][0]
-        start = japanese.index(surface, cursor)
+        start = text.index(surface, cursor)
         cursor = start + len(surface)
         items.append(
             {
@@ -125,7 +125,7 @@ def _sentence_entry(seed_id: str, item_ids: Sequence[str]) -> dict[str, Any]:
         )
     return {
         "seed_id": seed_id,
-        "japanese": japanese,
+        "text": text,
         "korean_translation": f"{seed_id} 번역",
         "items": items,
     }
@@ -166,7 +166,7 @@ def _item(
 def _sentence(module: ModuleType, seed_id: str, item_ids: Sequence[str]) -> object:
     return module.SeedSentence(
         seed_id=seed_id,
-        japanese=seed_id,
+        text=seed_id,
         korean_translation=seed_id,
         items=tuple(
             module.SeedSentenceItem(
@@ -611,10 +611,10 @@ def test_ruby_failure_keeps_the_sentence_with_empty_ruby(
     )
     real = fixture_script.compute_ruby
 
-    def flaky(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> object:
-        if japanese.startswith(WORDS["it_b"][0]):
+    def flaky(text: str, items: Sequence[RubyItem], *, now: datetime) -> object:
+        if text.startswith(WORDS["it_b"][0]):
             raise ValueError("boom: secret detail")
-        return real(japanese, items, now=now)
+        return real(text, items, now=now)
 
     monkeypatch.setattr(fixture_script, "compute_ruby", flaky)
     output = tmp_path / "out.ts"

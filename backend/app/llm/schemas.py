@@ -37,7 +37,7 @@ _STRICT = ConfigDict(extra="forbid", frozen=True)
 
 
 class SpanPayload(BaseModel):
-    """`japanese`에 대한 Unicode code point index. `[start, end)` 반열림 구간이다."""
+    """`text`에 대한 Unicode code point index. `[start, end)` 반열림 구간이다."""
 
     model_config = _STRICT
 
@@ -72,7 +72,7 @@ class ItemPayload(BaseModel):
 class SentencePayload(BaseModel):
     model_config = _STRICT
 
-    japanese: str
+    text: str
     korean_translation: str
     # 허용값은 difficulty ladder 3단계와 같다(06_LEARNING_ENGINE.md). 다른 값은
     # 여기 parsing 단계에서 걸린다. label이 실제 난이도와 맞는지는 검증하지 않는다.

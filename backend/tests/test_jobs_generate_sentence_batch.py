@@ -166,7 +166,7 @@ def test_the_worker_asks_for_one_sentence_per_item_that_has_no_ready_sentence(
     assert [target["lemma"] for target in context["target_items"]] == [bare.lemma]
     assert context["sentences_requested"] == 1
     stored = [row for row in _sentences(db) if row.source_type.value == "generated"]
-    assert [row.japanese for row in stored] == ["仕方ないと思う。"]
+    assert [row.text for row in stored] == ["仕方ないと思う。"]
     assert covered.id is not None
 
 
@@ -381,7 +381,7 @@ def test_the_configured_sentence_length_is_the_limit_the_handler_enforces(
     )
 
     assert status is COMPLETED, "상한과 같은 길이는 통과해야 한다"
-    assert [row.japanese for row in _sentences(db)] == [exact]
+    assert [row.text for row in _sentences(db)] == [exact]
 
 
 # --------------------------------------------------------------------------
@@ -415,8 +415,8 @@ def test_the_duplicate_corpus_keeps_quarantined_and_drops_retired(
     assert retired.id not in {row.sentence_id for row in corpus}
     # 해시도 실제 본문에서 온 값이어야 한다. 자리 채우기 값이면 11번이 발화할 수 없다.
     assert [row.normalized_hash for row in corpus] == [
-        normalized_sentence_hash(live.japanese),
-        normalized_sentence_hash(quarantined.japanese),
+        normalized_sentence_hash(live.text),
+        normalized_sentence_hash(quarantined.text),
     ]
 
 
@@ -437,7 +437,7 @@ def test_avoid_examples_skip_retired_sentences(db: Session) -> None:
         db, learning_item_id=item.id, limit=get_config().llm.avoid_examples_per_item
     )
 
-    assert examples == [live.japanese]
+    assert examples == [live.text]
 
 
 # --------------------------------------------------------------------------
@@ -454,11 +454,9 @@ def test_a_generated_sentence_becomes_a_candidate_on_the_next_materialization(
     item = factories.make_learning_item(db, lemma="仕方ない")
     _prompt_version(db)
     job = _job(db, user)
-    japanese = "それは仕方ないと思う。"
+    text = "それは仕方ないと思う。"
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", "仕方ない", japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", "仕方ない", text)]))]
     )
 
     _run(db, job, provider, study_clock)
@@ -470,7 +468,7 @@ def test_a_generated_sentence_becomes_a_candidate_on_the_next_materialization(
     db.commit()
     assert created == 1
     candidate = db.execute(sa.select(UserSentenceCandidate)).scalar_one()
-    stored = db.execute(sa.select(Sentence).where(Sentence.japanese == japanese)).scalar_one()
+    stored = db.execute(sa.select(Sentence).where(Sentence.text == text)).scalar_one()
     assert candidate.sentence_id == stored.id
     assert stored.status is SentenceStatus.VALIDATED
 
@@ -515,12 +513,12 @@ def test_the_second_copy_of_the_same_sentence_in_one_batch_is_rejected(
     factories.make_learning_item(db, lemma="仕方ない")
     _prompt_version(db)
     job = _job(db, user)
-    japanese = "それは君に任せる。"
+    text = "それは君に任せる。"
     provider = RecordingProvider(
         responses=[
             batch_response(
-                sentence_payload(japanese, [item_payload("it0", "任せる", japanese)]),
-                sentence_payload(japanese, [item_payload("it0", "任せる", japanese)]),
+                sentence_payload(text, [item_payload("it0", "任せる", text)]),
+                sentence_payload(text, [item_payload("it0", "任せる", text)]),
             )
         ]
     )
@@ -547,17 +545,15 @@ def test_a_sentence_that_repeats_existing_content_is_rejected(
     """
     user = factories.make_user(db)
     item = factories.make_learning_item(db, lemma="任せる")
-    japanese = "それは君に任せる。"
-    quarantined = factories.make_ready_sentence(db, [item], surfaces=[japanese])
+    text = "それは君に任せる。"
+    quarantined = factories.make_ready_sentence(db, [item], surfaces=[text])
     quarantined.status = SentenceStatus.QUARANTINED
     db.commit()
-    assert quarantined.normalized_hash == normalized_sentence_hash(japanese)
+    assert quarantined.normalized_hash == normalized_sentence_hash(text)
     _prompt_version(db)
     job = _job(db, user)
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", "任せる", japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", "任せる", text)]))]
     )
 
     status = _run(db, job, provider, study_clock)
@@ -580,10 +576,8 @@ def test_running_the_same_job_twice_stores_the_sentence_once(
     factories.make_learning_item(db, lemma="仕方ない")
     _prompt_version(db)
     job = _job(db, user)
-    japanese = "それは仕方ない。"
-    response = batch_response(
-        sentence_payload(japanese, [item_payload("it0", "仕方ない", japanese)])
-    )
+    text = "それは仕方ない。"
+    response = batch_response(sentence_payload(text, [item_payload("it0", "仕方ない", text)]))
     provider = RecordingProvider(responses=[response, response])
 
     first = _run(db, job, provider, study_clock)
@@ -612,11 +606,9 @@ def test_every_sentence_rejected_is_a_retry(db: Session, study_clock: MutableClo
     factories.make_learning_item(db, lemma="任せる")
     _prompt_version(db)
     job = _job(db, user)
-    japanese = "これは表現9です。"
+    text = "これは表現9です。"
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it7", "表現9", japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it7", "表現9", text)]))]
     )
 
     status = _run(db, job, provider, study_clock)
@@ -746,7 +738,7 @@ def test_no_database_transaction_is_open_while_the_provider_runs(
     factories.make_learning_item(db, lemma="仕方ない")
     _prompt_version(db)
     job = _job(db, user)
-    japanese = "それは仕方ない。"
+    text = "それは仕方ない。"
     observed: list[bool] = []
 
     class TransactionProbe(RecordingProvider):
@@ -757,9 +749,7 @@ def test_no_database_transaction_is_open_while_the_provider_runs(
             return super().generate_structured(request)
 
     provider = TransactionProbe(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", "仕方ない", japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", "仕方ない", text)]))]
     )
 
     _run(db, job, provider, study_clock)
@@ -810,7 +800,7 @@ def test_avoid_examples_are_capped_by_config(db: Session, study_clock: MutableCl
     user = factories.make_user(db)
     item = factories.make_learning_item(db, lemma="任せる")
     for prefix in ("A", "B", "C"):
-        sentence = factories.make_sentence(db, japanese=f"{prefix}それは君に任せる。")
+        sentence = factories.make_sentence(db, text=f"{prefix}それは君に任せる。")
         factories.make_sentence_item(db, sentence, item, surface_form="任せる")
     _prompt_version(db)
     job = _job(db, user)
@@ -819,8 +809,8 @@ def test_avoid_examples_are_capped_by_config(db: Session, study_clock: MutableCl
     _run(db, job, provider, study_clock, cfg=_cfg(avoid_examples_per_item=2))
 
     context = json.loads(provider.calls[0].context)
-    assert len(context["avoid_japanese"]) == 2
-    assert all(row.endswith("それは君に任せる。") for row in context["avoid_japanese"])
+    assert len(context["avoid_examples"]) == 2
+    assert all(row.endswith("それは君に任せる。") for row in context["avoid_examples"])
     assert db.get(LearningItem, item.id) is not None
 
 
@@ -946,7 +936,7 @@ def test_the_rejection_log_keeps_the_reason_code_and_drops_the_response_text(
     factories.make_learning_item(db, lemma="任せる")
     _prompt_version(db)
     job = _job(db, user)
-    japanese = "これは秘密の合図です。"
+    text = "これは秘密の合図です。"
     surface = "存在しない表現"
     mismatched: dict[str, Any] = {
         "item_ref": "it0",
@@ -957,9 +947,7 @@ def test_the_rejection_log_keeps_the_reason_code_and_drops_the_response_text(
         "spans": [{"start_codepoint": 0, "end_codepoint": 3, "span_order": 0}],
         "explanation": explanation_payload(),
     }
-    provider = RecordingProvider(
-        responses=[batch_response(sentence_payload(japanese, [mismatched]))]
-    )
+    provider = RecordingProvider(responses=[batch_response(sentence_payload(text, [mismatched]))])
 
     with caplog.at_level(logging.INFO):
         status = _run(db, job, provider, study_clock)
@@ -967,9 +955,9 @@ def test_the_rejection_log_keeps_the_reason_code_and_drops_the_response_text(
     assert status is RETRY
     rejected = _result(_reload(db, job))["rejected"]
     assert [row["reason"] for row in rejected] == ["surface_not_found"]
-    assert japanese[:3] in rejected[0]["detail"]  # 진단은 DB에 남는다
+    assert text[:3] in rejected[0]["detail"]  # 진단은 DB에 남는다
     assert "surface_not_found" in caplog.text
-    assert japanese[:3] not in caplog.text
+    assert text[:3] not in caplog.text
     assert surface not in caplog.text
 
 
@@ -984,7 +972,7 @@ def test_the_last_error_is_one_capped_line(db: Session, study_clock: MutableCloc
     factories.make_learning_item(db)
     _prompt_version(db)
     job = _job(db, user)
-    bloated = json.dumps({"sentences": [{"japanese": "あ" * 5_000}]})
+    bloated = json.dumps({"sentences": [{"text": "あ" * 5_000}]})
 
     status = _run(db, job, RecordingProvider(responses=[bloated]), study_clock)
 

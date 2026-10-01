@@ -85,7 +85,7 @@ def _sentence_with(
     아니라 그 문장의 **모든** tappable item이다(06_LEARNING_ENGINE.md).
     """
     items = [*explained, *unexplained]
-    sentence = factories.make_sentence(db, japanese="".join(item.lemma for item in items))
+    sentence = factories.make_sentence(db, text="".join(item.lemma for item in items))
     sentence_items = []
     cursor = 0
     for item in items:

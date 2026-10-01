@@ -9,7 +9,7 @@ BMP 밖 한자가 한 글자라도 들어오면 두 기준이 갈리고, 그 순
 frontend는 받은 `text` 조각을 순서대로 이어 붙이기만 하고 인덱스를 전혀 보지
 않는다. 그래서 이 모듈의 불변식은 하나로 압축된다.
 
-    "".join(segment.text for segment in segments) == japanese
+    "".join(segment.text for segment in segments) == text
 
 `validate_item_spans`는 적재/생성 시점의 검증이고 `build_render_segments`는 표시
 시점의 렌더링이다. 둘을 한 모듈에 두는 이유는 판정 기준이 갈리면 검증을 통과한
@@ -106,7 +106,7 @@ class TappableItem:
 
 
 def build_render_segments(
-    japanese: str,
+    text: str,
     spans: Sequence[SpanRef],
     ruby: Sequence[RubySpan] | None = None,
 ) -> list[RenderSegment]:
@@ -135,31 +135,31 @@ def build_render_segments(
     segments: list[RenderSegment] = []
     cursor = 0
     for span in tappable:
-        _validate(span, length=len(japanese))
+        _validate(span, length=len(text))
         if span.start_codepoint < cursor:
             raise RenderSpanError(
                 f"tappable spans overlap at codepoint {span.start_codepoint} "
                 f"(sentence_item_id={span.sentence_item_id})"
             )
         if span.start_codepoint > cursor:
-            segments.append(RenderSegment(japanese[cursor : span.start_codepoint], None))
+            segments.append(RenderSegment(text[cursor : span.start_codepoint], None))
         segments.append(
             RenderSegment(
-                japanese[span.start_codepoint : span.end_codepoint],
+                text[span.start_codepoint : span.end_codepoint],
                 span.sentence_item_id,
             )
         )
         cursor = span.end_codepoint
 
-    if cursor < len(japanese):
-        segments.append(RenderSegment(japanese[cursor:], None))
+    if cursor < len(text):
+        segments.append(RenderSegment(text[cursor:], None))
 
     if not ruby:
         return segments
     validate_ruby_spans(
-        japanese, ruby, [(span.start_codepoint, span.end_codepoint) for span in tappable]
+        text, ruby, [(span.start_codepoint, span.end_codepoint) for span in tappable]
     )
-    return _attach_ruby(japanese, segments, ruby)
+    return _attach_ruby(text, segments, ruby)
 
 
 def build_tappable_items(spans: Sequence[SpanRef]) -> list[TappableItem]:
@@ -178,11 +178,11 @@ def build_tappable_items(spans: Sequence[SpanRef]) -> list[TappableItem]:
     return [items[key] for key in sorted(items)]
 
 
-def validate_item_spans(japanese: str, surface_form: str, spans: Sequence[ItemSpan]) -> None:
+def validate_item_spans(text: str, surface_form: str, spans: Sequence[ItemSpan]) -> None:
     """sentence_item 하나의 span 집합이 문장과 맞는지 확인한다.
 
-    offset이 `japanese`의 실제 code point index와 맞는지 본다. CPython의 `str`은
-    code point 열이므로(PEP 393) `list(japanese)`의 원소 하나가 code point 하나다.
+    offset이 `text`의 실제 code point index와 맞는지 본다. CPython의 `str`은
+    code point 열이므로(PEP 393) `list(text)`의 원소 하나가 code point 하나다.
     이모지 같은 BMP 밖 문자도 여기서는 1칸이며 UTF-16 code unit 기준으로는 2칸이다.
     그 둘이 섞이는 유일한 통로는 lone surrogate(UTF-16 index를 그대로 옮겨 적은
     문자열)이므로 그런 문자열은 아예 거부한다.
@@ -191,11 +191,11 @@ def validate_item_spans(japanese: str, surface_form: str, spans: Sequence[ItemSp
     span 전부를 `build_render_segments`에 한 번에 넣어 확인한다. 여기의 overlap
     검사는 그 검사가 보지 않는 non-tappable item까지 덮는다.
     """
-    codepoints = list(japanese)
+    codepoints = list(text)
     for offset, char in enumerate(codepoints):
         if 0xD800 <= ord(char) <= 0xDFFF:
             raise RenderSpanError(
-                f"'japanese' contains a lone surrogate at code point {offset}; "
+                f"'text' contains a lone surrogate at code point {offset}; "
                 "offsets must be Unicode code point indexes, not UTF-16 code units"
             )
 
@@ -307,7 +307,7 @@ def parse_stored_ruby(value: object) -> list[RubySpan]:
 
 
 def validate_ruby_spans(
-    japanese: str,
+    text: str,
     ruby: Sequence[RubySpan],
     tappable_spans: Sequence[tuple[int, int]],
 ) -> None:
@@ -321,7 +321,7 @@ def validate_ruby_spans(
     - 어떤 span도 tappable span의 경계를 넘지 않는다(안에 있거나 완전히 밖)
     - reading이 비어 있지 않고 R4 문자만으로 되어 있다
     """
-    length = len(japanese)
+    length = len(text)
     previous_end = 0
     for index, span in enumerate(ruby):
         start, end = span.start_codepoint, span.end_codepoint
@@ -353,7 +353,7 @@ def _is_plain_int(value: object) -> bool:
 
 
 def _attach_ruby(
-    japanese: str, segments: list[RenderSegment], ruby: Sequence[RubySpan]
+    text: str, segments: list[RenderSegment], ruby: Sequence[RubySpan]
 ) -> list[RenderSegment]:
     """검증된 ruby span을 segment마다 `RubyPart`로 자른다(R1~R3).
 
@@ -378,7 +378,7 @@ def _attach_ruby(
             RenderSegment(
                 segment.text,
                 segment.sentence_item_id,
-                _ruby_parts(japanese, segment_start, segment_end, inside),
+                _ruby_parts(text, segment_start, segment_end, inside),
             )
         )
         segment_start = segment_end
@@ -386,7 +386,7 @@ def _attach_ruby(
 
 
 def _ruby_parts(
-    japanese: str, segment_start: int, segment_end: int, inside: Sequence[RubySpan]
+    text: str, segment_start: int, segment_end: int, inside: Sequence[RubySpan]
 ) -> tuple[RubyPart, ...]:
     """R2: 달 읽기가 없으면 `[{"text": ..., "reading": null}]`가 아니라 `()`.
 
@@ -399,9 +399,9 @@ def _ruby_parts(
     cursor = segment_start
     for span in inside:
         if span.start_codepoint > cursor:
-            parts.append(RubyPart(japanese[cursor : span.start_codepoint], None))
-        parts.append(RubyPart(japanese[span.start_codepoint : span.end_codepoint], span.reading))
+            parts.append(RubyPart(text[cursor : span.start_codepoint], None))
+        parts.append(RubyPart(text[span.start_codepoint : span.end_codepoint], span.reading))
         cursor = span.end_codepoint
     if cursor < segment_end:
-        parts.append(RubyPart(japanese[cursor:segment_end], None))
+        parts.append(RubyPart(text[cursor:segment_end], None))
     return tuple(parts)

@@ -52,7 +52,7 @@ class RejectionReason(enum.StrEnum):
     """
 
     SCHEMA_PARSE_FAILED = "schema_parse_failed"  # 1
-    EMPTY_JAPANESE = "empty_japanese"  # 2
+    EMPTY_TEXT = "empty_text"  # 2
     SENTENCE_TOO_LONG = "sentence_too_long"  # 3
     MISSING_TRANSLATION = "missing_translation"  # 4
     TARGET_COUNT_OUT_OF_RANGE = "target_count_out_of_range"  # 5
@@ -138,15 +138,15 @@ def validate_sentence(
     사용자에게 신규인 것(검사 10). 둘 다 worker가 요청을 만들 때 이미 알고 있는
     값이며 응답에서 읽지 않는다.
     """
-    japanese = payload.japanese
+    text = payload.text
 
-    if not japanese.strip():  # 2
-        return Rejection(RejectionReason.EMPTY_JAPANESE, "japanese is empty")
+    if not text.strip():  # 2
+        return Rejection(RejectionReason.EMPTY_TEXT, "text is empty")
 
-    if len(japanese) > policy.max_sentence_length_chars:  # 3
+    if len(text) > policy.max_sentence_length_chars:  # 3
         return Rejection(
             RejectionReason.SENTENCE_TOO_LONG,
-            f"{len(japanese)} code points exceeds {policy.max_sentence_length_chars}",
+            f"{len(text)} code points exceeds {policy.max_sentence_length_chars}",
         )
 
     if not payload.korean_translation.strip():  # 4
@@ -178,14 +178,14 @@ def validate_sentence(
 
     # span 자동 보정은 검사 **이전**에 끝난다. 아래 6·7·8은 보정된 span으로 다시
     # 처음부터 돌고, 보정이 만들어낸 span도 예외 없이 같은 검사를 받는다.
-    items = tuple(_corrected_item(japanese, item) for item in payload.items)
+    items = tuple(_corrected_item(text, item) for item in payload.items)
 
     for item in items:
-        rejection = _validate_item_spans(japanese, item)  # 6, 7
+        rejection = _validate_item_spans(text, item)  # 6, 7
         if rejection is not None:
             return rejection
 
-    overlap = _reject_cross_item_overlap(japanese, items)  # 8
+    overlap = _reject_cross_item_overlap(text, items)  # 8
     if overlap is not None:
         return overlap
 
@@ -221,7 +221,7 @@ def _item_spans(item: ItemPayload) -> tuple[ItemSpan, ...]:
     )
 
 
-def _corrected_item(japanese: str, item: ItemPayload) -> ItemPayload:
+def _corrected_item(text: str, item: ItemPayload) -> ItemPayload:
     """모델이 틀린 offset을 **단 한 경우에만** 고친다.
 
     조건: span이 정확히 1개이고 `surface_form`이 문장에 정확히 1회 나타난다. 그때
@@ -234,15 +234,15 @@ def _corrected_item(japanese: str, item: ItemPayload) -> ItemPayload:
     돌려준 item은 호출부에서 6·7·8을 처음부터 다시 받는다. 특히 보정된 위치가
     **다른 item의 span과 겹치는** 경우가 실제로 생기고, 그것은 8번에서 걸린다.
     """
-    if item.surface_form and _spans_match(japanese, item):
+    if item.surface_form and _spans_match(text, item):
         return item
     if len(item.spans) != 1 or not item.surface_form:
         return item
-    if japanese.count(item.surface_form) != 1:
+    if text.count(item.surface_form) != 1:
         return item
 
     # `str.index` / `str.count`는 code point 단위다(CPython의 str은 code point 열).
-    start = japanese.index(item.surface_form)
+    start = text.index(item.surface_form)
     corrected = SpanPayload(
         start_codepoint=start,
         end_codepoint=start + len(item.surface_form),
@@ -251,15 +251,15 @@ def _corrected_item(japanese: str, item: ItemPayload) -> ItemPayload:
     return item.model_copy(update={"spans": (corrected,)})
 
 
-def _spans_match(japanese: str, item: ItemPayload) -> bool:
+def _spans_match(text: str, item: ItemPayload) -> bool:
     try:
-        validate_item_spans(japanese, item.surface_form, _item_spans(item))
+        validate_item_spans(text, item.surface_form, _item_spans(item))
     except RenderSpanError:
         return False
     return True
 
 
-def _validate_item_spans(japanese: str, item: ItemPayload) -> Rejection | None:
+def _validate_item_spans(text: str, item: ItemPayload) -> Rejection | None:
     """item 하나의 span 집합 (검사 6·7 + item 안의 overlap).
 
     판정은 `app.render.validate_item_spans`가 한다. 그 함수는 세 가지를 한 예외로
@@ -270,9 +270,9 @@ def _validate_item_spans(japanese: str, item: ItemPayload) -> Rejection | None:
     if not spans:
         return Rejection(RejectionReason.SPAN_OUT_OF_RANGE, f"item {item.item_ref!r} has no spans")
     try:
-        validate_item_spans(japanese, item.surface_form, spans)
+        validate_item_spans(text, item.surface_form, spans)
     except RenderSpanError as error:
-        if _has_invalid_boundary(japanese, spans):
+        if _has_invalid_boundary(text, spans):
             return Rejection(RejectionReason.SPAN_OUT_OF_RANGE, f"{item.item_ref}: {error}")
         if _overlaps(spans):
             return Rejection(RejectionReason.SPAN_OVERLAP, f"{item.item_ref}: {error}")
@@ -280,19 +280,17 @@ def _validate_item_spans(japanese: str, item: ItemPayload) -> Rejection | None:
     return None
 
 
-def _has_invalid_boundary(japanese: str, spans: tuple[ItemSpan, ...]) -> bool:
+def _has_invalid_boundary(text: str, spans: tuple[ItemSpan, ...]) -> bool:
     """검사 7: code point index 범위와 `span_order`의 유효성.
 
     lone surrogate가 섞인 문자열도 여기로 본다 --- 그것은 offset을 UTF-16 code unit
     기준으로 적어 넣은 응답의 흔적이고, 그 순간 모든 span 경계가 의미를 잃는다.
     """
-    if any(0xD800 <= ord(char) <= 0xDFFF for char in japanese):
+    if any(0xD800 <= ord(char) <= 0xDFFF for char in text):
         return True
     if sorted(span.span_order for span in spans) != list(range(len(spans))):
         return True
-    return any(
-        not 0 <= span.start_codepoint < span.end_codepoint <= len(japanese) for span in spans
-    )
+    return any(not 0 <= span.start_codepoint < span.end_codepoint <= len(text) for span in spans)
 
 
 def _overlaps(spans: tuple[ItemSpan, ...]) -> bool:
@@ -303,7 +301,7 @@ def _overlaps(spans: tuple[ItemSpan, ...]) -> bool:
     )
 
 
-def _reject_cross_item_overlap(japanese: str, items: tuple[ItemPayload, ...]) -> Rejection | None:
+def _reject_cross_item_overlap(text: str, items: tuple[ItemPayload, ...]) -> Rejection | None:
     """검사 8: 서로 **다른** item의 tappable span이 겹치면 그 문장은 ambiguous하다.
 
     `validate_item_spans`는 item 하나 안만 본다. 문장의 tappable span **전부를**
@@ -327,7 +325,7 @@ def _reject_cross_item_overlap(japanese: str, items: tuple[ItemPayload, ...]) ->
         for span in item.spans
     ]
     try:
-        build_render_segments(japanese, spans)
+        build_render_segments(text, spans)
     except RenderSpanError as error:
         return Rejection(RejectionReason.SPAN_OVERLAP, str(error))
     return None

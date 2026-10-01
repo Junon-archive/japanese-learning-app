@@ -40,7 +40,7 @@ ITEM: dict[str, Any] = {
 }
 
 SENTENCE: dict[str, Any] = {
-    "japanese": "猫が好きです。",
+    "text": "猫が好きです。",
     "korean_translation": "고양이를 좋아합니다.",
     "difficulty_label": "beginner",
     "items": [ITEM],
@@ -60,7 +60,7 @@ def test_full_response_parses() -> None:
 
     assert isinstance(parsed, SentenceBatchPayload)
     sentence = parsed.sentences[0]
-    assert sentence.japanese == "猫が好きです。"
+    assert sentence.text == "猫が好きです。"
     assert sentence.difficulty_label == "beginner"
     assert sentence.items[0].spans == (
         SpanPayload(start_codepoint=0, end_codepoint=1, span_order=0),
@@ -128,7 +128,7 @@ def test_the_model_cannot_declare_its_own_duplicate_exemption(field: str) -> Non
 
 EXPECTED_FIELDS = {
     SentenceBatchPayload: {"sentences"},
-    SentencePayload: {"japanese", "korean_translation", "difficulty_label", "items"},
+    SentencePayload: {"text", "korean_translation", "difficulty_label", "items"},
     ItemPayload: {"item_ref", "surface_form", "is_tappable", "spans", "explanation"},
     SpanPayload: {"start_codepoint", "end_codepoint", "span_order"},
     ExplanationPayload: {
@@ -220,7 +220,7 @@ def test_payload_models_are_frozen() -> None:
     """검증을 통과한 payload가 저장 직전에 조용히 바뀌지 않는다."""
     sentence = parse_sentence_batch(batch()).sentences[0]
     with pytest.raises(ValueError, match="frozen"):
-        sentence.japanese = "犬が好きです。"
+        sentence.text = "犬が好きです。"
 
 
 def test_item_payload_keeps_spans_as_a_tuple() -> None:

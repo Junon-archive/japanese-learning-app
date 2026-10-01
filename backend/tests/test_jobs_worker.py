@@ -34,6 +34,7 @@ from app.models.enums import (
     CandidateStatus,
     GenerationJobStatus,
     JobType,
+    Language,
     LlmTaskType,
     PresentationRole,
 )
@@ -116,6 +117,7 @@ def _queued_job(
     db: Session, *, now: datetime, payload: dict[str, Any] | None = None
 ) -> GenerationJob:
     job = GenerationJob(
+        language=Language.JA,
         job_type=JobType.GENERATE_SENTENCE_BATCH,
         status=GenerationJobStatus.QUEUED,
         payload_json=payload or {},
@@ -793,7 +795,7 @@ def test_logs_carry_no_key_no_prompt_and_no_provider_payload(
 ) -> None:
     api_key = "sk-test-DO-NOT-LOG"
     prompt = "너는 일본어 문장을 만든다"
-    response = '{"sentences": [{"japanese": "秘密の応答本文"}]}'
+    response = '{"sentences": [{"text": "秘密の応答本文"}]}'
 
     with committed_db() as setup:
         _queued_job(setup, now=clock.now())

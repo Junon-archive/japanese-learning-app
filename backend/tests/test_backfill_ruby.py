@@ -210,7 +210,7 @@ def test_the_explanation_reading_comes_from_the_smallest_validated_row_of_tappab
         with Session(engine) as session:
             item = factories.make_learning_item(session, lemma="明日")
             other = factories.make_learning_item(session, lemma="日")
-            sentence = factories.make_sentence(session, japanese="明日は早い。")
+            sentence = factories.make_sentence(session, text="明日は早い。")
             tappable = factories.make_sentence_item(session, sentence, item, surface_form="明日")
             factories.make_span(session, tappable, start=0, end=2)
             plain = factories.make_sentence_item(
@@ -408,10 +408,10 @@ def test_two_overlapping_runs_end_in_the_same_state_and_the_late_one_updates_not
 
 
 def _fail_for(script: ModuleType, japanese_prefix: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    def flaky(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
-        if japanese.startswith(japanese_prefix):
+    def flaky(text: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
+        if text.startswith(japanese_prefix):
             raise RuntimeError("simulated ruby failure")
-        return compute_ruby(japanese, items, now=now)
+        return compute_ruby(text, items, now=now)
 
     monkeypatch.setattr(script, "compute_ruby", flaky)
 
@@ -504,7 +504,7 @@ def test_control_characters_in_the_mismatch_list_are_escaped(
     try:
         with Session(engine) as session:
             item = factories.make_learning_item(session, lemma="明日")
-            sentence = factories.make_sentence(session, japanese="明日は早い。")
+            sentence = factories.make_sentence(session, text="明日は早い。")
             sentence_item = factories.make_sentence_item(
                 session, sentence, item, surface_form="明日"
             )
@@ -538,7 +538,7 @@ def _seed_payloads() -> list[SentencePayload]:
     )
     return [
         SentencePayload(
-            japanese=entry["japanese"],
+            text=entry["text"],
             korean_translation=entry["korean_translation"],
             difficulty_label=StartingLevel.BEGINNER,
             items=tuple(
@@ -576,7 +576,7 @@ def test_seed_worker_and_backfill_produce_the_same_spans(
             with Session(seed_engine) as session:
                 load_seed(session, SEED_MIN, now=datetime.now(UTC))
                 seed_spans = {
-                    row.japanese: row.ruby_json["spans"]
+                    row.text: row.ruby_json["spans"]
                     for row in session.scalars(sa.select(Sentence)).all()
                     if row.ruby_json is not None
                 }
@@ -617,7 +617,7 @@ def test_seed_worker_and_backfill_produce_the_same_spans(
                     now=now,
                 )
                 worker_spans = {
-                    row.japanese: row.ruby_json["spans"]
+                    row.text: row.ruby_json["spans"]
                     for row in session.scalars(
                         sa.select(Sentence).where(Sentence.id.in_(completion.stored))
                     ).all()
@@ -633,9 +633,9 @@ def test_seed_worker_and_backfill_produce_the_same_spans(
     try:
         with engine.connect() as connection:
             backfill_spans = {
-                japanese: value["spans"]
-                for japanese, value in connection.execute(
-                    sa.select(Sentence.japanese, Sentence.ruby_json)
+                text: value["spans"]
+                for text, value in connection.execute(
+                    sa.select(Sentence.text, Sentence.ruby_json)
                 ).all()
             }
     finally:

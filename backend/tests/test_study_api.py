@@ -178,7 +178,7 @@ def test_the_next_response_has_no_offsets_and_rebuilds_the_sentence(
 
     payload = _next(api, session_id).json()["presentation"]
 
-    assert "".join(segment["text"] for segment in payload["render_segments"]) == sentence.japanese
+    assert "".join(segment["text"] for segment in payload["render_segments"]) == sentence.text
     for segment in payload["render_segments"]:
         assert set(segment) == {"text", "sentence_item_id", "ruby"}
     assert isinstance(payload["presentation_id"], int)
@@ -304,7 +304,7 @@ def test_a_broken_tappable_span_is_still_500_even_with_valid_ruby(
     sentence = _seed_ready_sentence(db_session, user)
     sentence.ruby_json = dict(_VALID_RUBY)
     span = db_session.execute(sa.select(SentenceItemSpan)).scalars().one()
-    span.end_codepoint = len(sentence.japanese) + 3
+    span.end_codepoint = len(sentence.text) + 3
     db_session.flush()
     session_id = _start(api)
 

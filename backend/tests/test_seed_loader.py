@@ -46,7 +46,7 @@ from tests.factories import NOW
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(__file__).resolve().parent / "data"
 SEED_MIN = DATA_DIR / "seed_min"
-REAL_SEED_DIR = REPO_ROOT / "seed"
+REAL_SEED_DIR = REPO_ROOT / "seed" / "ja"
 
 
 def _items_by_lemma(session: Session) -> dict[str, LearningItem]:
@@ -110,9 +110,7 @@ def test_discontinuous_spans_are_stored_in_order(db_session: Session) -> None:
         .order_by(SentenceItemSpan.span_order)
     ).all()
 
-    covered = "".join(
-        sentence.japanese[span.start_codepoint : span.end_codepoint] for span in spans
-    )
+    covered = "".join(sentence.text[span.start_codepoint : span.end_codepoint] for span in spans)
     assert covered == sentence_item.surface_form
 
 
@@ -215,7 +213,7 @@ def test_stored_normalized_hash_matches_the_shared_function(db_session: Session)
     rows = db_session.scalars(sa.select(Sentence)).all()
     assert rows
     for row in rows:
-        assert row.normalized_hash == normalized_sentence_hash(row.japanese)
+        assert row.normalized_hash == normalized_sentence_hash(row.text)
 
 
 # --------------------------------------------------------------------------
@@ -271,7 +269,7 @@ def test_seed_ruby_is_the_shared_computation(db_session: Session) -> None:
         sa.select(Sentence).where(Sentence.source_id == "sn_min_0002")
     ).one()
     expected = compute_ruby(
-        sentence.japanese,
+        sentence.text,
         [RubyItem("it_min_kiganoru", (ItemSpan(3, 5, 0), ItemSpan(7, 9, 1)), "きがのら")],
         now=NOW,
     )
@@ -282,10 +280,10 @@ def test_seed_ruby_is_the_shared_computation(db_session: Session) -> None:
 def test_a_failed_ruby_computation_leaves_null_and_the_load_continues(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def flaky(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
-        if japanese.startswith("仕事"):
+    def flaky(text: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
+        if text.startswith("仕事"):
             raise RuntimeError("simulated analyzer failure")
-        return compute_ruby(japanese, items, now=now)
+        return compute_ruby(text, items, now=now)
 
     monkeypatch.setattr(seed_loader, "compute_ruby", flaky)
 
@@ -318,7 +316,7 @@ def test_seed_ruby_does_not_change_the_text_or_spans(db_session: Session) -> Non
         .where(SentenceItem.sentence_id == sentence.id)
         .order_by(SentenceItemSpan.start_codepoint)
     ).all()
-    assert sentence.japanese == "仕事を任せる。"
+    assert sentence.text == "仕事を任せる。"
     assert [tuple(row) for row in spans] == [(0, 2), (3, 6)]
 
 

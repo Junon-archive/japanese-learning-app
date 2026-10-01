@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.llm.prompts import explain_item, review_context, sentence_gen
+from app.llm.prompts.ja import explain_item, review_context, sentence_gen
 from app.llm.provider import LlmError
 from app.models.enums import LlmTaskType
 

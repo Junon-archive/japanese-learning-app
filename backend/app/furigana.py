@@ -287,14 +287,14 @@ def _align_token(token: Token, reading: str) -> tuple[list[RubySpan], _Shape]:
 # --------------------------------------------------------------------------
 
 
-def _item_surface(japanese: str, item: RubyItem) -> str:
+def _item_surface(text: str, item: RubyItem) -> str:
     return "".join(
-        japanese[span.start_codepoint : span.end_codepoint]
+        text[span.start_codepoint : span.end_codepoint]
         for span in sorted(item.spans, key=lambda span: span.span_order)
     )
 
 
-def _item_runs(japanese: str, item: RubyItem) -> list[_Run]:
+def _item_runs(text: str, item: RubyItem) -> list[_Run]:
     """item span을 span_order 순으로 이어 한자/비한자 run으로 자른다. span 경계에서도 자른다.
 
     ADR-021의 "위치가 이어지지 않는 곳(불연속 span 경계)에서도 자른다". span 단위로 자르면
@@ -302,19 +302,19 @@ def _item_runs(japanese: str, item: RubyItem) -> list[_Run]:
     """
     runs: list[_Run] = []
     for span in sorted(item.spans, key=lambda span: span.span_order):
-        text = japanese[span.start_codepoint : span.end_codepoint]
-        runs.extend(_surface_runs(text, span.start_codepoint))
+        span_text = text[span.start_codepoint : span.end_codepoint]
+        runs.extend(_surface_runs(span_text, span.start_codepoint))
     return runs
 
 
-def _explanation_spans(japanese: str, item: RubyItem) -> list[RubySpan] | None:
+def _explanation_spans(text: str, item: RubyItem) -> list[RubySpan] | None:
     """정렬이 정확히 1개이고 부분 읽기가 전부 히라가나 조건을 만족하면 한자 run마다 span.
 
     그 밖(0개, 2개 이상, 조건 위반, 설명 없음)은 None --- 이 item은 계층 1을 쓰지 않는다.
     """
     if item.explanation_reading is None:
         return None
-    runs = _item_runs(japanese, item)
+    runs = _item_runs(text, item)
     reading = normalize_explanation_reading(item.explanation_reading)
     found, parts = _alignment(runs, reading)
     if found != 1:
@@ -503,9 +503,7 @@ def _annotate_tokens(
 # --------------------------------------------------------------------------
 
 
-def _analyzer_reading(
-    japanese: str, item: RubyItem, analyzer_spans: Sequence[RubySpan]
-) -> str | None:
+def _analyzer_reading(text: str, item: RubyItem, analyzer_spans: Sequence[RubySpan]) -> str | None:
     """계층 1을 뺀 계산의 ruby로 item span을 훑은 읽기. ruby 없는 한자가 있으면 None(비교 불가)."""
     by_start = {span.start_codepoint: span for span in analyzer_spans}
     parts: list[str] = []
@@ -517,7 +515,7 @@ def _analyzer_reading(
                 parts.append(ruby.reading)
                 position = ruby.end_codepoint
                 continue
-            char = japanese[position]
+            char = text[position]
             if is_kanji(char):
                 return None
             parts.append(to_hiragana(char))
@@ -531,7 +529,7 @@ def _analyzer_reading(
 
 
 def compute_ruby_from_tokens(
-    japanese: str,
+    text: str,
     tokens: Sequence[Token],
     items: Sequence[RubyItem],
     *,
@@ -545,19 +543,19 @@ def compute_ruby_from_tokens(
         raise ValueError("now must be timezone-aware (UTC)")
 
     tappable = [(span.start_codepoint, span.end_codepoint) for item in items for span in item.spans]
-    kanji_items = [item for item in items if has_kanji(_item_surface(japanese, item))]
-    explained = [(item, _explanation_spans(japanese, item)) for item in kanji_items]
+    kanji_items = [item for item in items if has_kanji(_item_surface(text, item))]
+    explained = [(item, _explanation_spans(text, item)) for item in kanji_items]
     explanation_spans = [span for _, spans in explained if spans for span in spans]
 
     final = _annotate_tokens(tokens, tappable, explanation_spans)
     spans = tuple(sorted([*explanation_spans, *final.spans], key=lambda span: span.start_codepoint))
-    validate_ruby_spans(japanese, spans, tappable)
+    validate_ruby_spans(text, spans, tappable)
 
     analyzer_spans = _annotate_tokens(tokens, tappable, []).spans if kanji_items else []
     mismatches: list[ReadingMismatch] = []
     uncomparable = 0
     for item, item_explanation_spans in explained:
-        analyzer = _analyzer_reading(japanese, item, analyzer_spans)
+        analyzer = _analyzer_reading(text, item, analyzer_spans)
         if item.explanation_reading is None or analyzer is None:
             uncomparable += 1
             continue
@@ -571,7 +569,7 @@ def compute_ruby_from_tokens(
                     else MismatchKind.EXPLANATION_OVERRIDE
                 ),
                 sentence_item_id=item.sentence_item_id,
-                surface=_item_surface(japanese, item),
+                surface=_item_surface(text, item),
                 explanation=item.explanation_reading,
                 analyzer=analyzer,
             )
@@ -624,10 +622,8 @@ class Analyzer:
     def __init__(self, tokenizer: Any) -> None:  # noqa: ANN401 (sudachipy에 타입 정보가 없다)
         self._tokenizer = tokenizer
 
-    def tokenize(self, japanese: str) -> list[Token]:
-        return [
-            self._token(morpheme, split=True) for morpheme in self._tokenizer.tokenize(japanese)
-        ]
+    def tokenize(self, text: str) -> list[Token]:
+        return [self._token(morpheme, split=True) for morpheme in self._tokenizer.tokenize(text)]
 
     def _token(self, morpheme: Any, *, split: bool) -> Token:  # noqa: ANN401
         return Token(
@@ -653,9 +649,9 @@ def load_analyzer() -> Analyzer:
     return Analyzer(Dictionary(dict="core").create(SplitMode.C))
 
 
-def compute_ruby(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
+def compute_ruby(text: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
     """문장 하나의 ruby를 계산한다. `items`는 그 문장의 tappable item 전부다."""
-    return compute_ruby_from_tokens(japanese, load_analyzer().tokenize(japanese), items, now=now)
+    return compute_ruby_from_tokens(text, load_analyzer().tokenize(text), items, now=now)
 
 
 # --------------------------------------------------------------------------

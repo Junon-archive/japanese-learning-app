@@ -184,8 +184,8 @@ def _flag(api: StudyApi, presentation_id: int, *, reason: str = "unnatural") -> 
     assert response.status_code == 204, response.text
 
 
-def _batch_of(japanese: str, *, surface: str) -> str:
-    return batch_response(sentence_payload(japanese, [item_payload("it0", surface, japanese)]))
+def _batch_of(text: str, *, surface: str) -> str:
+    return batch_response(sentence_payload(text, [item_payload("it0", surface, text)]))
 
 
 def _spent_call(
@@ -265,8 +265,8 @@ def test_the_enqueued_batch_job_becomes_the_next_presented_sentence(
     assert all(job.status is GenerationJobStatus.QUEUED for job in queued)
     assert _count(observer, UserSentenceCandidate) == 0
 
-    japanese = "それは仕方ないと思う。"
-    provider = RecordingProvider(responses=[_batch_of(japanese, surface="仕方ない")])
+    text = "それは仕方ないと思う。"
+    provider = RecordingProvider(responses=[_batch_of(text, surface="仕方ない")])
     handled = _drain(committed_db, provider=provider, cfg=cfg, now=now)
 
     # role마다 job이 있지만 대상 item이 있는 role은 하나다(나머지는 대상 0건이므로
@@ -274,7 +274,7 @@ def test_the_enqueued_batch_job_becomes_the_next_presented_sentence(
     assert handled == len(PresentationRole)
     assert provider.call_count == 1
     generated = _sentences(observer, source="generated")
-    assert [row.japanese for row in generated] == [japanese]
+    assert [row.text for row in generated] == [text]
     assert generated[0].status is SentenceStatus.VALIDATED
     assert _count(observer, SentenceItem) == 1
     assert _count(observer, SentenceItemSpan) == 1
@@ -284,7 +284,7 @@ def test_the_enqueued_batch_job_becomes_the_next_presented_sentence(
 
     assert shown is not None, "worker가 만든 문장이 pool로 돌아오지 않았다"
     assert shown["sentence_id"] == generated[0].id
-    assert shown["japanese"] == japanese
+    assert shown["text"] == text
     candidate = observer.execute(sa.select(UserSentenceCandidate)).scalar_one()
     assert candidate.sentence_id == generated[0].id
     assert candidate.user_id == committed_api.user.id
@@ -314,8 +314,8 @@ def test_the_same_job_run_twice_does_not_double_the_pool(
     session_id = _start(committed_api)
     assert _next(committed_api, session_id) is None
 
-    japanese = "それは仕方ないと思う。"
-    response = _batch_of(japanese, surface="仕方ない")
+    text = "それは仕方ないと思う。"
+    response = _batch_of(text, surface="仕方ない")
     provider = RecordingProvider(responses=[response, response])
     _drain(committed_db, provider=provider, cfg=cfg, now=now)
 
@@ -352,7 +352,7 @@ class _Flagged:
 
     session_id: int
     sentence_id: int
-    japanese: str
+    text: str
 
 
 def _quarantine_by_flagging(
@@ -370,11 +370,11 @@ def _quarantine_by_flagging(
     실제로 일어난다. 자리 채우기 해시를 쓰면 같은 문장을 넣어도 hash가 달라 11번이
     발화할 수 없으므로, factory가 그 값을 계산하는 것 자체가 이 테스트의 전제다.
     """
-    japanese = "それは君に任せる。"
+    text = "それは君に任せる。"
     with factory() as setup:
         item = factories.make_learning_item(setup, lemma="任せる")
-        sentence = factories.make_ready_sentence(setup, [item], surfaces=[japanese])
-        assert sentence.normalized_hash == normalized_sentence_hash(japanese)
+        sentence = factories.make_ready_sentence(setup, [item], surfaces=[text])
+        assert sentence.normalized_hash == normalized_sentence_hash(text)
         _activate_prompt_versions(setup, LlmTaskType.GENERATE_SENTENCE_BATCH)
         setup.commit()
         flagged_id = sentence.id
@@ -391,7 +391,7 @@ def _quarantine_by_flagging(
     assert quarantined.status is SentenceStatus.QUARANTINED
     assert _next(api, session_id) is None, "격리된 문장이 다시 선택됐다"
     del cfg  # 호출부가 이미 app에 꽂았다. 여기서는 서명의 대칭을 위해 받는다.
-    return _Flagged(session_id=session_id, sentence_id=flagged_id, japanese=japanese)
+    return _Flagged(session_id=session_id, sentence_id=flagged_id, text=text)
 
 
 def _rejection_reasons(observer: Session) -> list[str]:
@@ -423,8 +423,8 @@ def test_quarantined_sentence_is_not_regenerated_into_ready(
     flagged = _quarantine_by_flagging(committed_api, committed_db, observer, cfg=cfg)
 
     # 모델이 같은 문장을 다시 만들어 온다. 실제로 있었던 실패 양상이다 ---
-    # avoid_japanese는 힌트일 뿐이고 판정은 deterministic duplicate 검사다.
-    provider = RecordingProvider(responses=[_batch_of(flagged.japanese, surface="任せる")])
+    # avoid_examples는 힌트일 뿐이고 판정은 deterministic duplicate 검사다.
+    provider = RecordingProvider(responses=[_batch_of(flagged.text, surface="任せる")])
     _drain(committed_db, provider=provider, cfg=cfg, now=now)
 
     assert provider.call_count == 1, "생성 자체가 일어나지 않았다면 이 테스트는 무의미하다"
@@ -455,8 +455,8 @@ def test_a_near_copy_of_a_quarantined_sentence_is_rejected_by_the_corpus(
     flagged = _quarantine_by_flagging(committed_api, committed_db, observer, cfg=cfg)
 
     near_copy = "それは君に任せるよ。"
-    assert normalized_sentence_hash(near_copy) != normalized_sentence_hash(flagged.japanese)
-    assert similarity_ratio(near_copy, flagged.japanese) > threshold
+    assert normalized_sentence_hash(near_copy) != normalized_sentence_hash(flagged.text)
+    assert similarity_ratio(near_copy, flagged.text) > threshold
 
     provider = RecordingProvider(responses=[_batch_of(near_copy, surface="任せる")])
     _drain(committed_db, provider=provider, cfg=cfg, now=now)
@@ -485,7 +485,7 @@ def test_the_explain_item_job_makes_the_skipped_sentence_presentable(
     now = committed_api.clock.now()
     with committed_db() as setup:
         item = factories.make_learning_item(setup, lemma="任せる")
-        sentence = factories.make_sentence(setup, japanese="それは君に任せる。")
+        sentence = factories.make_sentence(setup, text="それは君に任せる。")
         sentence_item = factories.make_sentence_item(setup, sentence, item, surface_form="任せる")
         factories.make_span(setup, sentence_item, start=5, end=8)
         # explanation을 두지 않는다. 그 하나 때문에 문장 전체가 ready가 아니다.
@@ -609,13 +609,13 @@ def test_the_review_context_job_creates_the_candidate_for_that_stage(
         "anchor_sentence_id": anchor_id,
     }
 
-    japanese = "今日の仕事は全部あなたに任せるつもりだ。"
-    provider = RecordingProvider(responses=[_batch_of(japanese, surface="任せる")])
+    text = "今日の仕事は全部あなたに任せるつもりだ。"
+    provider = RecordingProvider(responses=[_batch_of(text, surface="任せる")])
     _drain(committed_db, provider=provider, cfg=cfg, now=now)
 
     assert provider.call_count == 1
     generated = _sentences(observer, source="generated")
-    assert [row.japanese for row in generated] == [japanese]
+    assert [row.text for row in generated] == [text]
     # `varied`는 anchor의 자식이 아니다. lineage는 stage에서 나온다.
     assert generated[0].parent_sentence_id is None
 

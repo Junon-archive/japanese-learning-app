@@ -19,7 +19,7 @@ import hashlib
 import unicodedata
 
 
-def normalized_sentence_text(japanese: str) -> str:
+def normalized_sentence_text(text: str) -> str:
     """NFKC 정규화 후 모든 공백을 제거한다.
 
     NFKC는 전각 영숫자와 기호를 반각으로 접어 같은 문장의 표기 변형을 하나로
@@ -27,12 +27,12 @@ def normalized_sentence_text(japanese: str) -> str:
     유무만 다른 문장은 같은 문장으로 본다. `str.split()`은 전각 공백(U+3000)을
     포함한 모든 whitespace를 나눈다.
     """
-    return "".join(unicodedata.normalize("NFKC", japanese).split())
+    return "".join(unicodedata.normalize("NFKC", text).split())
 
 
-def normalized_sentence_hash(japanese: str) -> str:
+def normalized_sentence_hash(text: str) -> str:
     """`sentences.normalized_hash`. exact duplicate 검출의 키다."""
-    return hashlib.sha256(normalized_sentence_text(japanese).encode("utf-8")).hexdigest()
+    return hashlib.sha256(normalized_sentence_text(text).encode("utf-8")).hexdigest()
 
 
 def similarity_ratio(a: str, b: str) -> float:

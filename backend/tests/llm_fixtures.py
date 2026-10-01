@@ -38,12 +38,12 @@ def explanation_payload(**overrides: str | None) -> dict[str, Any]:
 def item_payload(
     label: str,
     surface: str,
-    japanese: str,
+    text: str,
     *,
     is_tappable: bool = True,
     explanation: dict[str, Any] | str | None = "default",
 ) -> dict[str, Any]:
-    start = japanese.index(surface)
+    start = text.index(surface)
     return {
         "item_ref": label,
         "surface_form": surface,
@@ -60,14 +60,14 @@ def item_payload(
 
 
 def sentence_payload(
-    japanese: str,
+    text: str,
     items: Sequence[dict[str, Any]],
     *,
     korean_translation: str = "번역",
     difficulty_label: str = "beginner",
 ) -> dict[str, Any]:
     return {
-        "japanese": japanese,
+        "text": text,
         "korean_translation": korean_translation,
         "difficulty_label": difficulty_label,
         "items": list(items),

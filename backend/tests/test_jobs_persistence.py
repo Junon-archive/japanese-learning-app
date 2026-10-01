@@ -69,14 +69,14 @@ def _job(db: Session, *, key: str = "persistence-test") -> GenerationJob:
 
 def _payload(
     *,
-    japanese: str = JAPANESE,
+    text: str = JAPANESE,
     label: str = "it0",
     explanation: ExplanationPayload | None = None,
     is_tappable: bool = True,
 ) -> SentencePayload:
-    start = japanese.index(SURFACE)
+    start = text.index(SURFACE)
     return SentencePayload(
-        japanese=japanese,
+        text=text,
         korean_translation="내일은 너에게 맡길게.",
         difficulty_label=StartingLevel.BEGINNER,
         items=(
@@ -334,7 +334,7 @@ def test_the_same_hash_from_another_job_is_a_duplicate(
     두 단계를 구별할 수 없다(`persistence.DUPLICATE_BACKSTOP_MARKER`).
     """
     item = factories.make_learning_item(db)
-    other = factories.make_sentence(db, japanese=JAPANESE)
+    other = factories.make_sentence(db, text=JAPANESE)
     job = _job(db)
     db.commit()
 
@@ -409,9 +409,9 @@ def test_one_bad_sentence_does_not_discard_the_good_ones(
         db,
         job=job,
         sentences=[
-            _new_sentence(item.id, japanese="今日は君に任せる。", explanation=_explanation()),
-            _new_sentence(item.id, japanese="明日も君に任せる。", explanation=None),
-            _new_sentence(item.id, japanese="来週は君に任せる。", explanation=_explanation()),
+            _new_sentence(item.id, text="今日は君に任せる。", explanation=_explanation()),
+            _new_sentence(item.id, text="明日も君に任せる。", explanation=None),
+            _new_sentence(item.id, text="来週は君に任せる。", explanation=_explanation()),
         ],
         rejected=[Rejection(RejectionReason.SENTENCE_TOO_LONG, "60자 초과")],
         provenance=_provenance(study_clock),
@@ -640,7 +640,7 @@ def test_the_text_and_spans_are_not_changed_by_ruby(db: Session, study_clock: Mu
     sentence = _save_one(db, study_clock, explanation=_explanation())
 
     span = db.execute(sa.select(SentenceItemSpan)).scalar_one()
-    assert sentence.japanese == JAPANESE
+    assert sentence.text == JAPANESE
     assert (span.start_codepoint, span.end_codepoint, span.span_order) == (5, 8, 0)
 
 
@@ -678,7 +678,7 @@ def test_an_explanation_override_is_logged_with_the_tappable_items_stored_id(
     job = _job(db)
     explanation = ExplanationPayload(**{**_explanation().model_dump(), "reading": "にんせる"})
     payload = SentencePayload(
-        japanese=JAPANESE,
+        text=JAPANESE,
         korean_translation="내일은 너에게 맡길게.",
         difficulty_label=StartingLevel.BEGINNER,
         items=(
@@ -741,7 +741,7 @@ def test_a_failed_ruby_computation_still_stores_a_validated_sentence(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def broken(japanese: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
+    def broken(text: str, items: Sequence[RubyItem], *, now: datetime) -> RubyComputation:
         raise RuntimeError("simulated ruby failure")
 
     monkeypatch.setattr(persistence, "compute_ruby", broken)

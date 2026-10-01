@@ -73,7 +73,7 @@ EXIT_FAILED = 2
 @dataclass(frozen=True)
 class Target:
     sentence_id: int
-    japanese: str
+    text: str
     items: tuple[RubyItem, ...]
 
 
@@ -129,7 +129,7 @@ def load_targets(connection: sa.Connection) -> list[Target]:
     """
     targets = sa.select(Sentence.id).where(Sentence.ruby_json.is_(None)).subquery()
     sentences = connection.execute(
-        sa.select(Sentence.id, Sentence.japanese)
+        sa.select(Sentence.id, Sentence.text)
         .where(Sentence.id.in_(sa.select(targets.c.id)))
         .order_by(Sentence.id)
     ).all()
@@ -170,7 +170,7 @@ def load_targets(connection: sa.Connection) -> list[Target]:
     return [
         Target(
             sentence_id=int(sentence_id),
-            japanese=str(japanese),
+            text=str(text),
             items=tuple(
                 RubyItem(
                     sentence_item_id=item_id,
@@ -180,7 +180,7 @@ def load_targets(connection: sa.Connection) -> list[Target]:
                 for item_id, item_spans in spans.get(int(sentence_id), {}).items()
             ),
         )
-        for sentence_id, japanese in sentences
+        for sentence_id, text in sentences
     ]
 
 
@@ -232,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         values: list[tuple[int, dict[str, Any]]] = []
         for target in targets:
             try:
-                computation = compute_ruby(target.japanese, target.items, now=now)
+                computation = compute_ruby(target.text, target.items, now=now)
             except Exception as exc:
                 summary.add_failure()
                 _out(f"failed sentence={target.sentence_id} error={type(exc).__name__}\n")

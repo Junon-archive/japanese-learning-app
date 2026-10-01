@@ -36,7 +36,7 @@ class CorpusSentence:
     """비교 대상 한 건. `app/jobs/`가 `sentences` 행에서 만든다."""
 
     sentence_id: int
-    japanese: str
+    text: str
     normalized_hash: str
 
 
@@ -53,7 +53,7 @@ def skips_similarity_check(*, task_type: LlmTaskType, context_stage: ContextStag
 
 
 def find_duplicate(
-    japanese: str,
+    text: str,
     corpus: Sequence[CorpusSentence],
     *,
     similarity_threshold: float,
@@ -72,7 +72,7 @@ def find_duplicate(
     `corpus`에 이어 붙이며 다음 문장을 검사하는 것으로 한다 --- 여기서 batch를
     통째로 받으면 "이미 저장된 것"과 "방금 통과한 것"의 경계가 흐려진다.
     """
-    digest = normalized_sentence_hash(japanese)
+    digest = normalized_sentence_hash(text)
     for existing in corpus:
         if existing.normalized_hash == digest:
             return Rejection(
@@ -84,7 +84,7 @@ def find_duplicate(
         return None
 
     for existing in corpus:
-        ratio = similarity_ratio(japanese, existing.japanese)
+        ratio = similarity_ratio(text, existing.text)
         if ratio > similarity_threshold:
             return Rejection(
                 RejectionReason.DUPLICATE_SIMILARITY,

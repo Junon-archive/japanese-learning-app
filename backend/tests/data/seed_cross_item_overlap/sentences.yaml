@@ -2,7 +2,7 @@
 # item 단위 검증은 둘 다 통과한다 --- 각 item 안에서는 span이 하나뿐이다.
 # 문장 단위 검증만이 이것을 거부한다.
 - seed_id: sn_overlap_0001
-  japanese: 仕事を任せる。
+  text: 仕事を任せる。
   korean_translation: 일을 맡긴다.
   items:
     - item_seed_id: it_min_shigoto

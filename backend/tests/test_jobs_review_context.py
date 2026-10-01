@@ -138,23 +138,21 @@ def test_near_original_records_the_anchor_as_parent_and_skips_the_similarity_che
         db, user=user, item_id=item.id, anchor_id=anchor.id, stage=ContextStage.NEAR_ORIGINAL
     )
     # anchor와 한 글자만 다르다. similarity threshold(0.9)를 확실히 넘는다.
-    japanese = "それは君に任せるよ。"
+    text = "それは君に任せるよ。"
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", SURFACE, japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", SURFACE, text)]))]
     )
 
     status = _run(db, job, provider, study_clock)
 
     assert status is COMPLETED
     stored = _generated(db)
-    assert [row.japanese for row in stored] == [japanese]
+    assert [row.text for row in stored] == [text]
     assert stored[0].parent_sentence_id == anchor.id
     assert stored[0].provenance_json["parent_sentence_id"] == anchor.id
     context = json.loads(provider.calls[0].context)
     assert context["context_stage"] == "near_original"
-    assert context["anchor_japanese"] == ANCHOR_JAPANESE
+    assert context["anchor_text"] == ANCHOR_JAPANESE
 
 
 @pytest.mark.integration
@@ -167,11 +165,9 @@ def test_varied_does_not_skip_the_similarity_check_and_records_no_parent(
     anchor = factories.make_ready_sentence(db, [item], surfaces=[ANCHOR_JAPANESE])
     _prompt_version(db)
     job = _job(db, user=user, item_id=item.id, anchor_id=anchor.id, stage=ContextStage.VARIED)
-    japanese = "それは君に任せるよ。"
+    text = "それは君に任せるよ。"
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", SURFACE, japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", SURFACE, text)]))]
     )
 
     status = _run(db, job, provider, study_clock)
@@ -190,11 +186,9 @@ def test_a_new_context_sentence_has_no_lineage(db: Session, study_clock: Mutable
     anchor = factories.make_ready_sentence(db, [item], surfaces=[ANCHOR_JAPANESE])
     _prompt_version(db)
     job = _job(db, user=user, item_id=item.id, anchor_id=anchor.id, stage=ContextStage.NEW_CONTEXT)
-    japanese = "今回の準備は後輩に任せる予定だ。"
+    text = "今回の準備は後輩に任せる予定だ。"
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", SURFACE, japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", SURFACE, text)]))]
     )
 
     status = _run(db, job, provider, study_clock)

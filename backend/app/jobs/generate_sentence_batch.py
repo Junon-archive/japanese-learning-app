@@ -133,7 +133,7 @@ class SentencePlan:
                 rejected.append(checked)
                 continue
             duplicate = find_duplicate(
-                checked.sentence.japanese,
+                checked.sentence.text,
                 corpus,
                 similarity_threshold=self.similarity_threshold,
                 skip_similarity=self.skip_similarity,
@@ -142,7 +142,7 @@ class SentencePlan:
                 rejected.append(duplicate)
                 continue
             accepted.append(self._new_sentence(checked))
-            corpus.append(_batch_local(checked.sentence.japanese, index=index))
+            corpus.append(_batch_local(checked.sentence.text, index=index))
 
         return accepted, rejected
 
@@ -186,10 +186,10 @@ def prepare(
         preferred_targets_per_sentence=cfg.learning.preferred_new_items_per_sentence,
         max_targets_per_sentence=cfg.learning.max_new_items_per_sentence,
         max_sentence_length_chars=cfg.content.max_sentence_length_chars,
-        avoid_japanese=tuple(
-            japanese
+        avoid_examples=tuple(
+            example
             for item in targets
-            for japanese in avoid_examples(
+            for example in avoid_examples(
                 db, learning_item_id=item.id, limit=cfg.llm.avoid_examples_per_item
             )
         ),
@@ -245,7 +245,7 @@ def load_corpus(db: Session, *, exclude_job_id: int | None) -> tuple[CorpusSente
     이미 저장한 문장을 duplicate로 보면, 그 job은 영원히 전량 탈락으로 재시도하다가
     `failed`가 된다. 그 재실행의 중복 방지는 `persistence`의 hash 대조가 한다.
     """
-    statement = sa.select(Sentence.id, Sentence.japanese, Sentence.normalized_hash).where(
+    statement = sa.select(Sentence.id, Sentence.text, Sentence.normalized_hash).where(
         Sentence.status != SentenceStatus.RETIRED
     )
     if exclude_job_id is not None:
@@ -256,25 +256,25 @@ def load_corpus(db: Session, *, exclude_job_id: int | None) -> tuple[CorpusSente
             )
         )
     return tuple(
-        CorpusSentence(sentence_id=sentence_id, japanese=japanese, normalized_hash=digest)
-        for sentence_id, japanese, digest in db.execute(statement.order_by(Sentence.id)).all()
+        CorpusSentence(sentence_id=sentence_id, text=text, normalized_hash=digest)
+        for sentence_id, text, digest in db.execute(statement.order_by(Sentence.id)).all()
     )
 
 
 def avoid_examples(db: Session, *, learning_item_id: int, limit: int) -> list[str]:
-    """그 item이 이미 등장한 기존 문장의 `japanese`. 중복 생성을 줄이는 **힌트**다.
+    """그 item이 이미 등장한 기존 문장의 `text`. 중복 생성을 줄이는 **힌트**다.
 
     실제 판정은 deterministic duplicate 검사가 한다(`08_LLM_SPEC.md`).
     """
     statement = (
-        sa.select(Sentence.japanese)
+        sa.select(Sentence.text)
         .join(SentenceItem, SentenceItem.sentence_id == Sentence.id)
         .where(
             SentenceItem.learning_item_id == learning_item_id,
             Sentence.status != SentenceStatus.RETIRED,
         )
         .distinct()
-        .order_by(Sentence.japanese)
+        .order_by(Sentence.text)
         .limit(limit)
     )
     return list(db.execute(statement).scalars().all())
@@ -429,10 +429,10 @@ def _role(value: object) -> PresentationRole | None:
     return next((role for role in PresentationRole if role.value == value), None)
 
 
-def _batch_local(japanese: str, *, index: int) -> CorpusSentence:
+def _batch_local(text: str, *, index: int) -> CorpusSentence:
     """이번 batch에서 방금 통과한 문장. 아직 DB에 없으므로 id가 음수다."""
     return CorpusSentence(
         sentence_id=-(index + 1),
-        japanese=japanese,
-        normalized_hash=normalized_sentence_hash(japanese),
+        text=text,
+        normalized_hash=normalized_sentence_hash(text),
     )

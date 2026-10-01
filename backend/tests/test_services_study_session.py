@@ -31,6 +31,7 @@ from app.models.enums import (
     ContextStage,
     EventType,
     ExplanationStatus,
+    Language,
 )
 from app.services.events import server_client_event_id
 from app.services.study_session import (
@@ -55,6 +56,7 @@ from tests.clock import DEFAULT_START, MutableClock
 def _detached_session(*, active_seconds: int = 0) -> StudySession:
     """DB에 넣지 않은 session 인스턴스. active time 계산은 DB를 보지 않는다."""
     return StudySession(
+        language=Language.JA,
         user_id=1,
         started_at=DEFAULT_START,
         last_activity_at=DEFAULT_START,

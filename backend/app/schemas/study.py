@@ -221,7 +221,7 @@ class PresentationPayload(BaseModel):
 
     presentation_id: int
     sentence_id: int
-    japanese: str
+    text: str
     render_segments: list[RenderSegmentPayload]
     presentation_role: PresentationRole
     review_reason: ReviewReason | None

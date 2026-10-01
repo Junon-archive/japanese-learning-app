@@ -244,7 +244,7 @@ def test_version_without_task_is_refused(
 ) -> None:
     """version은 task_type마다 다르다. 3종에 같은 문자열을 붙일 수 없다."""
     exit_code = load_prompts.main(
-        ["--provider", PROVIDER, "--model", MODEL, "--version", "explain_item_v1"]
+        ["--provider", PROVIDER, "--model", MODEL, "--version", "explain_item_v2"]
     )
 
     assert exit_code == EXIT_FAILED
@@ -261,14 +261,16 @@ def test_an_ambiguous_registry_requires_an_explicit_version(
     """
     task = LlmTaskType.EXPLAIN_ITEM
     monkeypatch.setitem(
-        PROMPT_TEMPLATES, (task, "explain_item_v2"), PROMPT_TEMPLATES[task, REGISTRY_VERSIONS[task]]
+        PROMPT_TEMPLATES,
+        (task, "explain_item_v99"),
+        PROMPT_TEMPLATES[task, REGISTRY_VERSIONS[task]],
     )
 
     with pytest.raises(load_prompts.PromptRegistrationError, match="several prompt versions"):
         load_prompts.resolve_version(task, None)
 
     # 명시하면 등록할 수 있다. 위 거부가 "전부 거부"로 굳으면 rollback이 불가능해진다.
-    assert load_prompts.resolve_version(task, "explain_item_v2") == "explain_item_v2"
+    assert load_prompts.resolve_version(task, "explain_item_v99") == "explain_item_v99"
 
 
 # --------------------------------------------------------------------------

@@ -580,7 +580,7 @@ def test_next_renders_segments_that_rebuild_the_sentence(
     )
 
     assert view is not None
-    assert "".join(segment.text for segment in view.render_segments) == scene.sentence.japanese
+    assert "".join(segment.text for segment in view.render_segments) == scene.sentence.text
     assert [item.learning_item_id for item in view.tappable_items] == [scene.item.id]
 
 
@@ -615,7 +615,7 @@ def test_a_tappable_span_error_is_not_swallowed_as_invalid_ruby(
     scene = _scene(db_session)
     scene.sentence.ruby_json = {"spans": "broken"}
     span = db_session.execute(sa.select(SentenceItemSpan)).scalars().one()
-    span.end_codepoint = len(scene.sentence.japanese) + 1
+    span.end_codepoint = len(scene.sentence.text) + 1
     db_session.flush()
 
     with pytest.raises(RenderSpanError) as caught:

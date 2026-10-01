@@ -21,7 +21,7 @@ from app.config import AppConfig, SessionConfig
 from app.jobs.replenishment import enqueue_materialization_gaps
 from app.learning.mastery import MASTERY_ALGORITHM_VERSION
 from app.learning.selection import MaterializationGaps, materialize_candidates
-from app.models.enums import EventType
+from app.models.enums import EventType, Language
 from app.models.study import StudyPresentation, StudySession
 from app.models.user import User
 from app.services.events import record_event, server_client_event_id
@@ -133,6 +133,8 @@ def start_or_resume(db: Session, *, user: User, now: datetime, cfg: AppConfig) -
         timed_out_session_id = open_session.id
 
     session = StudySession(
+        # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
+        language=Language.JA,
         user_id=user.id,
         started_at=now,
         last_activity_at=now,

@@ -73,7 +73,7 @@ from app.schemas.study import (  # noqa: E402
 EXIT_OK = 0
 EXIT_FAILED = 2
 
-DEFAULT_SEED_DIR = REPO_ROOT / "seed"
+DEFAULT_SEED_DIR = REPO_ROOT / "seed" / "ja"
 DEFAULT_OUTPUT = REPO_ROOT / "frontend" / "src" / "demo" / "fixture-data.ts"
 ITEMS_FILE = "items.yaml"
 SENTENCES_FILE = "sentences.yaml"
@@ -140,7 +140,7 @@ class SeedSentenceItem:
 @dataclass(frozen=True)
 class SeedSentence:
     seed_id: str
-    japanese: str
+    text: str
     korean_translation: str
     items: tuple[SeedSentenceItem, ...]
 
@@ -314,7 +314,7 @@ def parse_sentences(path: Path, item_seed_ids: set[str]) -> list[SeedSentence]:
         sentences.append(
             SeedSentence(
                 seed_id=seed_id,
-                japanese=_text(mapping, "japanese", where),
+                text=_text(mapping, "text", where),
                 korean_translation=_text(mapping, "korean_translation", where),
                 items=tuple(items),
             )
@@ -347,10 +347,10 @@ def check_sentence(sentence: SeedSentence, max_tappable: int) -> str | None:
     tappable = sentence.tappable_items
     try:
         for item in sentence.items:
-            validate_item_spans(sentence.japanese, item.surface_form, item.spans)
+            validate_item_spans(sentence.text, item.surface_form, item.spans)
         # item 사이 겹침은 렌더링 함수가 터지는 조건 그대로 본다(seed_loader와 같다).
         indexes = [(index, index) for index in range(len(tappable))]
-        build_render_segments(sentence.japanese, _span_refs(tappable, indexes))
+        build_render_segments(sentence.text, _span_refs(tappable, indexes))
     except RenderSpanError:
         return REASON_SPAN_MISMATCH
     if any(item.explanation is None for item in tappable):
@@ -435,20 +435,20 @@ def _sentence_entry(
         for item in tappable
     ]
     try:
-        computation = compute_ruby(sentence.japanese, ruby_items, now=RUBY_COMPUTED_AT)
-        segments = build_render_segments(sentence.japanese, refs, ruby=computation.spans)
+        computation = compute_ruby(sentence.text, ruby_items, now=RUBY_COMPUTED_AT)
+        segments = build_render_segments(sentence.text, refs, ruby=computation.spans)
     except Exception as exc:
         # 표시 보조의 실패는 문장을 막지 않는다(ADR-021). 예외 메시지는 싣지 않는다.
         summary.add_failure()
         ruby_failed.append((sentence.seed_id, type(exc).__name__))
-        segments = build_render_segments(sentence.japanese, refs)
+        segments = build_render_segments(sentence.text, refs)
     else:
         summary.add(sentence.seed_id, computation)
 
     presentation = PresentationPayload(
         presentation_id=sentence_id,
         sentence_id=sentence_id,
-        japanese=sentence.japanese,
+        text=sentence.text,
         render_segments=[_segment_payload(segment) for segment in segments],
         presentation_role=FIXED_PRESENTATION_ROLE,
         review_reason=None,

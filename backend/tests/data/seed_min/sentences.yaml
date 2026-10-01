@@ -1,5 +1,5 @@
 - seed_id: sn_min_0001
-  japanese: 仕事を任せる。
+  text: 仕事を任せる。
   korean_translation: 일을 맡긴다.
   items:
     - item_seed_id: it_min_shigoto
@@ -29,7 +29,7 @@
 
 # 불연속 span fixture.
 - seed_id: sn_min_0002
-  japanese: 今日は気が全然乗らない。
+  text: 今日は気が全然乗らない。
   korean_translation: 오늘은 전혀 마음이 내키지 않는다.
   items:
     - item_seed_id: it_min_kiganoru

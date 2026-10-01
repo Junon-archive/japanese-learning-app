@@ -1158,11 +1158,9 @@ def test_scenario_e_the_enqueued_job_refills_the_pool(
     assert queued, "replenishment job이 없으면 회복될 것도 없다"
     assert {job.job_type for job in queued} == {JobType.GENERATE_SENTENCE_BATCH}
 
-    japanese = "それは仕方ないと思う。"
+    text = "それは仕方ないと思う。"
     provider = RecordingProvider(
-        responses=[
-            batch_response(sentence_payload(japanese, [item_payload("it0", "仕方ない", japanese)]))
-        ]
+        responses=[batch_response(sentence_payload(text, [item_payload("it0", "仕方ない", text)]))]
     )
     turns = 0
     while worker.run_once(
@@ -1183,7 +1181,7 @@ def test_scenario_e_the_enqueued_job_refills_the_pool(
     assert refilled.status_code == 200, refilled.text
     shown = refilled.json()["presentation"]
     assert shown is not None, "worker가 만든 문장이 Ready Pool로 돌아오지 않았다"
-    assert shown["japanese"] == japanese
+    assert shown["text"] == text
 
 
 # --------------------------------------------------------------------------

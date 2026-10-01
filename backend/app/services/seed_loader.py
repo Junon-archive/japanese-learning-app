@@ -42,6 +42,7 @@ from app.models.content import (
 )
 from app.models.enums import (
     ExplanationStatus,
+    Language,
     LearningItemOrigin,
     LearningItemType,
     SentenceSourceType,
@@ -109,7 +110,7 @@ class _Item:
 @dataclass(frozen=True)
 class _Sentence:
     seed_id: str
-    japanese: str
+    text: str
     korean_translation: str
     items: tuple[_SentenceItem, ...]
 
@@ -268,7 +269,7 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
         if seed_id in seen:
             raise SeedError(f"{where}: duplicate seed_id '{seed_id}'")
         seen.add(seed_id)
-        japanese = _text(mapping, "japanese", where)
+        text = _text(mapping, "text", where)
         raw_items = mapping.get("items")
         if not isinstance(raw_items, list) or not raw_items:
             raise SeedError(f"{where}: 'items' must be a non-empty list")
@@ -285,7 +286,7 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
             surface_form = _text(item_mapping, "surface_form", item_where)
             spans = _parse_spans(item_mapping, item_where)
             try:
-                validate_item_spans(japanese, surface_form, spans)
+                validate_item_spans(text, surface_form, spans)
             except RenderSpanError as error:
                 raise SeedError(f"{item_where}: {error}") from error
             parsed_items.append(
@@ -298,11 +299,11 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
                 )
             )
 
-        _reject_cross_item_overlap(japanese, parsed_items, where)
+        _reject_cross_item_overlap(text, parsed_items, where)
         sentences.append(
             _Sentence(
                 seed_id=seed_id,
-                japanese=japanese,
+                text=text,
                 korean_translation=_text(mapping, "korean_translation", where),
                 items=tuple(parsed_items),
             )
@@ -310,7 +311,7 @@ def _parse_sentences(path: Path, item_seed_ids: set[str]) -> list[_Sentence]:
     return sentences
 
 
-def _reject_cross_item_overlap(japanese: str, items: list[_SentenceItem], where: str) -> None:
+def _reject_cross_item_overlap(text: str, items: list[_SentenceItem], where: str) -> None:
     """서로 **다른** item의 tappable span이 겹치면 거부한다.
 
     `validate_item_spans`는 item 하나 안만 본다. 문장의 tappable span **전부를**
@@ -336,7 +337,7 @@ def _reject_cross_item_overlap(japanese: str, items: list[_SentenceItem], where:
         for span in item.spans
     ]
     try:
-        build_render_segments(japanese, spans)
+        build_render_segments(text, spans)
     except RenderSpanError as error:
         raise SeedError(f"{where}: {error}") from error
 
@@ -386,6 +387,8 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
             if item.frequency_rank is not None:
                 metadata["frequency_rank"] = item.frequency_rank
             row = LearningItem(
+                # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
+                language=Language.JA,
                 type=item.type,
                 lemma=item.lemma,
                 reading=item.reading,
@@ -402,11 +405,13 @@ def load_seed(session: Session, seed_dir: Path, *, now: datetime) -> SeedSummary
 
         for sentence in sentences:
             sentence_row = Sentence(
-                japanese=sentence.japanese,
+                # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
+                language=Language.JA,
+                text=sentence.text,
                 korean_translation=sentence.korean_translation,
                 source_type=SentenceSourceType.SEED,
                 source_id=sentence.seed_id,
-                normalized_hash=normalized_sentence_hash(sentence.japanese),
+                normalized_hash=normalized_sentence_hash(sentence.text),
                 status=SentenceStatus.VALIDATED,
                 ruby_json=_compute_ruby_json(sentence, ruby, now=now),
                 created_at=now,
@@ -481,7 +486,7 @@ def _compute_ruby_json(
         if item.is_tappable
     ]
     try:
-        computation = compute_ruby(sentence.japanese, items, now=now)
+        computation = compute_ruby(sentence.text, items, now=now)
     except Exception:
         summary.add_failure()
         return None

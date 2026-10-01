@@ -46,7 +46,7 @@ from app.render import ItemSpan, is_valid_reading
 from .conftest import REPO_ROOT
 
 NOW = datetime(2026, 9, 13, 9, 0, tzinfo=UTC)
-SEED_SENTENCES = REPO_ROOT / "seed" / "sentences.yaml"
+SEED_SENTENCES = REPO_ROOT / "seed" / "ja" / "sentences.yaml"
 
 # ADR-021 `실측`: 중단 판정 기준(경계 때문에 생략한 토큰 / 한자 포함 토큰)이다. 학습 정책값이 아니라
 # MVP-02 진행 판정 기준이다(11_OBSERVABILITY.md).

@@ -143,7 +143,7 @@ class PresentationView:
 
     presentation_id: int
     sentence_id: int
-    japanese: str
+    text: str
     render_segments: list[RenderSegment]
     tappable_items: list[TappableItem]
     presentation_role: PresentationRole
@@ -652,7 +652,7 @@ def _build_view(
     return PresentationView(
         presentation_id=presentation.id,
         sentence_id=sentence.id,
-        japanese=sentence.japanese,
+        text=sentence.text,
         render_segments=_render_segments(sentence, spans),
         tappable_items=build_tappable_items(spans),
         presentation_role=presentation.presentation_role,
@@ -679,12 +679,12 @@ def _render_segments(sentence: Sentence, spans: Sequence[SpanRef]) -> list[Rende
     못하면 `ruby.invalid_stored`를 남기고 모든 segment가 `()`(R6)다. tappable 검증이 이미
     통과했으므로 두 번째 호출에서 나오는 오류는 `RubySpanError`뿐이다.
     """
-    segments = build_render_segments(sentence.japanese, spans)
+    segments = build_render_segments(sentence.text, spans)
     if sentence.ruby_json is None:
         return segments
     try:
         ruby = parse_stored_ruby(sentence.ruby_json)
-        return build_render_segments(sentence.japanese, spans, ruby=ruby)
+        return build_render_segments(sentence.text, spans, ruby=ruby)
     except RubySpanError:
         logger.warning(RUBY_INVALID_STORED, extra={"sentence_id": sentence.id})
         return segments

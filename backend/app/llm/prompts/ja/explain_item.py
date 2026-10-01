@@ -1,4 +1,4 @@
-"""`EXPLAIN_ITEM`의 정적 지시문. prompt version `explain_item_v1`.
+"""`EXPLAIN_ITEM`의 정적 지시문. prompt version `explain_item_v2`.
 
 missing explanation repair job 전용이다. 문장을 새로 만들지 않고 이미 저장된
 `sentence_item` 하나의 contextual explanation만 만든다(`08_LLM_SPEC.md`).
@@ -6,7 +6,7 @@ missing explanation repair job 전용이다. 문장을 새로 만들지 않고 �
 
 from __future__ import annotations
 
-VERSION = "explain_item_v1"
+VERSION = "explain_item_v2"
 
 INSTRUCTIONS = """\
 You explain one expression as it is used in one Japanese sentence, for a

@@ -78,7 +78,7 @@ class SentenceBatchInput:
     max_sentence_length_chars: int
     # target item이 이미 등장한 기존 문장. 중복 생성을 줄이기 위한 **힌트**이고
     # 실제 판정은 `app.llm.duplicates`가 한다.
-    avoid_japanese: tuple[str, ...]
+    avoid_examples: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -90,9 +90,9 @@ class ReviewContextInput:
     context_stage: ContextStage
     # anchor 문장은 `near_original`이 "표현은 유지, 주변 문맥만 최소 변경"을
     # 지시하기 위해 필요하고, 나머지 stage에서는 "이것과 다른 상황"의 기준이다.
-    anchor_japanese: str
+    anchor_text: str
     max_sentence_length_chars: int
-    avoid_japanese: tuple[str, ...]
+    avoid_examples: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ class ExplainItemInput:
     """`EXPLAIN_ITEM`의 동적 context. 문장을 새로 만들지 않는다."""
 
     learner_level: str
-    japanese: str
+    text: str
     surface_form: str
     spans: tuple[SpanPayload, ...]
 
@@ -125,7 +125,7 @@ def build_sentence_batch_request(
         "max_sentence_length_chars": payload.max_sentence_length_chars,
         "sentences_requested": len(payload.targets),
         "target_items": [_target(target) for target in payload.targets],
-        "avoid_japanese": list(payload.avoid_japanese),
+        "avoid_examples": list(payload.avoid_examples),
     }
     return _request(template, model=model, context=context)
 
@@ -137,12 +137,12 @@ def build_review_context_request(
     context = {
         "learner_level": payload.learner_level,
         "context_stage": payload.context_stage.value,
-        "anchor_japanese": payload.anchor_japanese,
+        "anchor_text": payload.anchor_text,
         "max_sentence_length_chars": payload.max_sentence_length_chars,
         "max_targets_per_sentence": 1,
         "sentences_requested": 1,
         "target_items": [_target(payload.target)],
-        "avoid_japanese": list(payload.avoid_japanese),
+        "avoid_examples": list(payload.avoid_examples),
     }
     return _request(template, model=model, context=context)
 
@@ -153,7 +153,7 @@ def build_explain_item_request(
     template = template_for(LlmTaskType.EXPLAIN_ITEM, prompt_version)
     context = {
         "learner_level": payload.learner_level,
-        "japanese": payload.japanese,
+        "text": payload.text,
         "surface_form": payload.surface_form,
         "spans": [span.model_dump() for span in payload.spans],
     }

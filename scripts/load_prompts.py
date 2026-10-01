@@ -41,7 +41,7 @@ from app.clock import utc_now  # noqa: E402
 from app.db import new_session  # noqa: E402
 from app.llm.prompts import PROMPT_TEMPLATES  # noqa: E402
 from app.llm.provider import OPENAI  # noqa: E402
-from app.models.enums import LlmTaskType  # noqa: E402
+from app.models.enums import Language, LlmTaskType  # noqa: E402
 from app.models.jobs import PromptVersion  # noqa: E402
 
 EXIT_OK = 0
@@ -124,6 +124,8 @@ def upsert_prompt_version(
     created = row is None
     if row is None:
         row = PromptVersion(
+            # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
+            language=Language.JA,
             task_type=task_type,
             version=version,
             provider=provider,
@@ -143,6 +145,7 @@ def upsert_prompt_version(
     db.execute(
         sa.update(PromptVersion)
         .where(
+            # MVP-03 Wave 3에서 파라미터화한다 (ADR-023 결정 1).
             PromptVersion.task_type == task_type,
             PromptVersion.id != row.id,
             PromptVersion.active,

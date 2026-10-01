@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import AppConfig, get_config
 from app.jobs import queue
-from app.models.enums import GenerationJobStatus, JobType
+from app.models.enums import GenerationJobStatus, JobType, Language
 from app.models.jobs import GenerationJob
 from tests.clock import MutableClock
 from tests.conftest import override_config
@@ -52,6 +52,7 @@ def _job(
     검사하는 것이 정확히 그 세 값의 전이다.
     """
     job = GenerationJob(
+        language=Language.JA,
         job_type=JobType.GENERATE_SENTENCE_BATCH,
         status=status,
         payload_json={},
