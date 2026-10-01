@@ -170,15 +170,21 @@ class NothingToDo:
         return complete_without_content(db, job=job, now=now)
 
 
-def active_provenance(db: Session, *, task_type: LlmTaskType, now: datetime) -> Provenance | None:
-    """`prompt_versions`의 `active = true` 행 하나로 provenance를 만든다.
+def active_provenance(
+    db: Session, *, task_type: LlmTaskType, language: Language, now: datetime
+) -> Provenance | None:
+    """`prompt_versions`의 `(task_type, language)` active 행 하나로 provenance를 만든다.
 
     **모델명과 provider 이름은 코드가 아니라 이 행에서 온다**(원칙 8). 행이 없으면
-    재시도해도 결과가 같으므로 호출자는 그 job을 `dead_letter`로 보낸다.
+    재시도해도 결과가 같으므로 호출자는 그 job을 `dead_letter`로 보낸다. active 유일성이
+    `(task_type, language)`이므로(ADR-023 결정 5) `language`로 좁히지 않으면 두 언어가
+    모두 active인 경우 `scalar_one_or_none()`이 `MultipleResultsFound`를 던진다. 한
+    언어의 active 행이 없어도 다른 언어의 job은 영향받지 않는다.
     """
     row = db.execute(
         sa.select(PromptVersion).where(
             PromptVersion.task_type == task_type,
+            PromptVersion.language == language,
             PromptVersion.active.is_(True),
         )
     ).scalar_one_or_none()

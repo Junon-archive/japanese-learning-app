@@ -83,7 +83,9 @@ def prepare(
         # anchor를 다시 고르는 것은 materialization의 일이다.
         return NothingToDo()
 
-    provenance = persistence.active_provenance(db, task_type=TASK_TYPE, now=now)
+    provenance = persistence.active_provenance(
+        db, task_type=TASK_TYPE, language=job.language, now=now
+    )
     if provenance is None:
         return queue.PermanentReason.NO_ACTIVE_PROMPT_VERSION
 
@@ -92,7 +94,9 @@ def prepare(
         target=target_item(item, label=_LABEL),
         context_stage=stage,
         anchor_text=anchor.text,
-        max_sentence_length_chars=cfg.content.max_sentence_length_chars,
+        max_sentence_length_chars=getattr(
+            cfg.content.max_sentence_length_chars, job.language.value
+        ),
         avoid_examples=tuple(
             avoid_examples(db, learning_item_id=item.id, limit=cfg.llm.avoid_examples_per_item)
         ),
@@ -100,6 +104,7 @@ def prepare(
     try:
         request = build_review_context_request(
             request_input,
+            language=job.language,
             model=provenance.model,
             prompt_version=provenance.prompt_version,
         )
@@ -111,7 +116,7 @@ def prepare(
     return SentencePlan(
         request=request,
         provenance=provenance,
-        policy=sentence_policy(cfg),
+        policy=sentence_policy(cfg, job.language),
         corpus=load_corpus(db, exclude_job_id=job.id, language=job.language),
         requested_refs=frozenset({_LABEL}),
         new_refs=new_item_refs(db, user_id=user.id, item_ids=item_ids),

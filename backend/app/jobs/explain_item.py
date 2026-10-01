@@ -27,7 +27,7 @@ from app.llm.schemas import SpanPayload
 from app.llm.tasks import ExplainItemInput, build_explain_item_request, parse_explanation
 from app.llm.validation import Rejection, validate_explanation
 from app.models.content import Sentence, SentenceItem, SentenceItemExplanation, SentenceItemSpan
-from app.models.enums import ExplanationStatus, LlmTaskType, StartingLevel
+from app.models.enums import ExplanationStatus, Language, LlmTaskType, StartingLevel
 from app.models.jobs import GenerationJob
 
 TASK_TYPE = LlmTaskType.EXPLAIN_ITEM
@@ -45,6 +45,7 @@ class ExplanationPlan:
     request: ProviderRequest | None
     provenance: Provenance
     sentence_item_id: int
+    language: Language
 
     def complete(
         self,
@@ -57,7 +58,7 @@ class ExplanationPlan:
         if response is None:  # pragma: no cover - runner가 request=None일 때만 부른다
             return persistence.complete_without_content(db, job=job, now=now)
 
-        checked = validate_explanation(parse_explanation(response.text))
+        checked = validate_explanation(parse_explanation(response.text), language=self.language)
         if isinstance(checked, Rejection):
             return persistence.record_rejections(db, job=job, rejected=[checked])
 
@@ -93,7 +94,9 @@ def prepare(
         # 다른 attempt가 이미 채웠다. 같은 설명을 다시 사는 것은 순수한 비용이다.
         return NothingToDo()
 
-    provenance = persistence.active_provenance(db, task_type=TASK_TYPE, now=now)
+    provenance = persistence.active_provenance(
+        db, task_type=TASK_TYPE, language=job.language, now=now
+    )
     if provenance is None:
         return queue.PermanentReason.NO_ACTIVE_PROMPT_VERSION
 
@@ -105,6 +108,7 @@ def prepare(
                 surface_form=sentence_item.surface_form,
                 spans=_spans(db, sentence_item_id=sentence_item_id),
             ),
+            language=job.language,
             model=provenance.model,
             prompt_version=provenance.prompt_version,
         )
@@ -115,6 +119,7 @@ def prepare(
         request=request,
         provenance=provenance,
         sentence_item_id=sentence_item_id,
+        language=job.language,
     )
 
 
