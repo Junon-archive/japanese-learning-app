@@ -14,6 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine import Engine
 
 from app.models import Base
+from app.models.content import Sentence
 from app.models.study import EVIDENCE_UNIQUE_INDEX
 from app.services.presentation import FSRS_RATING_EVENTS
 
@@ -339,6 +340,29 @@ def test_ruby_json_is_a_nullable_jsonb_without_default_and_japanese_only(
         if row.table_name == "sentences" and row.column_name == "ruby_json"
     ]
     assert checks == ["ck_sentences_ruby_json_ja_only"]
+
+
+def test_sentence_model_declares_the_ruby_json_ja_only_check() -> None:
+    """모델 선언 자체가 `ruby_json_ja_only` CHECK를 갖는지 본다(DB 연결 없음).
+
+    위 `test_ruby_json_is_a_nullable_jsonb_without_default_and_japanese_only`는
+    migration으로 만든 실제 Postgres를 보므로, 모델의 `__table_args__`에서만
+    이 CheckConstraint 선언을 지워도(migration은 그대로 둔 채) 잡아내지 못한다.
+    이 테스트는 `Sentence.__table__`의 SQLAlchemy 메타데이터만 보고 모델 선언이
+    migration DDL과 같은 CHECK를 의도하는지 확인한다.
+    """
+    # naming convention이 선언 이름(`ruby_json_ja_only`) 앞에 `ck_sentences_`를
+    # 붙인다(`app/models/base.py`의 `NAMING_CONVENTION`) --- 위 integration 테스트가
+    # DB에서 보는 이름과 같다.
+    checks = [
+        constraint
+        for constraint in Sentence.__table__.constraints
+        if isinstance(constraint, sa.CheckConstraint)
+        and constraint.name == "ck_sentences_ruby_json_ja_only"
+    ]
+    assert len(checks) == 1
+    sqltext = str(checks[0].sqltext)
+    assert sqltext == "language = 'ja' OR ruby_json IS NULL"
 
 
 @pytest.mark.integration
