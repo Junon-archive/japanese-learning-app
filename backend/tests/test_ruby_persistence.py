@@ -72,7 +72,10 @@ def _activate(db: Session, task_type: LlmTaskType) -> None:
     for template in PROMPT_TEMPLATES.values():
         if template.task_type is task_type:
             factories.make_prompt_version(
-                db, task_type=template.task_type, version=template.version
+                db,
+                task_type=template.task_type,
+                version=template.version,
+                language=template.language,
             )
 
 

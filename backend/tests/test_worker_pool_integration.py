@@ -105,7 +105,12 @@ def _activate_prompt_versions(db: Session, *task_types: LlmTaskType) -> None:
     for template in PROMPT_TEMPLATES.values():
         if task_types and template.task_type not in task_types:
             continue
-        factories.make_prompt_version(db, task_type=template.task_type, version=template.version)
+        factories.make_prompt_version(
+            db,
+            task_type=template.task_type,
+            version=template.version,
+            language=template.language,
+        )
 
 
 def _jobs(db: Session, *, job_type: JobType | None = None) -> list[GenerationJob]:

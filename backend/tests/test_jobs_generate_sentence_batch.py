@@ -36,6 +36,7 @@ from app.models.enums import (
     CandidateStatus,
     GenerationJobStatus,
     JobType,
+    Language,
     LlmTaskType,
     PresentationRole,
     SentenceStatus,
@@ -280,15 +281,18 @@ def test_the_sentence_policy_takes_every_limit_from_config() -> None:
     length, new_items = 41, 3
     cfg = override_config(
         get_config(),
-        content={"max_sentence_length_chars": length},
+        content={"max_sentence_length_chars": {"ja": length, "en": 120}},
         learning={"max_new_items_per_sentence": new_items},
     )
-    assert cfg.content.max_sentence_length_chars != get_config().content.max_sentence_length_chars
+    assert (
+        cfg.content.max_sentence_length_chars.ja
+        != get_config().content.max_sentence_length_chars.ja
+    )
     assert (
         cfg.learning.max_new_items_per_sentence != get_config().learning.max_new_items_per_sentence
     )
 
-    policy = sentence_policy(cfg)
+    policy = sentence_policy(cfg, Language.JA)
 
     assert policy.max_sentence_length_chars == length
     assert policy.max_targets_per_sentence == new_items
@@ -310,7 +314,7 @@ def test_check_ten_cannot_fire_while_both_limits_share_one_config_key() -> None:
     (b) 두 상한을 분리하는 변경이 들어와도 아무 신호가 없다. 분리되는 날 이
     테스트가 빨개지고, 그때 handler 경로의 검사 10 테스트를 추가하면 된다.
     """
-    policy = sentence_policy(get_config())
+    policy = sentence_policy(get_config(), Language.JA)
     limit = policy.max_targets_per_sentence
     assert policy.max_new_items_per_sentence == limit
 
@@ -339,7 +343,9 @@ def test_the_configured_sentence_length_is_the_limit_the_handler_enforces(
     """
     limit = 12
     surface = "任せる"
-    cfg = override_config(get_config(), content={"max_sentence_length_chars": limit})
+    cfg = override_config(
+        get_config(), content={"max_sentence_length_chars": {"ja": limit, "en": 120}}
+    )
     user = factories.make_user(db)
     factories.make_learning_item(db, lemma=surface)
     _prompt_version(db)
@@ -672,6 +678,84 @@ def test_a_missing_active_prompt_version_is_a_dead_letter(
     assert status is DEAD_LETTER
     assert provider.call_count == 0
     assert _reload(db, job).last_error == "no_active_prompt_version"
+
+
+# --------------------------------------------------------------------------
+# 언어별 prompt 선택 (MVP-03, ADR-023 결정 5)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_a_missing_active_prompt_version_is_scoped_to_its_language(
+    db: Session, study_clock: MutableClock
+) -> None:
+    """ja에만 active 행이 있어도 en job은 그것을 쓸 수 없다 --- 그 언어의 job만
+    `dead_letter`이고 다른 언어는 영향받지 않는다(`08_LLM_SPEC.md`)."""
+    user = factories.make_user(db)
+    factories.make_learning_item(db)
+    _prompt_version(db)  # ja만 등록한다.
+    job = _job(db, user, key="lang:en-missing")
+    job.language = Language.EN
+    db.commit()
+    provider = RecordingProvider(responses=[])
+
+    status = _run(db, job, provider, study_clock)
+
+    assert status is DEAD_LETTER
+    assert provider.call_count == 0
+    assert _reload(db, job).last_error == "no_active_prompt_version"
+
+
+@pytest.mark.integration
+def test_the_jobs_language_picks_the_matching_active_row_when_both_languages_are_active(
+    db: Session, study_clock: MutableClock
+) -> None:
+    """`active_provenance`가 `language`로 좁히지 않으면 두 active 행을 만나
+    `MultipleResultsFound`를 던진다(`jobs/persistence.py`의 `active_provenance`)."""
+    user = factories.make_user(db)
+    factories.make_learning_item(db, lemma="pick up")
+    factories.make_prompt_version(
+        db,
+        task_type=LlmTaskType.GENERATE_SENTENCE_BATCH,
+        version=sentence_gen.VERSION,
+        language=Language.JA,
+        model="ja-model",
+    )
+    factories.make_prompt_version(
+        db,
+        task_type=LlmTaskType.GENERATE_SENTENCE_BATCH,
+        version="sentence_gen_en_v1",
+        language=Language.EN,
+        model="en-model",
+    )
+    job = _job(db, user, key="lang:both-active")
+    job.language = Language.EN
+    db.commit()
+    provider = RecordingProvider(
+        responses=[
+            batch_response(
+                sentence_payload(
+                    "Can you pick it up?",
+                    [
+                        item_payload(
+                            "it0",
+                            "pick it up",
+                            "Can you pick it up?",
+                            explanation=explanation_payload(reading=None),
+                        )
+                    ],
+                )
+            )
+        ]
+    )
+
+    status = _run(db, job, provider, study_clock)
+
+    assert status is COMPLETED
+    assert provider.calls[0].model == "en-model"
+    stored = [row for row in _sentences(db) if row.source_type.value == "generated"]
+    assert stored[0].provenance_json["model"] == "en-model"
+    assert stored[0].provenance_json["prompt_version"] == "sentence_gen_en_v1"
 
 
 @pytest.mark.integration

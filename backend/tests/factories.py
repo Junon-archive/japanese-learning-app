@@ -476,6 +476,7 @@ def make_prompt_version(
     *,
     task_type: LlmTaskType,
     version: str,
+    language: Language = Language.JA,
     provider: str = "stub",
     model: str = "test-model",
     active: bool = True,
@@ -485,10 +486,11 @@ def make_prompt_version(
     `provider = "stub"`은 **test double이 만든 콘텐츠**를 뜻하며
     `LLM_PROVIDER`가 가질 수 있는 값이 아니다(08_LLM_SPEC.md). `version`은 코드에 본문이
     있는 값이어야 하므로 기본값을 두지 않는다 --- `app.llm.prompts`의 VERSION을 넘긴다.
-    `model` 문자열도 여기서 오고 코드에 박히지 않는다.
+    `model` 문자열도 여기서 오고 코드에 박히지 않는다. `language`는 기본값이 `ja`다 ---
+    이 인자가 생기기 전부터 있던 호출부는 전부 일본어 job만 다룬다.
     """
     row = PromptVersion(
-        language=Language.JA,
+        language=language,
         task_type=task_type,
         version=version,
         provider=provider,

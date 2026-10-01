@@ -19,11 +19,12 @@ from app.llm.validation import (
     Rejection,
     RejectionReason,
     SentencePolicy,
+    ValidatedExplanation,
     ValidatedSentence,
     validate_explanation,
     validate_sentence,
 )
-from app.models.enums import StartingLevel
+from app.models.enums import Language, StartingLevel
 
 # 「猫が好きです。」 = 7 code point. 猫[0,1) が[1,2) 好き[2,4) です[4,6) 。[6,7)
 JAPANESE = "猫が好きです。"
@@ -97,8 +98,11 @@ def check(
     requested: frozenset[str] = frozenset({"it0"}),
     new: frozenset[str] = frozenset(),
     policy: SentencePolicy = POLICY,
+    language: Language = Language.JA,
 ) -> ValidatedSentence | Rejection:
-    return validate_sentence(payload, requested_refs=requested, new_refs=new, policy=policy)
+    return validate_sentence(
+        payload, requested_refs=requested, new_refs=new, policy=policy, language=language
+    )
 
 
 def reason(result: ValidatedSentence | Rejection) -> RejectionReason:
@@ -343,9 +347,10 @@ def test_9_every_tappable_item_needs_an_explanation() -> None:
 
 
 @pytest.mark.parametrize(
-    "field", ["reading", "core_meaning", "meaning_in_context", "nuance", "example_sentence"]
+    "field", ["core_meaning", "meaning_in_context", "nuance", "example_sentence"]
 )
 def test_9_required_explanation_fields_may_not_be_empty(field: str) -> None:
+    """`reading`은 이 목록에 없다 --- 언어별 요구는 검사 14다."""
     payload = sentence(items=(item(explanation_payload=explanation(**{field: "  "})),))
     assert reason(check(payload)) is RejectionReason.MISSING_EXPLANATION
 
@@ -373,9 +378,11 @@ def test_9_untappable_items_need_nothing() -> None:
 
 
 def test_9_explain_item_response_uses_the_same_field_rule() -> None:
-    assert isinstance(validate_explanation(explanation()).explanation, ExplanationPayload)  # type: ignore[union-attr]
+    checked = validate_explanation(explanation(), language=Language.JA)
+    assert isinstance(checked, ValidatedExplanation)
+    assert isinstance(checked.explanation, ExplanationPayload)
 
-    rejected = validate_explanation(explanation(nuance=""))
+    rejected = validate_explanation(explanation(nuance=""), language=Language.JA)
     assert isinstance(rejected, Rejection)
     assert rejected.reason is RejectionReason.MISSING_EXPLANATION
 
@@ -416,6 +423,67 @@ def test_10_counts_new_items_only() -> None:
 def test_13_a_ref_the_request_never_sent() -> None:
     payload = sentence(items=(item(item_ref="it9"),))
     assert reason(check(payload)) is RejectionReason.UNKNOWN_ITEM_REF
+
+
+# --------------------------------------------------------------------------
+# 14  reading_language_mismatch (MVP-03)
+# --------------------------------------------------------------------------
+
+
+def test_14_japanese_rejects_a_null_reading() -> None:
+    payload = sentence(items=(item(explanation_payload=explanation(reading=None)),))
+    result = check(payload, language=Language.JA)
+    assert reason(result) is RejectionReason.READING_LANGUAGE_MISMATCH
+
+
+def test_14_japanese_rejects_an_empty_reading() -> None:
+    payload = sentence(items=(item(explanation_payload=explanation(reading="  ")),))
+    result = check(payload, language=Language.JA)
+    assert reason(result) is RejectionReason.READING_LANGUAGE_MISMATCH
+
+
+def test_14_japanese_accepts_a_non_empty_reading() -> None:
+    payload = sentence(items=(item(explanation_payload=explanation(reading="ねこ")),))
+    assert accepted(check(payload, language=Language.JA)).text == JAPANESE
+
+
+def test_14_english_rejects_a_non_null_reading() -> None:
+    payload = sentence(items=(item(explanation_payload=explanation(reading="ねこ")),))
+    result = check(payload, language=Language.EN)
+    assert reason(result) is RejectionReason.READING_LANGUAGE_MISMATCH
+
+
+def test_14_english_accepts_a_null_reading() -> None:
+    payload = sentence(items=(item(explanation_payload=explanation(reading=None)),))
+    assert accepted(check(payload, language=Language.EN)).text == JAPANESE
+
+
+def test_14_is_a_separate_reason_code_from_missing_explanation() -> None:
+    """검사 9와 검사 14는 별개 사유 코드다 --- 섞지 않는다."""
+    missing = sentence(items=(item(explanation_payload=None),))
+    assert reason(check(missing, language=Language.JA)) is RejectionReason.MISSING_EXPLANATION
+
+    mismatched = sentence(items=(item(explanation_payload=explanation(reading=None)),))
+    result = check(mismatched, language=Language.JA)
+    assert reason(result) is RejectionReason.READING_LANGUAGE_MISMATCH
+
+
+def test_14_explain_item_response_is_checked_too() -> None:
+    """`EXPLAIN_ITEM`은 문장이 아니라 `explanation` 객체 하나를 검사한다."""
+    assert isinstance(
+        validate_explanation(explanation(reading=None), language=Language.JA), Rejection
+    )
+    assert isinstance(
+        validate_explanation(explanation(reading="ねこ"), language=Language.EN), Rejection
+    )
+    assert isinstance(
+        validate_explanation(explanation(reading="ねこ"), language=Language.JA),
+        ValidatedExplanation,
+    )
+    assert isinstance(
+        validate_explanation(explanation(reading=None), language=Language.EN),
+        ValidatedExplanation,
+    )
 
 
 # --------------------------------------------------------------------------

@@ -23,6 +23,7 @@ from app.models.enums import (
     ContextStage,
     GenerationJobStatus,
     JobType,
+    Language,
     LlmTaskType,
     SentenceSourceType,
     SentenceStatus,
@@ -31,7 +32,7 @@ from app.models.jobs import GenerationJob
 from app.models.user import User
 from tests import factories
 from tests.clock import MutableClock
-from tests.llm_fixtures import batch_response, item_payload, sentence_payload
+from tests.llm_fixtures import batch_response, explanation_payload, item_payload, sentence_payload
 from tests.provider_double import RecordingProvider
 
 COMPLETED = GenerationJobStatus.COMPLETED
@@ -288,3 +289,84 @@ def test_a_payload_that_points_at_no_anchor_is_a_dead_letter(
     assert status is DEAD_LETTER
     assert provider.call_count == 0
     assert _reload(db, job).last_error == "missing_reference"
+
+
+# --------------------------------------------------------------------------
+# 언어별 prompt 선택 (MVP-03, ADR-023 결정 5)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_a_missing_active_prompt_version_is_scoped_to_its_language(
+    db: Session, study_clock: MutableClock
+) -> None:
+    """ja에만 active 행이 있어도 en job은 그것을 쓸 수 없다 --- 그 언어의 job만
+    `dead_letter`이고 다른 언어는 영향받지 않는다(`08_LLM_SPEC.md`)."""
+    user = factories.make_user(db)
+    item = factories.make_learning_item(db, lemma=SURFACE)
+    anchor = factories.make_ready_sentence(db, [item], surfaces=[ANCHOR_JAPANESE])
+    _prompt_version(db)  # ja만 등록한다.
+    job = _job(db, user=user, item_id=item.id, anchor_id=anchor.id, stage=ContextStage.VARIED)
+    job.language = Language.EN
+    db.commit()
+    provider = RecordingProvider(responses=[])
+
+    status = _run(db, job, provider, study_clock)
+
+    assert status is DEAD_LETTER
+    assert provider.call_count == 0
+    assert _reload(db, job).last_error == "no_active_prompt_version"
+
+
+@pytest.mark.integration
+def test_the_jobs_language_picks_the_matching_active_row_when_both_languages_are_active(
+    db: Session, study_clock: MutableClock
+) -> None:
+    """`active_provenance`가 `language`로 좁히지 않으면 두 active 행을 만나
+    `MultipleResultsFound`를 던진다(`jobs/persistence.py`의 `active_provenance`)."""
+    user = factories.make_user(db)
+    item = factories.make_learning_item(db, lemma="pick up")
+    anchor = factories.make_ready_sentence(db, [item], surfaces=["pick up"])
+    factories.make_prompt_version(
+        db,
+        task_type=LlmTaskType.GENERATE_REVIEW_CONTEXT,
+        version=review_context_prompt.VERSION,
+        language=Language.JA,
+        model="ja-model",
+    )
+    factories.make_prompt_version(
+        db,
+        task_type=LlmTaskType.GENERATE_REVIEW_CONTEXT,
+        version="review_context_en_v1",
+        language=Language.EN,
+        model="en-model",
+    )
+    job = _job(db, user=user, item_id=item.id, anchor_id=anchor.id, stage=ContextStage.VARIED)
+    job.language = Language.EN
+    db.commit()
+    text = "Can you pick it up later?"
+    provider = RecordingProvider(
+        responses=[
+            batch_response(
+                sentence_payload(
+                    text,
+                    [
+                        item_payload(
+                            "it0",
+                            "pick it up",
+                            text,
+                            explanation=explanation_payload(reading=None),
+                        )
+                    ],
+                )
+            )
+        ]
+    )
+
+    status = _run(db, job, provider, study_clock)
+
+    assert status is COMPLETED
+    assert provider.calls[0].model == "en-model"
+    stored = _generated(db)
+    assert stored[0].provenance_json["model"] == "en-model"
+    assert stored[0].provenance_json["prompt_version"] == "review_context_en_v1"

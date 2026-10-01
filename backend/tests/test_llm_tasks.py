@@ -23,7 +23,7 @@ from app.llm.tasks import (
     item_ref,
     requested_refs,
 )
-from app.models.enums import ContextStage, LlmTaskType
+from app.models.enums import ContextStage, Language, LlmTaskType
 
 TARGET = TargetItem(
     item_ref="it0",
@@ -54,38 +54,71 @@ def test_item_ref_format_lives_in_one_place() -> None:
 
 
 def test_prompt_versions_are_the_three_the_spec_names() -> None:
-    assert {(task.value, version) for task, version in PROMPT_TEMPLATES} == {
-        ("GENERATE_SENTENCE_BATCH", "sentence_gen_v2"),
-        ("GENERATE_REVIEW_CONTEXT", "review_context_v2"),
-        ("EXPLAIN_ITEM", "explain_item_v2"),
+    assert {
+        (task.value, language.value, version) for task, language, version in PROMPT_TEMPLATES
+    } == {
+        ("GENERATE_SENTENCE_BATCH", "ja", "sentence_gen_v2"),
+        ("GENERATE_REVIEW_CONTEXT", "ja", "review_context_v2"),
+        ("EXPLAIN_ITEM", "ja", "explain_item_v2"),
+        ("GENERATE_SENTENCE_BATCH", "en", "sentence_gen_en_v1"),
+        ("GENERATE_REVIEW_CONTEXT", "en", "review_context_en_v1"),
+        ("EXPLAIN_ITEM", "en", "explain_item_en_v1"),
     }
 
 
 def test_an_active_version_with_no_template_is_not_retryable() -> None:
-    """`prompt_versions.active`가 코드에 없는 version을 가리키면 결과가 늘 같다."""
+    """`prompt_versions.active`가 코드에 없는 `(language, version)`을 가리키면 결과가 늘 같다."""
     with pytest.raises(UnknownPromptVersionError):
-        template_for(LlmTaskType.GENERATE_SENTENCE_BATCH, "sentence_gen_v3")
+        template_for(LlmTaskType.GENERATE_SENTENCE_BATCH, Language.JA, "sentence_gen_v3")
 
     with pytest.raises(UnknownPromptVersionError):
-        template_for(LlmTaskType.EXPLAIN_ITEM, "sentence_gen_v2")
+        template_for(LlmTaskType.EXPLAIN_ITEM, Language.JA, "sentence_gen_v2")
+
+    with pytest.raises(UnknownPromptVersionError):
+        # 본문은 코드에 있지만 그 언어에는 없다 (ja의 sentence_gen_v2가 en에는 없다).
+        template_for(LlmTaskType.GENERATE_SENTENCE_BATCH, Language.EN, "sentence_gen_v2")
 
 
 def test_sentence_batch_request_carries_the_model_it_was_given() -> None:
     request = build_sentence_batch_request(
-        BATCH, model="whatever-the-row-says", prompt_version="sentence_gen_v2"
+        BATCH, language=Language.JA, model="whatever-the-row-says", prompt_version="sentence_gen_v2"
     )
 
     assert request.model == "whatever-the-row-says"
     assert (
         request.instructions
-        == template_for(LlmTaskType.GENERATE_SENTENCE_BATCH, "sentence_gen_v2").instructions
+        == template_for(
+            LlmTaskType.GENERATE_SENTENCE_BATCH, Language.JA, "sentence_gen_v2"
+        ).instructions
     )
     assert request.json_schema["$defs"]
 
 
+def test_sentence_batch_request_picks_the_template_for_the_jobs_language() -> None:
+    """worker는 job의 `(job_type, language)`로 prompt를 고른다(`08_LLM_SPEC.md`)."""
+    request = build_sentence_batch_request(
+        BATCH, language=Language.EN, model="m", prompt_version="sentence_gen_en_v1"
+    )
+
+    assert (
+        request.instructions
+        == template_for(
+            LlmTaskType.GENERATE_SENTENCE_BATCH, Language.EN, "sentence_gen_en_v1"
+        ).instructions
+    )
+    assert (
+        request.instructions
+        != template_for(
+            LlmTaskType.GENERATE_SENTENCE_BATCH, Language.JA, "sentence_gen_v2"
+        ).instructions
+    )
+
+
 def test_sentence_batch_context_holds_only_what_the_spec_allows() -> None:
     """전체 mastery 목록도, 사용자 식별자도, event 원문도 싣지 않는다 (원칙 2)."""
-    request = build_sentence_batch_request(BATCH, model="m", prompt_version="sentence_gen_v2")
+    request = build_sentence_batch_request(
+        BATCH, language=Language.JA, model="m", prompt_version="sentence_gen_v2"
+    )
     payload = context(request.context)
 
     assert set(payload) == {
@@ -120,7 +153,9 @@ def test_review_context_request_asks_for_one_sentence_and_names_the_stage() -> N
         avoid_examples=(),
     )
 
-    request = build_review_context_request(payload, model="m", prompt_version="review_context_v2")
+    request = build_review_context_request(
+        payload, language=Language.JA, model="m", prompt_version="review_context_v2"
+    )
     body = context(request.context)
 
     assert body["sentences_requested"] == 1
@@ -131,7 +166,9 @@ def test_review_context_request_asks_for_one_sentence_and_names_the_stage() -> N
 
 def test_both_generation_tasks_share_one_response_schema() -> None:
     """두 task의 차이는 요청 context와 저장 시 lineage이지 응답 모양이 아니다."""
-    batch = build_sentence_batch_request(BATCH, model="m", prompt_version="sentence_gen_v2")
+    batch = build_sentence_batch_request(
+        BATCH, language=Language.JA, model="m", prompt_version="sentence_gen_v2"
+    )
     review = build_review_context_request(
         ReviewContextInput(
             learner_level="beginner",
@@ -141,6 +178,7 @@ def test_both_generation_tasks_share_one_response_schema() -> None:
             max_sentence_length_chars=60,
             avoid_examples=(),
         ),
+        language=Language.JA,
         model="m",
         prompt_version="review_context_v2",
     )
@@ -157,6 +195,7 @@ def test_explain_item_request_uses_the_explanation_schema() -> None:
             surface_form="猫",
             spans=(SpanPayload(start_codepoint=0, end_codepoint=1, span_order=0),),
         ),
+        language=Language.JA,
         model="m",
         prompt_version="explain_item_v2",
     )
@@ -171,3 +210,67 @@ def test_explain_item_request_uses_the_explanation_schema() -> None:
         "example_translation",
     }
     assert context(request.context)["surface_form"] == "猫"
+
+
+# --------------------------------------------------------------------------
+# 영어 prompt 본문 (MVP-03, ADR-024 결정 5)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("task_type", "version"),
+    [
+        (LlmTaskType.GENERATE_SENTENCE_BATCH, "sentence_gen_en_v1"),
+        (LlmTaskType.GENERATE_REVIEW_CONTEXT, "review_context_en_v1"),
+        (LlmTaskType.EXPLAIN_ITEM, "explain_item_en_v1"),
+    ],
+)
+def test_english_prompt_templates_load_with_non_empty_instructions(
+    task_type: LlmTaskType, version: str
+) -> None:
+    template = template_for(task_type, Language.EN, version)
+
+    assert template.language is Language.EN
+    assert template.version == version
+    assert template.instructions.strip()
+
+
+def test_english_sentence_batch_request_assembles_like_the_japanese_one() -> None:
+    """요청 조립 경로가 언어와 무관하게 같은 모양을 낸다 --- 언어를 context에 싣지 않는다."""
+    english_target = TargetItem(
+        item_ref="it0",
+        item_type="expression",
+        lemma="you good?",
+        reading=None,
+        default_meaning="괜찮아?",
+    )
+    batch = SentenceBatchInput(
+        learner_level="intermediate",
+        targets=(english_target,),
+        preferred_targets_per_sentence=1,
+        max_targets_per_sentence=2,
+        max_sentence_length_chars=120,
+        avoid_examples=(),
+    )
+
+    request = build_sentence_batch_request(
+        batch, language=Language.EN, model="m", prompt_version="sentence_gen_en_v1"
+    )
+    payload = context(request.context)
+
+    assert (
+        request.instructions
+        == template_for(
+            LlmTaskType.GENERATE_SENTENCE_BATCH, Language.EN, "sentence_gen_en_v1"
+        ).instructions
+    )
+    assert "language" not in payload
+    assert payload["target_items"] == [
+        {
+            "item_ref": "it0",
+            "type": "expression",
+            "lemma": "you good?",
+            "reading": None,
+            "default_meaning": "괜찮아?",
+        }
+    ]
