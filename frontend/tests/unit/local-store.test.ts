@@ -55,7 +55,7 @@ afterEach(() => {
 describe('LOCAL_STORE_KEYS', () => {
   it('is exactly the three keys', async () => {
     const { LOCAL_STORE_KEYS } = await freshModule()
-    expect([...LOCAL_STORE_KEYS]).toEqual(['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.v1'])
+    expect([...LOCAL_STORE_KEYS]).toEqual(['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'])
   })
 })
 
@@ -193,7 +193,7 @@ describe('localSlot', () => {
     })
     try {
       const { localSlot } = await freshModule()
-      const slot = localSlot('nc.demo.v1', isFlag)
+      const slot = localSlot('nc.demo.ja.v1', isFlag)
       expect(slot.read()).toBeUndefined()
       expect(() => slot.write({ on: false })).not.toThrow()
       expect(slot.read()).toEqual({ on: false })

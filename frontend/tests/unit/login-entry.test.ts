@@ -134,7 +134,7 @@ afterEach(() => {
 })
 
 describe('boot', () => {
-  const HASHES = ['', '#/', '#/demo', '#/kana', '#/kana/hiragana', '#/unknown']
+  const HASHES = ['', '#/', '#/ja/demo', '#/ja/kana', '#/ja/kana/hiragana', '#/unknown']
 
   for (const hash of HASHES) {
     it(`makes no request for ${JSON.stringify(hash)} even after every timer, then exactly one on 로그인`, async () => {
@@ -191,7 +191,7 @@ describe('login entry result', () => {
           presentation: {
             presentation_id: 11,
             sentence_id: 3,
-            japanese: '気が乗らない。',
+            text: '気が乗らない。',
             render_segments: [
               { text: '気が乗らない', sentence_item_id: 21, ruby: [] },
               { text: '。', sentence_item_id: null, ruby: [] },
@@ -265,7 +265,7 @@ describe('login entry result', () => {
 
   it('offers a retry that calls fetchMe again and nothing else on a connection failure', async () => {
     vi.useFakeTimers()
-    await boot('#/demo')
+    await boot('#/ja/demo')
     answerMe(async () => json(503, { detail: 'unavailable' }))
 
     loginButton().click()
@@ -308,7 +308,7 @@ describe('login entry result', () => {
 
   it('restarts the whole entry from the 로그인 on the connection failure screen', async () => {
     vi.useFakeTimers()
-    await boot('#/demo')
+    await boot('#/ja/demo')
     answerMe(async () => json(503, { detail: 'unavailable' }))
     loginButton().click()
     await settle()
@@ -319,7 +319,7 @@ describe('login entry result', () => {
     const firstEntry = calls().length
     expect(browser.replaceStateCalls).toHaveLength(1)
     // 실패 화면에 hash가 다시 생긴 상태를 hashchange 없이 만든다. 재진입이 hash를 다시 지우는지 보려는 것이다.
-    history.replaceState(null, '', '/#/demo')
+    history.replaceState(null, '', '/#/ja/demo')
     const replacedBefore = browser.replaceStateCalls.length
 
     answerMe(async () => json(401, { detail: 'Not authenticated' }))
@@ -357,7 +357,7 @@ describe('login entry result', () => {
         secondLoadDone()
       }
     })
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     loginButton().click()
     await settle()
@@ -365,7 +365,7 @@ describe('login entry result', () => {
     expect(flatText(byClass(failure, 'notice')[0]!)).toContain(MESSAGES.loginAreaLoadFailed)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(loads).toBe(1)
-    history.replaceState(null, '', '/#/demo')
+    history.replaceState(null, '', '/#/ja/demo')
     const replacedBefore = browser.replaceStateCalls.length
 
     answerMe(async () => json(401, { detail: 'Not authenticated' }))
@@ -384,7 +384,7 @@ describe('login entry result', () => {
     vi.doMock('../../src/private', () => {
       throw new Error('chunk load failed')
     })
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     loginButton().click()
     await settle()
@@ -399,7 +399,7 @@ describe('login entry result', () => {
   })
 
   it('clears the hash with replaceState and gets no hashchange', async () => {
-    await boot('#/demo')
+    await boot('#/ja/demo')
     answerMe(async () => json(401, { detail: 'Not authenticated' }))
 
     loginButton().click()
@@ -429,7 +429,7 @@ describe('leaving during the login entry', () => {
 
     loginButton().click()
     // 동적 import가 끝나기 전에 떠난다.
-    location.hash = '#/demo'
+    location.hash = '#/ja/demo'
     await settle()
 
     expect(fetchMock).not.toHaveBeenCalled()
@@ -455,7 +455,7 @@ describe('leaving during the login entry', () => {
       await settle()
       expect(calls()).toEqual(['GET /api/auth/me'])
 
-      location.hash = '#/demo'
+      location.hash = '#/ja/demo'
       await settle()
       const demo = root.children[0]
       expect(screenClass()).toContain('demo')
@@ -487,7 +487,7 @@ describe('leaving after logging in', () => {
     await settle()
     expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/auth/login'])
 
-    location.hash = '#/demo'
+    location.hash = '#/ja/demo'
     await settle()
     const demo = root.children[0]
 
@@ -522,7 +522,7 @@ describe('url values', () => {
       .join(' ')
   }
 
-  const HOSTILE = ['#/<img src=x onerror=alert(1)>', '#/demo/<img src=x onerror=alert(1)>']
+  const HOSTILE = ['#/<img src=x onerror=alert(1)>', '#/ja/demo/<img src=x onerror=alert(1)>']
 
   for (const hash of HOSTILE) {
     it(`never prints ${hash}`, async () => {
@@ -535,8 +535,8 @@ describe('url values', () => {
     })
   }
 
-  // #/kana는 하위 경로를 받는다. 모르는 하위 경로도 가나 화면이고 그 값은 화면에 나오지 않는다.
-  const KANA_HOSTILE = '#/kana/<img src=x onerror=alert(1)>'
+  // #/ja/kana는 하위 경로를 받는다. 모르는 하위 경로도 가나 화면이고 그 값은 화면에 나오지 않는다.
+  const KANA_HOSTILE = '#/ja/kana/<img src=x onerror=alert(1)>'
 
   it(`never prints ${KANA_HOSTILE}`, async () => {
     await boot(KANA_HOSTILE)

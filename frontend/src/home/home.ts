@@ -19,13 +19,13 @@ type HomeCard = { hash: string; title: string; description: string; pills: strin
 
 const CARDS: readonly HomeCard[] = [
   {
-    hash: '#/demo',
+    hash: '#/ja/demo',
     title: '표현 학습 체험해 보기',
     description: '모르는 표현을 눌러 뜻을 확인해요.',
     pills: ['로그인 없이'],
   },
   {
-    hash: '#/kana',
+    hash: '#/ja/kana',
     title: '글자부터 배우기',
     description: '히라가나와 가타카나를 표와 퀴즈로 익혀요.',
     pills: ['히라가나', '가타카나'],

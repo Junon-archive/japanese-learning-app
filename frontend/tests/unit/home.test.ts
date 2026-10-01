@@ -90,7 +90,7 @@ describe('home', () => {
     cards()[0]!.click()
     cards()[1]!.click()
 
-    expect(navigations).toEqual(['#/demo', '#/kana'])
+    expect(navigations).toEqual(['#/ja/demo', '#/ja/kana'])
     expect(logins).toBe(0)
   })
 

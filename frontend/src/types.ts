@@ -90,7 +90,7 @@ export type StartSessionResponse = {
 /**
  * 서버가 offset을 이미 적용해 만든 렌더링 단위.
  *
- * `text`를 순서대로 이어 붙이면 `japanese`가 된다. **frontend는 index를 계산하지
+ * `text`를 순서대로 이어 붙이면 `text`가 된다. **frontend는 index를 계산하지
  * 않는다**(05_API_SPEC.md). `sentence_item_id`가 non-null이면 tap 가능한 span이다.
  */
 /** segment 안의 표시 조각. reading이 null이면 후리가나 없이 text만 그린다. */
@@ -135,7 +135,7 @@ export type Probe = {
 export type Presentation = {
   presentation_id: number
   sentence_id: number
-  japanese: string
+  text: string
   render_segments: RenderSegment[]
   presentation_role: PresentationRole
   review_reason: ReviewReason | null

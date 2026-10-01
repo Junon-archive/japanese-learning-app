@@ -74,7 +74,7 @@ afterEach(() => {
 
 describe('entering the demo', () => {
   it('opens by url without a request', async () => {
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     expect(screenClass()).toContain('demo')
   })
@@ -85,12 +85,12 @@ describe('entering the demo', () => {
     byClass(root, 'home-card')[0]!.click()
     await settle()
 
-    expect(location.hash).toBe('#/demo')
+    expect(location.hash).toBe('#/ja/demo')
     expect(screenClass()).toContain('demo')
   })
 
   it('has the login entry in the top bar and no exit button in the screen', async () => {
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     const bar = byClass(root, 'topbar')[0]!
     expect(buttons(byClass(bar, 'topbar-actions')[0]!).map((button) => button.textContent)).toEqual([
@@ -103,13 +103,13 @@ describe('entering the demo', () => {
   it('continues from the saved progress without a request', async () => {
     let saved = initialProgress(DEMO_FIXTURE)
     for (let i = 0; i < 3; i += 1) saved = advance(DEMO_FIXTURE, saved)
-    vi.stubGlobal('localStorage', memoryStorage({ 'nc.demo.v1': JSON.stringify(saved) }))
+    vi.stubGlobal('localStorage', memoryStorage({ 'nc.demo.ja.v1': JSON.stringify(saved) }))
 
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     expect(screenClass()).toContain('demo')
     expect(byClass(root, 'sentence')[0]!.getAttribute('aria-label')).toBe(
-      DEMO_SENTENCES[saved.position]!.presentation.japanese,
+      DEMO_SENTENCES[saved.position]!.presentation.text,
     )
     expect(byClass(root, 'demo-progress')[0]!.textContent).toBe(`${saved.seen} / ${DEMO_SENTENCES.length}`)
   })
@@ -117,7 +117,7 @@ describe('entering the demo', () => {
 
 describe('leaving the demo', () => {
   it('goes home from the app name without a request', async () => {
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     press('Nihongo Context')
     await settle()

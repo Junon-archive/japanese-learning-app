@@ -9,7 +9,7 @@
  * `InteractionOps` 자리에 fixture와 진행 규칙(`progress.ts`)을 꽂는다 --- 탭, 설명 시트, 번역 펼침, probe,
  * 신고가 실제 화면과 같은 코드로 돈다. 후리가나 토글도 Study Screen과 같은 모듈이다.
  *
- * -   진도는 `progress.ts`가 `nc.demo.v1`에 저장한다. 다시 열면 이어서 보여주고, 없거나 맞지 않으면 조용히
+ * -   진도는 `progress.ts`가 `nc.demo.ja.v1`에 저장한다. 다시 열면 이어서 보여주고, 없거나 맞지 않으면 조용히
  *     처음부터다. 서버로 보내지 않고 학습 신호가 아니다.
  * -   진행 표시는 `본 문장 수 / 전체 문장 수` 하나다. 12분 진행바, `오늘 학습 완료 / 더 학습하기`, 연장이 없다.
  * -   타이머도 주기 호출도 없다. 진행은 `다음 문장`을 누를 때만 움직인다.
@@ -65,10 +65,10 @@ const DEMO_MESSAGES = {
 const PROBE_PROMPT = '이 표현을 알고 계세요?'
 const PROBE_OPTIONS: readonly ProbeResponseValue[] = ['known', 'uncertain', 'unknown', 'skip']
 
-const KANA_HASH = '#/kana'
+const KANA_HASH = '#/ja/kana'
 
 /**
- * `#/demo` route의 화면(`routes.ts`). 나가는 길은 상단바다 --- 앱 이름은 선택 홈, `로그인`은 main.ts가
+ * `#/ja/demo` route의 화면(`routes.ts`). 나가는 길은 상단바다 --- 앱 이름은 선택 홈, `로그인`은 main.ts가
  * 주입한 로그인 진입을 **넘기기만** 한다.
  */
 export function mount(ctx: PublicScreenContext): void {

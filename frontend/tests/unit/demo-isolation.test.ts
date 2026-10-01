@@ -344,7 +344,7 @@ describe('demo source', () => {
     .map((name) => ({ name, source: readFileSync(join(SRC, name), 'utf8') }))
 
   it('reaches browser storage only through local-store.ts', () => {
-    // demo 진도는 localStorage의 nc.demo.v1에만 남고, 그 접근은 local-store.ts의 localSlot 경유뿐이다
+    // demo 진도는 localStorage의 nc.demo.ja.v1에만 남고, 그 접근은 local-store.ts의 localSlot 경유뿐이다
     // (04_SECURITY_AND_DATA.md의 `localStorage 사용 범위`). 주석에서 이름을 언급하는 것은 막지 않는다 ---
     // 접근 형태만 찾는다. 계산된 속성 접근은 local-storage-scope.test.ts가 본다.
     expect(files.map((file) => file.name)).toEqual(expect.arrayContaining(['demo/demo.ts', 'demo/progress.ts']))
@@ -558,7 +558,7 @@ describe('positive controls: forbidden uses on synthetic sources', () => {
     ['an arrow function as the timer argument', 'setInterval(() => {}, 10)'],
     ['a literal non-script element', "document.createElement('div')"],
     ['a literal plain attribute', "el.setAttribute('role', v)"],
-    ['a literal href', "el.setAttribute('href', '#/demo')"],
+    ['a literal href', "el.setAttribute('href', '#/ja/demo')"],
     ['a route constant for navigation', "import { HOME_HASH } from '../routes'\nlocation.href = HOME_HASH\nwindow.open(HOME_HASH)"],
     ['a literal dynamic import of a public module', "export const m = () => import('./demo')"],
     ['a stylesheet import', "import '../styles.css'"],

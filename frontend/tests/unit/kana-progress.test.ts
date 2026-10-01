@@ -181,7 +181,7 @@ describe('resetKanaProgress', () => {
   it('removes only the kana progress', async () => {
     const storage = memoryStorage({
       'nc.furigana.v1': '{"on":true}',
-      'nc.demo.v1': '{"fixture":"abc"}',
+      'nc.demo.ja.v1': '{"fixture":"abc"}',
     })
     vi.stubGlobal('localStorage', storage)
     const { readKanaProgress, recordKanaAnswer, resetKanaProgress } = await freshProgress()
@@ -193,6 +193,6 @@ describe('resetKanaProgress', () => {
     expect(readKanaProgress()).toBeUndefined()
     expect(storage.data.has('nc.kana.v1')).toBe(false)
     expect(storage.data.get('nc.furigana.v1')).toBe('{"on":true}')
-    expect(storage.data.get('nc.demo.v1')).toBe('{"fixture":"abc"}')
+    expect(storage.data.get('nc.demo.ja.v1')).toBe('{"fixture":"abc"}')
   })
 })

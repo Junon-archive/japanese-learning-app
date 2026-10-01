@@ -21,7 +21,7 @@
 import type { RenderSegment } from '../types'
 
 /**
- * segment의 `text`를 순서대로 이은 문장. 값은 payload의 `japanese`와 같아야 한다.
+ * segment의 `text`를 순서대로 이은 문장. 값은 payload의 `text`와 같아야 한다.
  *
  * 화면에서는 문장 요소의 `aria-label`로 쓴다. span으로 쪼개 놓으면 스크린 리더가
  * 조각마다 끊어 읽기 때문이다.

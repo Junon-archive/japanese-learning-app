@@ -43,7 +43,7 @@ const EXPLANATION: Explanation = {
 const PRESENTATION: Presentation = {
   presentation_id: 4821,
   sentence_id: 1907,
-  japanese: '今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。',
+  text: '今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。',
   render_segments: [
     { text: '今日は', sentence_item_id: null, ruby: [{ text: '今日', reading: 'きょう' }, { text: 'は', reading: null }] },
     { text: 'なんとなく', sentence_item_id: 5511, ruby: [] },

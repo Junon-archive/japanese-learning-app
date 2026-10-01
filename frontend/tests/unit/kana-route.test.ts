@@ -68,7 +68,7 @@ afterEach(() => {
 })
 
 describe('entering kana learning', () => {
-  for (const hash of ['#/kana', '#/kana/hiragana', '#/kana/katakana']) {
+  for (const hash of ['#/ja/kana', '#/ja/kana/hiragana', '#/ja/kana/katakana']) {
     it(`opens ${hash} by url with only 로그인 on the right and no request`, async () => {
       await boot(hash)
 
@@ -84,7 +84,7 @@ describe('entering kana learning', () => {
     byClass(root, 'home-card')[1]!.click()
     await settle()
 
-    expect(location.hash).toBe('#/kana')
+    expect(location.hash).toBe('#/ja/kana')
     expect(screenClass()).toContain('kana')
   })
 
@@ -92,7 +92,7 @@ describe('entering kana learning', () => {
     vi.doMock('../../src/kana/screen', () => {
       throw new Error('chunk load failed')
     })
-    await boot('#/kana')
+    await boot('#/ja/kana')
 
     const notice = byClass(root, 'notice')[0]!
     expect(flatText(notice)).toContain(MESSAGES.kanaLoadFailed)
@@ -115,7 +115,7 @@ describe('leaving kana learning', () => {
   })
 
   it('goes home from the app name without a request', async () => {
-    await boot('#/kana')
+    await boot('#/ja/kana')
 
     buttons(root)
       .find((button) => button.textContent === 'Nihongo Context')!

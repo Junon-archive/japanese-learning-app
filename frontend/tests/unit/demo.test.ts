@@ -7,7 +7,7 @@
  *
  * 1.  **`fetch`가 한 번도 불리지 않는다.** 던지는 스텁이고 `afterEach`가 호출 0회를 단정한다. 정적 검사
  *     (`demo-isolation.test.ts`)는 "코드에 없다"까지고, 이 테스트가 "그래서 아무것도 안 나간다"를 말한다.
- * 2.  **`nc.demo.v1`(과 토글을 누르면 `nc.furigana.v1`) 밖에 쓰지 않는다.** localStorage의 다른 key,
+ * 2.  **`nc.demo.ja.v1`(과 토글을 누르면 `nc.furigana.v1`) 밖에 쓰지 않는다.** localStorage의 다른 key,
  *     sessionStorage, cookie에 쓰면 `afterEach`에서 드러난다.
  *
  * 숫자는 fixture 길이와 `constants.ts`에서 온다. 테스트에 적지 않는다.
@@ -35,7 +35,7 @@ import {
   sentenceOnScreen,
 } from './demo-harness'
 
-const DEMO_KEY = 'nc.demo.v1'
+const DEMO_KEY = 'nc.demo.ja.v1'
 const FURIGANA_KEY = 'nc.furigana.v1'
 const TOTAL = DEMO_SENTENCES.length
 
@@ -154,7 +154,7 @@ describe('demo fixture', () => {
         }
       }
       // render_segments를 이으면 그 문장이다. demo도 offset을 계산하지 않는다.
-      expect(entry.presentation.render_segments.map((s) => s.text).join('')).toBe(entry.presentation.japanese)
+      expect(entry.presentation.render_segments.map((s) => s.text).join('')).toBe(entry.presentation.text)
       // 번역은 payload에 없다. 누른 뒤에 건넨다.
       expect(JSON.stringify(entry.presentation)).not.toContain(entry.korean_translation)
     }
@@ -193,7 +193,7 @@ describe('demo screen', () => {
     const [first, second] = DEMO_SENTENCES
 
     // 1. 첫 문장. 일본어가 먼저고 번역은 없다.
-    expect(sentenceOnScreen(page.root)).toBe(first!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(first!.presentation.text)
     expect(text()).not.toContain(first!.korean_translation)
     expect(byClass(page.root, 'translation')).toEqual([])
 
@@ -216,7 +216,7 @@ describe('demo screen', () => {
 
     // 5. 다음 문장 -> 두 번째 문장. 번역은 다시 숨어 있고 본 문장 수가 하나 늘었다.
     next(page.root)
-    expect(sentenceOnScreen(page.root)).toBe(second!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(second!.presentation.text)
     expect(text()).not.toContain(second!.korean_translation)
     expect(progressText(page.root)).toBe(progressLabel(2, TOTAL))
   })
@@ -229,9 +229,9 @@ describe('demo screen', () => {
     expect(readings.length, 'the first fixture sentence has readings (premise)').toBeGreaterThan(0)
 
     const sentence = byClass(page.root, 'sentence')[0]!
-    expect(textWithoutRt(sentence)).toBe(presentation.japanese)
+    expect(textWithoutRt(sentence)).toBe(presentation.text)
     expect(sentence.querySelectorAll('rt').map((rt) => rt.textContent)).toEqual(readings)
-    expect(sentence.getAttribute('aria-label')).toBe(presentation.japanese)
+    expect(sentence.getAttribute('aria-label')).toBe(presentation.text)
   })
 
   it('brings back a sentence self-reported unknown after the review interval without counting it again', async () => {
@@ -299,7 +299,7 @@ describe('demo screen', () => {
 
     press(page.root, COPY.reset)
     press(page.root, COPY.resetConfirm)
-    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.text)
     expect(progressText(page.root)).toBe(progressLabel(1, TOTAL))
     expect(flatText(document.body as unknown as FakeElement)).toContain(COPY.resetDone)
     expect(local.data.has(DEMO_KEY)).toBe(false)
@@ -317,7 +317,7 @@ describe('demo screen', () => {
 
   it('ends on the completion screen with two actions and only 로그인 in the top bar', async () => {
     await reopen({ ...startOf(), position: TOTAL - 1, seen: TOTAL })
-    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[TOTAL - 1]!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[TOTAL - 1]!.presentation.text)
     expect(progressText(page.root)).toBe(progressLabel(TOTAL, TOTAL))
 
     next(page.root)
@@ -338,7 +338,7 @@ describe('demo screen', () => {
     expect(text().replace(COPY.completeTitle, '')).not.toMatch(/\d/)
 
     press(page.root, COPY.learnKana)
-    expect(page.navigations).toEqual(['#/kana'])
+    expect(page.navigations).toEqual(['#/ja/kana'])
   })
 
   it('starts over from the completion screen after deleting the demo progress', async () => {
@@ -349,7 +349,7 @@ describe('demo screen', () => {
     press(page.root, COPY.restart)
 
     expect(local.data.has(DEMO_KEY)).toBe(false)
-    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.text)
     expect(progressText(page.root)).toBe(progressLabel(1, TOTAL))
     expect(topBarRight()).toEqual([COPY.furigana, COPY.login])
     expect(page.navigations).toEqual([])
@@ -406,7 +406,7 @@ describe('demo screen', () => {
     expect(JSON.parse(local.data.get(FURIGANA_KEY)!)).toEqual({ on: true })
   })
 
-  it('writes nothing outside nc.demo.v1 while studying, and only when the progress moves', async () => {
+  it('writes nothing outside nc.demo.ja.v1 while studying, and only when the progress moves', async () => {
     click(page.root, 'token')
     await flush()
     click(page.root, 'reveal-translation')
@@ -427,7 +427,7 @@ describe('demo screen', () => {
     expect([...local.data.keys()]).toEqual([DEMO_KEY])
     // 가리키는 것은 fixture 순번과 표현 id다. 문장·번역·설명을 옮겨 적지 않는다.
     const stored = local.data.get(DEMO_KEY)!
-    expect(stored).not.toContain(DEMO_SENTENCES[0]!.presentation.japanese)
+    expect(stored).not.toContain(DEMO_SENTENCES[0]!.presentation.text)
     expect(stored).not.toContain(DEMO_SENTENCES[0]!.korean_translation)
 
     press(page.root, COPY.reset)

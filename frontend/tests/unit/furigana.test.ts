@@ -226,7 +226,7 @@ describe('toggling does not re-render', () => {
   const PRESENTATION: Presentation = {
     presentation_id: 4821,
     sentence_id: 1907,
-    japanese: '今日は気が乗らなくて家にいた。',
+    text: '今日は気が乗らなくて家にいた。',
     render_segments: [
       { text: '今日は', sentence_item_id: null, ruby: [{ text: '今日', reading: 'きょう' }, { text: 'は', reading: null }] },
       {
@@ -335,7 +335,7 @@ describe('toggle on the study screen', () => {
   const STUDY_PRESENTATION: Presentation = {
     presentation_id: 11,
     sentence_id: 3,
-    japanese: '仕事の気が乗らない。',
+    text: '仕事の気が乗らない。',
     render_segments: [
       { text: '仕事の', sentence_item_id: null, ruby: [{ text: '仕事', reading: 'しごと' }, { text: 'の', reading: null }] },
       {

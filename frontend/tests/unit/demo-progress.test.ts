@@ -49,7 +49,7 @@ import {
 } from './demo-harness'
 import { SRC, createProject } from './import-graph'
 
-const DEMO_KEY = 'nc.demo.v1'
+const DEMO_KEY = 'nc.demo.ja.v1'
 const FURIGANA_KEY = 'nc.furigana.v1'
 const KANA_KEY = 'nc.kana.v1'
 
@@ -72,7 +72,7 @@ function sentence(items: readonly number[], index: number): DemoSentence {
     presentation: {
       presentation_id: index + 1,
       sentence_id: index + 1,
-      japanese: segments.map((segment) => segment.text).join(''),
+      text: segments.map((segment) => segment.text).join(''),
       render_segments: segments,
       presentation_role: 'new',
       review_reason: null,
@@ -558,7 +558,7 @@ describe('progress on the demo screen', () => {
     vi.unstubAllGlobals()
   })
 
-  it('saves to nc.demo.v1 and continues after a reload, also in the middle of a review', async () => {
+  it('saves to nc.demo.ja.v1 and continues after a reload, also in the middle of a review', async () => {
     const storage = memoryStorage()
     vi.stubGlobal('localStorage', storage)
 
@@ -597,7 +597,7 @@ describe('progress on the demo screen', () => {
 
     const page = mountDemo(await freshDemo())
 
-    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.text)
     expect(progressText(page.root)).toBe(progressLabel(1, total))
     expect(byClass(page.root, 'notice')).toEqual([])
     expect(byClass(page.root, 'panel-failure')).toEqual([])
@@ -624,7 +624,7 @@ describe('progress on the demo screen', () => {
 
     expect(flatTextOfTitle(page.root)).toBe(`${total}문장을 모두 봤어요.`)
     const sentences = shown.filter((s): s is string => s !== null)
-    expect(new Set(sentences)).toEqual(new Set(DEMO_SENTENCES.map((s) => s.presentation.japanese)))
+    expect(new Set(sentences)).toEqual(new Set(DEMO_SENTENCES.map((s) => s.presentation.text)))
     // 첫 문장은 한 번 더(다시 보기) 나왔다. 메모리만으로 대기열이 이어졌다.
     expect(sentences.filter((s) => s === first)).toHaveLength(2)
     expect(sentences).toHaveLength(total + 1)
@@ -653,7 +653,7 @@ describe('progress on the demo screen', () => {
     press(page.root, '진도 초기화')
     press(page.root, '초기화하기')
 
-    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.japanese)
+    expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[0]!.presentation.text)
     expect(progressText(page.root)).toBe(progressLabel(1, total))
     expect(storage.data.has(DEMO_KEY)).toBe(false)
     expect(storage.data.get(FURIGANA_KEY)).toBe(furigana)
@@ -664,7 +664,7 @@ describe('progress on the demo screen', () => {
     const reloaded = mountDemo(await freshDemo())
     expect(progressText(reloaded.root)).toBe(progressLabel(1, total))
     for (let i = 0; i <= R; i += 1) next(reloaded.root)
-    expect(sentenceOnScreen(reloaded.root)).toBe(DEMO_SENTENCES[R + 1]!.presentation.japanese)
+    expect(sentenceOnScreen(reloaded.root)).toBe(DEMO_SENTENCES[R + 1]!.presentation.text)
   })
 
   it('reviews a flagged sentence exactly as an unflagged one', async () => {

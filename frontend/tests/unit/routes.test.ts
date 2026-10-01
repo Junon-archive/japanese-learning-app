@@ -85,7 +85,7 @@ afterEach(() => {
 
 describe('resolveHash', () => {
   const KANA: PublicRoute = {
-    prefix: '#/kana',
+    prefix: '#/ja/kana',
     load: () => Promise.reject(new Error('not loaded in this test')),
     loadFailure: '',
     acceptsSubpath: true,
@@ -98,40 +98,40 @@ describe('resolveHash', () => {
   })
 
   it('finds the demo route without a subpath', () => {
-    const resolved = resolveHash('#/demo')
+    const resolved = resolveHash('#/ja/demo')
 
     expect(resolved.kind).toBe('route')
-    expect(resolved.kind === 'route' && resolved.route.prefix).toBe('#/demo')
+    expect(resolved.kind === 'route' && resolved.route.prefix).toBe('#/ja/demo')
     expect(resolved.kind === 'route' && resolved.subpath).toBe('')
   })
 
   it('treats a subpath on a route that does not accept one as unknown', () => {
-    expect(resolveHash('#/demo/anything')).toEqual({ kind: 'unknown' })
-    expect(resolveHash('#/demox')).toEqual({ kind: 'unknown' })
+    expect(resolveHash('#/ja/demo/anything')).toEqual({ kind: 'unknown' })
+    expect(resolveHash('#/ja/demox')).toEqual({ kind: 'unknown' })
   })
 
   it('passes the subpath to a route that accepts one', () => {
     for (const [hash, subpath] of [
-      ['#/kana', ''],
-      ['#/kana/hiragana', 'hiragana'],
+      ['#/ja/kana', ''],
+      ['#/ja/kana/hiragana', 'hiragana'],
     ] as const) {
       const resolved = resolveHash(hash, ROUTES)
       expect(resolved.kind === 'route' && resolved.route).toBe(KANA)
       expect(resolved.kind === 'route' && resolved.subpath).toBe(subpath)
     }
-    expect(resolveHash('#/kanax', ROUTES)).toEqual({ kind: 'unknown' })
+    expect(resolveHash('#/ja/kanax', ROUTES)).toEqual({ kind: 'unknown' })
   })
 
   it('finds the registered kana route with and without a subpath', () => {
     for (const [hash, subpath] of [
-      ['#/kana', ''],
-      ['#/kana/hiragana', 'hiragana'],
+      ['#/ja/kana', ''],
+      ['#/ja/kana/hiragana', 'hiragana'],
     ] as const) {
       const resolved = resolveHash(hash)
-      expect(resolved.kind === 'route' && resolved.route.prefix).toBe('#/kana')
+      expect(resolved.kind === 'route' && resolved.route.prefix).toBe('#/ja/kana')
       expect(resolved.kind === 'route' && resolved.subpath).toBe(subpath)
     }
-    expect(resolveHash('#/kanax')).toEqual({ kind: 'unknown' })
+    expect(resolveHash('#/ja/kanax')).toEqual({ kind: 'unknown' })
     expect(resolveHash('#/unknown')).toEqual({ kind: 'unknown' })
   })
 })
@@ -156,7 +156,7 @@ describe('router', () => {
   })
 
   it('shows the demo for #/demo', async () => {
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     expect(screen().className).toContain('demo')
   })
@@ -179,7 +179,7 @@ describe('router', () => {
 
     byClass(root, 'home-card')[0]!.click()
     await settle()
-    expect(location.hash).toBe('#/demo')
+    expect(location.hash).toBe('#/ja/demo')
     expect(screen().className).toContain('demo')
 
     history.back()
@@ -190,7 +190,7 @@ describe('router', () => {
   it('does not let a late route load cover the screen the user went back to', async () => {
     await boot('')
 
-    location.hash = '#/demo'
+    location.hash = '#/ja/demo'
     await Promise.resolve()
     history.back()
     await settle()
@@ -202,7 +202,7 @@ describe('router', () => {
     vi.doMock('../../src/demo/demo', () => {
       throw new Error('chunk load failed')
     })
-    await boot('#/demo')
+    await boot('#/ja/demo')
 
     const notice = byClass(root, 'notice')[0]!
     expect(flatText(notice)).toContain(MESSAGES.demoLoadFailed)

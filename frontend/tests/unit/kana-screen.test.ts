@@ -103,7 +103,7 @@ const CHOOSE = '보고 고르기'
 // 하네스
 // ---------------------------------------------------------------------------------------------
 
-const INITIAL_HASH = '#/kana'
+const INITIAL_HASH = '#/ja/kana'
 const KANA_KEY = 'nc.kana.v1'
 /** 난수를 고정하는 값. 둘 이상으로 돌려 "난수가 실제로 문항을 고른다"도 본다. */
 const RANDOM_VALUES = [0, 0.75] as const
@@ -339,21 +339,21 @@ describe('kana table screen', () => {
   })
 
   it('opens the tab named by the subpath and treats anything else as 히라가나', async () => {
-    await mountKana('katakana', '#/kana/katakana')
+    await mountKana('katakana', '#/ja/kana/katakana')
     expect(pressed('kana-tabs')).toEqual([SCRIPT_LABEL.katakana])
     expect(texts('kana-cell-text')[0]).toBe(KANA_TABLES.katakana.seion[0]![0]!.text)
 
     for (const subpath of ['', 'hiragana', 'Katakana', 'katakana/extra']) {
       vi.resetModules()
       root = createFakeElement('div')
-      await mountKana(subpath, `#/kana/${subpath}`)
+      await mountKana(subpath, `#/ja/kana/${subpath}`)
       expect(pressed('kana-tabs'), `subpath ${subpath}`).toEqual([SCRIPT_LABEL.hiragana])
     }
   })
 
   it('does not print the subpath value anywhere', async () => {
     const subpath = '<img src=x onerror=alert(1)>'
-    await mountKana(subpath, `#/kana/${subpath}`)
+    await mountKana(subpath, `#/ja/kana/${subpath}`)
 
     expect(pressed('kana-tabs')).toEqual([SCRIPT_LABEL.hiragana])
     for (const scope of [root, doc.body]) {
@@ -444,7 +444,7 @@ describe('kana table screen', () => {
   })
 
   it('uses the katakana small letters in the katakana range descriptions', async () => {
-    await mountKana('katakana', '#/kana/katakana')
+    await mountKana('katakana', '#/ja/kana/katakana')
     press(RANGE_LABEL.yoon, one('kana-chips'))
     expect(one('kana-range-desc').textContent).toBe('작은 ャ·ュ·ョ가 붙으면 한 소리로 읽어요.')
     press(RANGE_LABEL.sokuon, one('kana-chips'))
@@ -640,7 +640,7 @@ describe('보고 고르기', () => {
     vi.spyOn(Math, 'random').mockReturnValue(RANDOM_VALUES[1])
     const pool = KANA_ITEMS.katakana.handakuon
     const total = Math.min(pool.length, KANA_ROUND_MAX_QUESTIONS)
-    await mountKana('katakana', '#/kana/katakana')
+    await mountKana('katakana', '#/ja/kana/katakana')
     press(RANGE_LABEL.handakuon, one('kana-chips'))
     startQuiz(CHOOSE)
 
@@ -760,7 +760,7 @@ describe('progress in nc.kana.v1', () => {
     vi.stubGlobal('localStorage', storage)
     vi.spyOn(Math, 'random').mockReturnValue(RANDOM_VALUES[0])
     const pool = KANA_ITEMS.katakana.gairaigo
-    await mountKana('katakana', '#/kana/katakana')
+    await mountKana('katakana', '#/ja/kana/katakana')
     press(RANGE_LABEL.gairaigo, one('kana-chips'))
     startQuiz(CHOOSE)
 
@@ -812,7 +812,7 @@ describe('progress in nc.kana.v1', () => {
 })
 
 describe('진도 초기화', () => {
-  const OTHER_KEYS = { 'nc.furigana.v1': 'furigana', 'nc.demo.v1': 'demo', unrelated: 'other' }
+  const OTHER_KEYS = { 'nc.furigana.v1': 'furigana', 'nc.demo.ja.v1': 'demo', unrelated: 'other' }
 
   function seededStorage() {
     const key = KANA_ITEMS.hiragana.seion[0]!.key
@@ -873,7 +873,7 @@ describe('진도 초기화', () => {
 describe('round state stays out of the url', () => {
   it('never changes location.hash nor pushes history through tabs, chips, a round and the result', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(RANDOM_VALUES[1])
-    const hash = '#/kana/katakana'
+    const hash = '#/ja/kana/katakana'
     await mountKana('katakana', hash)
     const steps: (() => void)[] = [
       () => select('hiragana', 'gairaigo'),

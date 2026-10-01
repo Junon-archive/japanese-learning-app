@@ -24,20 +24,20 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url))
 /** `src` 기준 경로(`/` 구분). */
 const STORE_MODULE = 'local-store.ts'
 
-const EXPECTED_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.v1'] as const
+const EXPECTED_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'] as const
 type StoreKey = (typeof EXPECTED_KEYS)[number]
 
 /** slot 소유 위치(04 `slot 소유`). */
 const SLOT_OWNER: Record<StoreKey, (path: string) => boolean> = {
   'nc.furigana.v1': (path) => path === 'ui/furigana.ts',
   'nc.kana.v1': (path) => path.startsWith('kana/'),
-  'nc.demo.v1': (path) => path.startsWith('demo/'),
+  'nc.demo.ja.v1': (path) => path.startsWith('demo/'),
 }
 
 /**
  * 최종 규칙: 세 key 모두 `localSlot` 호출이 정확히 1회다(04 `slot 소유`). 이 목록은 세 key 전부다.
  */
-const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1', 'nc.furigana.v1', 'nc.demo.v1']
+const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1', 'nc.furigana.v1', 'nc.demo.ja.v1']
 
 /** local-store.ts가 export해도 되는 이름 전부. 임의 key·임의 값을 쓰는 함수는 없다. */
 const STORE_EXPORTS = ['LOCAL_STORE_KEYS', 'LocalSlot', 'LocalStoreKey', 'localSlot']
@@ -417,7 +417,7 @@ describe('browser storage scope in frontend/src', () => {
 // ---------------------------------------------------------------------------
 
 const VALID_STORE = `
-export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.v1'] as const
+export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'] as const
 export type LocalStoreKey = (typeof LOCAL_STORE_KEYS)[number]
 export type LocalSlot<T> = { read: () => T | undefined }
 export function localSlot<T>(key: LocalStoreKey, isValid: (value: unknown) => value is T): LocalSlot<T> {
@@ -441,7 +441,7 @@ describe('positive controls', () => {
         import { localSlot } from '../local-store'
         const slot = localSlot('nc.kana.v1', isKana)
         history.replaceState(null, '', '#/')
-        window.history.pushState(null, '', '#/kana')
+        window.history.pushState(null, '', '#/ja/kana')
         window.addEventListener('hashchange', () => location.hash)
         const origin = window.location.origin
         const crypto = globalThis.crypto
@@ -449,7 +449,7 @@ describe('positive controls', () => {
         record['name'] = navigator.language
       `,
       'ui/furigana.ts': `import { localSlot } from '../local-store'\nlocalSlot<Flag>('nc.furigana.v1', isFlag)`,
-      'demo/progress.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.demo.v1', isDemo)`,
+      'demo/progress.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.demo.ja.v1', isDemo)`,
     })
     expect(localStorageOutsideStore(sources)).toEqual([])
     expect(computedGlobalAccess(sources)).toEqual([])
@@ -520,7 +520,7 @@ describe('positive controls', () => {
   })
 
   it.each([
-    ['object state', `history.pushState({ round: 3 }, '', '#/kana')`],
+    ['object state', `history.pushState({ round: 3 }, '', '#/ja/kana')`],
     ['string state', `window.history.replaceState('x', '', '#/')`],
     ['undefined state', `history.replaceState(undefined, '', '#/')`],
     ['no arguments', 'history.pushState()'],
@@ -530,9 +530,9 @@ describe('positive controls', () => {
   })
 
   it.each([
-    ['a fourth key', VALID_STORE.replace(`'nc.demo.v1']`, `'nc.demo.v1', 'nc.extra.v1']`)],
-    ['a missing key', VALID_STORE.replace(`, 'nc.demo.v1']`, `]`)],
-    ['a non-literal key', VALID_STORE.replace(`'nc.demo.v1']`, `DEMO_KEY]`)],
+    ['a fourth key', VALID_STORE.replace(`'nc.demo.ja.v1']`, `'nc.demo.ja.v1', 'nc.extra.v1']`)],
+    ['a missing key', VALID_STORE.replace(`, 'nc.demo.ja.v1']`, `]`)],
+    ['a non-literal key', VALID_STORE.replace(`'nc.demo.ja.v1']`, `DEMO_KEY]`)],
     ['an arbitrary-key export', `${VALID_STORE}\nexport function writeAny(k: string) { localStorage.setItem(k, '') }`],
     ['a re-export', `${VALID_STORE}\nexport * from './other'`],
     ['clear()', VALID_STORE.replace('localStorage.removeItem(key)', 'localStorage.clear()')],
@@ -547,7 +547,7 @@ describe('positive controls', () => {
     ['a template key', 'kana/progress.ts', 'localSlot(`nc.kana.v1`, isKana)'],
     ['an unknown key', 'kana/progress.ts', `localSlot('nc.other.v1', isKana)`],
     ['kana key outside src/kana', 'ui/study.ts', `localSlot('nc.kana.v1', isKana)`],
-    ['demo key in private code', 'private.ts', `localSlot('nc.demo.v1', isDemo)`],
+    ['demo key in private code', 'private.ts', `localSlot('nc.demo.ja.v1', isDemo)`],
     ['furigana key outside ui/furigana.ts', 'ui/study.ts', `localSlot('nc.furigana.v1', isFlag)`],
     ['a renamed import', 'kana/progress.ts', `import { localSlot as make } from '../local-store'`],
     ['a re-export', 'kana/index.ts', `export { localSlot } from '../local-store'`],
@@ -572,8 +572,8 @@ describe('positive controls', () => {
       'kana/progress.ts': `localSlot('nc.kana.v1', a)\nlocalSlot('nc.kana.v1', b)`,
     })
     const twiceInTwo = synthetic({
-      'demo/a.ts': `localSlot('nc.demo.v1', a)`,
-      'demo/b.ts': `localSlot('nc.demo.v1', b)`,
+      'demo/a.ts': `localSlot('nc.demo.ja.v1', a)`,
+      'demo/b.ts': `localSlot('nc.demo.ja.v1', b)`,
       'kana/progress.ts': `localSlot('nc.kana.v1', a)`,
     })
     expect(slotCallCounts(twiceInOne, REQUIRED_SLOT_KEYS).length).toBeGreaterThan(0)
@@ -584,7 +584,7 @@ describe('positive controls', () => {
     const sources = synthetic({ 'ui/furigana.ts': `localSlot('nc.furigana.v1', isFlag)` })
     expect(slotCallCounts(sources, REQUIRED_SLOT_KEYS)).toEqual([
       `localSlot('nc.kana.v1') must be called exactly once, found 0`,
-      `localSlot('nc.demo.v1') must be called exactly once, found 0`,
+      `localSlot('nc.demo.ja.v1') must be called exactly once, found 0`,
     ])
   })
 })
@@ -626,14 +626,14 @@ describe('private graph storage keys', () => {
     expect(privateGraphSlotKeys(project).violations).toEqual([])
   })
 
-  it('positive control: flags nc.demo.v1 created in a module the private graph reaches', () => {
+  it('positive control: flags nc.demo.ja.v1 created in a module the private graph reaches', () => {
     const study = createProject().read('ui/study.ts')
     const project = createProject({
-      'ui/study.ts': `${study}\nimport { localSlot } from '../local-store'\nlocalSlot('nc.demo.v1', isDemo)\n`,
+      'ui/study.ts': `${study}\nimport { localSlot } from '../local-store'\nlocalSlot('nc.demo.ja.v1', isDemo)\n`,
     })
     const result = privateGraphSlotKeys(project)
-    expect(result.keys).toContain('nc.demo.v1')
-    expect(result.violations).toContain(`private graph creates localSlot('nc.demo.v1')`)
+    expect(result.keys).toContain('nc.demo.ja.v1')
+    expect(result.violations).toContain(`private graph creates localSlot('nc.demo.ja.v1')`)
   })
 
   it('positive control: follows a transitive and a dynamic import into a kana slot', () => {
@@ -650,7 +650,7 @@ describe('private graph storage keys', () => {
     const project = createProject({
       [PRIVATE_ENTRY]: `import './ui/probe-furigana'\n`,
       'ui/probe-furigana.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.furigana.v1', isFlag)\n`,
-      'demo/probe-slot.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.demo.v1', isDemo)\n`,
+      'demo/probe-slot.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.demo.ja.v1', isDemo)\n`,
     })
     const result = privateGraphSlotKeys(project)
     expect(result.keys).toEqual(['nc.furigana.v1'])

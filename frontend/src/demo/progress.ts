@@ -7,7 +7,7 @@
  * -   "표현"은 learning item이다. 자기평가의 key는 `learning_item_id`다.
  * -   문장은 fixture 안의 순번(index)으로 가리킨다. 값 안의 fixture 식별자가 같을 때만 그 순번이 뜻을 가진다.
  *
- * 진도 저장(`nc.demo.v1`)도 이 모듈이 맡는다(`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위`). 서버로
+ * 진도 저장(`nc.demo.ja.v1`)도 이 모듈이 맡는다(`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위`). 서버로
  * 보내지 않고 로그인 여부·계정 값을 넣지 않는다. 형식·값 범위·소속이 맞지 않는 저장값은 조용히 없는 것으로 본다.
  */
 import { localSlot } from '../local-store'
@@ -181,7 +181,7 @@ function hasItem(sentence: DemoSentence, learningItemId: number): boolean {
 }
 
 // ----------------------------------------------------------------------
-// 저장 (`nc.demo.v1`)
+// 저장 (`nc.demo.ja.v1`)
 // ----------------------------------------------------------------------
 
 /** 지금 번들에 들어 있는 fixture. */
@@ -271,7 +271,7 @@ export function isDemoProgress(value: unknown): value is DemoProgress {
   return isProgressOf(DEMO_FIXTURE, value)
 }
 
-const slot = localSlot('nc.demo.v1', isDemoProgress)
+const slot = localSlot('nc.demo.ja.v1', isDemoProgress)
 
 /** 저장된 진도. 없거나, 읽을 수 없거나, 다른 fixture의 값이거나, 형식이 맞지 않으면 undefined. */
 export function readDemoProgress(): DemoProgress | undefined {
