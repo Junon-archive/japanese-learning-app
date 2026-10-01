@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
@@ -354,9 +355,12 @@ def test_sentence_model_declares_the_ruby_json_ja_only_check() -> None:
     # naming convention이 선언 이름(`ruby_json_ja_only`) 앞에 `ck_sentences_`를
     # 붙인다(`app/models/base.py`의 `NAMING_CONVENTION`) --- 위 integration 테스트가
     # DB에서 보는 이름과 같다.
+    # Sentence.__table__는 실제로 sa.Table이지만 선언적 매핑의 타입 스텁은
+    # FromClause까지만 좁혀준다(SQLAlchemy stub 정밀도의 한계).
+    table = cast(sa.Table, Sentence.__table__)
     checks = [
         constraint
-        for constraint in Sentence.__table__.constraints
+        for constraint in table.constraints
         if isinstance(constraint, sa.CheckConstraint)
         and constraint.name == "ck_sentences_ruby_json_ja_only"
     ]
