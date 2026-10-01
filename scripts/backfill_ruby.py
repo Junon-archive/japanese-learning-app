@@ -62,7 +62,7 @@ from app.models.content import (  # noqa: E402
     SentenceItemExplanation,
     SentenceItemSpan,
 )
-from app.models.enums import ExplanationStatus  # noqa: E402
+from app.models.enums import ExplanationStatus, Language  # noqa: E402
 from app.render import ItemSpan  # noqa: E402
 from app.settings import get_settings  # noqa: E402
 
@@ -127,7 +127,13 @@ def load_targets(connection: sa.Connection) -> list[Target]:
     validated 설명이 없는 tappable item(아직 ready가 아닌 문장)도 span은 경계로 넘기고 읽기는
     None으로 둔다 --- 계층 1을 쓰지 않고 불일치 비교에서 빠진다(`uncomparable_items`).
     """
-    targets = sa.select(Sentence.id).where(Sentence.ruby_json.is_(None)).subquery()
+    # 후리가나는 일본어 전용이다(불변식 23, ADR-024 결정 6). 이 필터가 없으면 영어
+    # 문장이 전부 "계산 실패"로 집계되어 exit 2가 된다.
+    targets = (
+        sa.select(Sentence.id)
+        .where(Sentence.ruby_json.is_(None), Sentence.language == Language.JA)
+        .subquery()
+    )
     sentences = connection.execute(
         sa.select(Sentence.id, Sentence.text)
         .where(Sentence.id.in_(sa.select(targets.c.id)))

@@ -95,12 +95,24 @@ class UserConfig(BaseModel):
     user_timezone: str = Field(...)
 
 
+class MaxSentenceLengthConfig(BaseModel):
+    """언어별 문장 길이 상한 (MVP-03 확정, 14_CONFIGURATION.md의
+    `max_sentence_length_chars가 맵인 것`). `ja`·`en` 둘 다 있어야 한다 --- 언어
+    key를 늘리는 것은 이 모델과 `language` CHECK를 같은 커밋에서 고치는 일이다.
+    """
+
+    model_config = _SECTION_CONFIG
+
+    ja: int = Field(...)
+    en: int = Field(...)
+
+
 class ContentConfig(BaseModel):
     model_config = _SECTION_CONFIG
 
     translation_default_visible: bool = Field(...)
     reading_default_visible: bool = Field(...)
-    max_sentence_length_chars: int = Field(...)
+    max_sentence_length_chars: MaxSentenceLengthConfig = Field(...)
     duplicate_similarity_threshold: float = Field(...)
 
 

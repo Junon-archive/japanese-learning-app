@@ -51,7 +51,7 @@ from app.llm.tasks import (
 )
 from app.llm.validation import Rejection, SentencePolicy, ValidatedSentence, validate_sentence
 from app.models.content import LearningItem, Sentence, SentenceItem
-from app.models.enums import LlmTaskType, PresentationRole, SentenceStatus
+from app.models.enums import Language, LlmTaskType, PresentationRole, SentenceStatus
 from app.models.jobs import GenerationJob
 from app.models.learning import ReviewState, UserItemLearningState, UserMastery
 from app.models.user import User
@@ -82,6 +82,10 @@ class SentencePlan:
     similarity_threshold: float
     skip_similarity: bool
     parent_sentence_id: int | None
+    # duplicate 비교(11·12번)와 corpus 조회를 좁히는 언어(ADR-024 결정 6). job의
+    # 언어를 그대로 쓴다. 기본값은 `Language.JA` --- 이 필드를 추가하기 전부터
+    # 있던 호출부(테스트 포함)는 전부 일본어 job만 다룬다.
+    language: Language = Language.JA
 
     def complete(
         self,
@@ -137,12 +141,13 @@ class SentencePlan:
                 corpus,
                 similarity_threshold=self.similarity_threshold,
                 skip_similarity=self.skip_similarity,
+                language=self.language.value,
             )
             if duplicate is not None:
                 rejected.append(duplicate)
                 continue
             accepted.append(self._new_sentence(checked))
-            corpus.append(_batch_local(checked.sentence.text, index=index))
+            corpus.append(_batch_local(checked.sentence.text, index=index, language=self.language))
 
         return accepted, rejected
 
@@ -209,13 +214,14 @@ def prepare(
         request=request,
         provenance=provenance,
         policy=sentence_policy(cfg),
-        corpus=load_corpus(db, exclude_job_id=job.id),
+        corpus=load_corpus(db, exclude_job_id=job.id, language=job.language),
         requested_refs=requested_refs(request_input.targets),
         new_refs=new_item_refs(db, user_id=user.id, item_ids=item_ids),
         item_ids=item_ids,
         similarity_threshold=cfg.content.duplicate_similarity_threshold,
         skip_similarity=False,
         parent_sentence_id=None,
+        language=job.language,
     )
 
 
@@ -233,20 +239,26 @@ def sentence_policy(cfg: AppConfig) -> SentencePolicy:
     )
 
 
-def load_corpus(db: Session, *, exclude_job_id: int | None) -> tuple[CorpusSentence, ...]:
+def load_corpus(
+    db: Session, *, exclude_job_id: int | None, language: Language = Language.JA
+) -> tuple[CorpusSentence, ...]:
     """검사 11·12의 비교 corpus (`08_LLM_SPEC.md`의 `duplicate 비교 corpus`).
 
-    `status != 'retired'`인 `sentences` **전체**이며 사용자별로 자르지 않는다 ---
-    `sentences`는 global content다. `quarantined`를 반드시 포함한다. 빼면 사용자가
-    flag해서 격리한 문장을 다음 generation이 그대로 다시 만들고, 새 id를 받은 그
-    문장이 `validated`가 되어 다시 Ready로 선택된다.
+    `status != 'retired'`이고 `language = <job의 language>`인 `sentences`이며
+    사용자별로 자르지 않는다 --- `sentences`는 global content다. `quarantined`를 반드시
+    포함한다. 빼면 사용자가 flag해서 격리한 문장을 다음 generation이 그대로 다시
+    만들고, 새 id를 받은 그 문장이 `validated`가 되어 다시 Ready로 선택된다.
+
+    언어가 다르면 애초에 같은 문장일 수 없으므로 언어로도 좁힌다(MVP-03, ADR-024
+    결정 6). 기본값은 `Language.JA` --- 이 필터를 추가하기 전부터 있던 호출부
+    (테스트 포함)는 전부 일본어 job만 다룬다.
 
     `exclude_job_id`가 만든 문장만 뺀다. at-least-once로 같은 job이 다시 돌 때 자기가
     이미 저장한 문장을 duplicate로 보면, 그 job은 영원히 전량 탈락으로 재시도하다가
     `failed`가 된다. 그 재실행의 중복 방지는 `persistence`의 hash 대조가 한다.
     """
     statement = sa.select(Sentence.id, Sentence.text, Sentence.normalized_hash).where(
-        Sentence.status != SentenceStatus.RETIRED
+        Sentence.status != SentenceStatus.RETIRED, Sentence.language == language
     )
     if exclude_job_id is not None:
         statement = statement.where(
@@ -429,10 +441,10 @@ def _role(value: object) -> PresentationRole | None:
     return next((role for role in PresentationRole if role.value == value), None)
 
 
-def _batch_local(text: str, *, index: int) -> CorpusSentence:
+def _batch_local(text: str, *, index: int, language: Language = Language.JA) -> CorpusSentence:
     """이번 batch에서 방금 통과한 문장. 아직 DB에 없으므로 id가 음수다."""
     return CorpusSentence(
         sentence_id=-(index + 1),
         text=text,
-        normalized_hash=normalized_sentence_hash(text),
+        normalized_hash=normalized_sentence_hash(text, language.value),
     )

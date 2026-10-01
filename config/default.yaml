@@ -56,8 +56,12 @@ user:
 content:
   translation_default_visible: false
   reading_default_visible: false
-  # deterministic validation (08_LLM_SPEC.md)
-  max_sentence_length_chars: 60
+  # deterministic validation (08_LLM_SPEC.md). 언어별 맵이다(MVP-03 확정,
+  # 14_CONFIGURATION.md의 `max_sentence_length_chars가 맵인 것`). ja/en 둘 다
+  # 있어야 한다 --- 60은 일본어, 120은 영어에 맞춘 값이다.
+  max_sentence_length_chars:
+    ja: 60
+    en: 120
   duplicate_similarity_threshold: 0.90
 
 jobs:
