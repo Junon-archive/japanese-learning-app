@@ -30,8 +30,19 @@ iPhone / Browser PWA
     `Provider 선택과 model 출처`, `04_SECURITY_AND_DATA.md`, ADR-016)
 -   **MVP-02:** 선택 홈과 가나 학습도 Public Demo와 같이 backend API를 쓰지 않는 **공개 화면**이다
     (`04_SECURITY_AND_DATA.md`의 `공개 화면 셋으로 확장 (MVP-02 확정)`, ADR-022)
+-   **MVP-03: 학습 대상 언어는 콘텐츠의 축이다.** `learning_items` / `sentences` /
+    `study_sessions` / `prompt_versions` / `generation_jobs`가 `language`를 가지고, 사용자별 학습
+    테이블은 갖지 않는다. 엔진·SRS·mastery·이벤트 경로를 언어별로 복제하지 않는다(불변식 21,
+    ADR-023)
+-   **MVP-03: 공개 화면이 여섯이다** --- 언어 선택 홈, 일본어 홈, 영어 홈, 일본어 demo, 영어
+    demo, 가나 학습. 여섯 모두 서버 요청 0건이고 API 모듈에 닿지 않는다(불변식 28, ADR-025)
+-   **MVP-03: 소리는 브라우저 안에서만 만든다.** 영어 문장·예문의 재생은 브라우저 내장
+    `speechSynthesis`의 `localService` 음성으로만 하며 서버에 audio endpoint가 없고 오디오 파일을
+    저장하지 않는다. 재생 때문에 frontend origin 밖으로 요청이 나가지 않는다(불변식 24, ADR-025
+    결정 4)
 -   **MVP-02: 형태소 분석기(SudachiPy + SudachiDict-core)는 worker 이미지와 호스트 CLI(`uv run`)에만
-    있다.** API 이미지와 API 요청 경로에는 없다. 의존성은 dependency group `furigana`로 두고,
+    있다.** (**MVP-03: 그리고 `language = 'ja'` 콘텐츠에만 쓴다.** 영어 콘텐츠를 적재·생성할 때는
+    분석기를 부르지 않는다. 영어용 분석기·lemmatizer를 도입하지 않는다 --- 불변식 23) API 이미지와 API 요청 경로에는 없다. 의존성은 dependency group `furigana`로 두고,
     API 이미지는 기본 group 없이, worker 이미지는 `furigana` group을 더해 sync한다. 호스트는 기본 group
     전부(dev + furigana)다. 두 Dockerfile의 sync 명령은 함께 바꾸고 테스트로 고정한다. API는 저장된 ruby를
     읽기만 한다(`mvp-01-core/05_API_SPEC.md`의 `render_segments[].ruby`, ADR-021)
@@ -80,7 +91,7 @@ scripts/run_worker.py         (기존) 부팅에서 분석기를 적재한다
 frontend/src/main.ts          부팅. 공개 라우터 시작. 로그인 영역 동적 import가 여기 한 곳에만 있다
 frontend/src/routes.ts        공개 route 표, navigate, hashchange를 듣는 유일한 곳
 frontend/src/private.ts       로그인 영역 진입(fetchMe -> 학습 | 401 -> 로그인). API 모듈은 여기서부터만 닿는다
-frontend/src/home/            선택 홈
+frontend/src/home/            선택 홈 (MVP-03: 언어 선택 홈 + 언어별 홈)
 frontend/src/demo/            demo 화면, 생성된 fixture, demo 전용 상수
 frontend/src/kana/            가나 데이터·퀴즈·진도·화면
 frontend/src/local-store.ts   localStorage 단일 모듈
@@ -89,6 +100,26 @@ frontend/src/ui/sheet.ts      바텀시트
 frontend/src/ui/topbar.ts     상단바 레이아웃
 frontend/src/ui/furigana.ts   후리가나 설정과 토글
 ```
+
+### MVP-03에서 바뀐 모듈 위치
+
+``` text
+backend/app/normalization.py   언어 인자를 받는다. 분기는 이 모듈 안에만 있다 (ADR-024 결정 6)
+backend/app/llm/prompts/ja/    기존 본문을 옮겼다
+backend/app/llm/prompts/en/    영어 prompt 본문 (신규)
+scripts/build_en_seed.py       외부 자료 -> seed/en/*.yaml 선별 (신규)
+scripts/build_demo_fixture.py  --language를 받는다
+scripts/backfill_seed_id.py    기존 일본어 seed 행에 seed_id를 채운다 (신규, ADR-023 결정 4)
+seed/ja/  seed/en/             언어별 seed 디렉터리
+data/wordlists/                외부 어휘 자료 원본. Git에 넣지 않는다 (불변식 27)
+
+frontend/src/routes.ts         중첩 route 표(#/ja/..., #/en/...), ctx.language, 옛 경로 리다이렉트
+frontend/src/home/             언어 선택 홈 + 언어별 홈
+frontend/src/demo/ja/ en/      언어별 fixture. 화면·진행·진도 코드는 공유한다
+frontend/src/ui/speech.ts      소리 재생 (신규). speechSynthesis 식별자가 나오는 유일한 모듈
+```
+
+-   `data/postgres`, `data/backups`, `data/wordlists`, `.env`는 Git에 포함하지 않는다.
 
 -   backend 계층과 import guard(G14)는 ADR-015의 계층표와 ADR-021이 canonical이다.
 -   frontend 격리 경계와 검사는 `04_SECURITY_AND_DATA.md`의 `공개 화면 셋으로 확장 (MVP-02 확정)`과

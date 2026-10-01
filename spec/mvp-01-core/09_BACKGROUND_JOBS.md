@@ -171,7 +171,7 @@ EXPLAIN_ITEM             materialization이 검사한 문장이 explanation 누�
 
 ``` text
 job_type                 idempotency_key
-GENERATE_SENTENCE_BATCH  replenish:GENERATE_SENTENCE_BATCH:{user_id}:{role}:{YYYY-MM-DD}
+GENERATE_SENTENCE_BATCH  replenish:GENERATE_SENTENCE_BATCH:{user_id}:{language}:{role}:{YYYY-MM-DD}
 GENERATE_REVIEW_CONTEXT  review_ctx:{user_id}:{learning_item_id}:{context_stage}:{YYYY-MM-DD}
 EXPLAIN_ITEM             explain:{sentence_item_id}:{YYYY-MM-DD}
 ```
@@ -183,6 +183,28 @@ GENERATE_REVIEW_CONTEXT  {"user_id", "learning_item_id", "context_stage",
                           "anchor_sentence_id"}
 EXPLAIN_ITEM             {"sentence_item_id"}
 ```
+
+### language (MVP-03 확정)
+
+**모든 job이 `language` 컬럼을 가진다**(`04_DB_SPEC.md`의 `generation_jobs`). enqueue가 그 값을
+정하고, worker는 claim한 job의 `(job_type, language)`로 prompt를 고른다.
+
+``` text
+GENERATE_SENTENCE_BATCH  그 세션의 language          (role별 replenish이고 세션 범위에서 돈다)
+GENERATE_REVIEW_CONTEXT  learning_item.language      (파생이 아니라 enqueue가 읽어 넣는다)
+EXPLAIN_ITEM             sentence.language           (같다)
+```
+
+-   **`GENERATE_SENTENCE_BATCH`의 `idempotency_key`에만 `{language}`를 넣는다.** 키가
+    `(user_id, role, 날짜)`뿐이면 같은 날 일본어와 영어의 같은 role replenish 중 **뒤에 온 쪽이
+    조용히 사라진다**(`ON CONFLICT DO NOTHING`). 그러면 한 언어가 하루 종일 보충되지 않는다.
+-   **나머지 둘은 키를 바꾸지 않는다.** `learning_item_id`와 `sentence_item_id`가 이미 언어를
+    유일하게 결정하므로 `{language}`를 더해도 충돌 집합이 달라지지 않는다. 바꾸면 기존 키 형식과
+    새 형식이 공존해 같은 대상에 job이 둘 생긴다.
+-   **payload에 `language`를 넣지 않는다.** 컬럼으로 있다. 같은 값을 두 곳에 두지 않는다.
+-   **한 job의 target item은 전부 같은 언어다.** `GENERATE_SENTENCE_BATCH`의 대상 선정이 세션
+    언어 범위에서 돌기 때문이다(`08_LLM_SPEC.md`의 `GENERATE_SENTENCE_BATCH 대상 선정`,
+    `06_LEARNING_ENGINE.md`의 `언어 범위`).
 
 -   `{YYYY-MM-DD}`는 **UTC 날짜**다. 사용자 local day가 아니다. 이 창은
     사용자에게 보이는 경계가 아니라 생성 비용 억제 장치이고, 같은 이유로
@@ -221,6 +243,10 @@ worker가 생성한 문장은 **다음 materialization 실행에서** candidate�
 worker는 하루 token/request ceiling을 넘으면 신규 generation을 중단하고
 기존 pool을 사용한다. ceiling에 도달해도 학습 세션은 계속 진행되며,
 review/reinforcement 중심의 저하 모드로 동작한다.
+
+**한도는 언어로 나누지 않는다(MVP-03).** 계정 전체에 하나이고 UTC 일 경계로 판정한다. 언어별
+한도를 두면 한쪽이 남고 한쪽이 막히는 상태를 운영자가 관리해야 하고, 두 한도의 합과 실제
+지출의 관계가 불투명해진다. 한도에 걸리면 **두 언어가 함께 멈춘다.**
 
 ### usage 기록과 일 경계 (MVP 확정)
 

@@ -4,7 +4,9 @@
 
 -   Anonymous: Public Demo only, private mastery/history 접근 금지, paid
     LLM call 금지. MVP-02에서 anonymous가 쓰는 화면은 **공개 화면 셋(선택 홈, Public Demo,
-    가나 학습)**이며 셋 모두 아래 `Public Demo 구조`를 따른다.
+    가나 학습)**이며 셋 모두 아래 `Public Demo 구조`를 따른다. **MVP-03에서 여섯이 되었다**
+    (언어 선택 홈, 일본어 홈, 영어 홈, 일본어 demo, 영어 demo, 가나 학습). 규칙은 같다
+    (불변식 28).
 -   Authenticated: 실제 학습 시스템.
 
 ## Public Demo 구조 (MVP 확정)
@@ -33,9 +35,27 @@ Paid LLM call      = structurally impossible
 Private DB access  = structurally impossible
 ```
 
-### 공개 화면 셋으로 확장 (MVP-02 확정)
+### 공개 화면 셋으로 확장 (MVP-02 확정) --- MVP-03에서 여섯
 
 위 구조를 **선택 홈, Public Demo, 가나 학습**에 똑같이 적용한다.
+
+**MVP-03: 화면이 여섯이 되었고 규칙은 한 글자도 바뀌지 않는다**(불변식 28). 늘어난 것은 route
+문자열과 fixture뿐이다.
+
+``` text
+#/           언어 선택 홈     정적
+#/ja         일본어 홈        정적
+#/en         영어 홈          정적
+#/ja/demo    일본어 demo      동적 import
+#/en/demo    영어 demo        동적 import
+#/ja/kana    가나 학습        동적 import
+```
+
+-   아래 `모듈 경계`의 `home/ demo/ kana/`는 디렉터리 기준이므로 화면이 늘어도 검사 대상이
+    자동으로 따라온다. **진입 모듈 이름을 테스트에 적지 않는다**는 기존 규칙 그대로다.
+-   **소리 재생이 이 구조를 깨지 않는다.** 영어 demo에도 재생 버튼이 있지만 브라우저 내장
+    `speechSynthesis`의 `localService` 음성만 쓰므로 어떤 origin으로도 요청이 나가지 않는다
+    (아래 `소리 재생의 경계 (MVP-03 확정)`, 불변식 24).
 
 -   세 화면은 **서버 요청 0건**이다(불변식 13).
 -   세 화면의 코드는 API 모듈(`frontend/src/api.ts`, `endpoints.ts`, `env.ts`)을
@@ -45,6 +65,7 @@ Private DB access  = structurally impossible
     때 `GET /api/auth/me`를 부르지 않는다. 로그인 진입이 불러오는 코드는 공개 화면의 import
     그래프 밖에 있다(`mvp-01-core/03_UI_UX_SPEC.md`의 `상단바`).
 -   가나 학습은 서버 쪽 대응물이 없다. 가나 데이터는 frontend 정적 데이터이고 DB·API에 없다.
+    가나 학습은 **일본어 전용**이다. 영어 쪽에 대응 화면을 만들지 않는다(불변식 23).
 -   demo fixture는 `seed/`에서 스크립트로만 만든 **공개 정적 데이터**다. private user data가 들어갈
     경로가 없다(`mvp-01-core/03_UI_UX_SPEC.md`의 `Demo`).
 -   **"서버 요청 0건"의 서버는 API origin이다.** 공개 route에 들어갈 때 frontend origin에서 청크·아이콘·
@@ -58,6 +79,8 @@ Private DB access  = structurally impossible
 frontend/src/main.ts                 부팅. fetchMe가 없다. 로그인 영역 동적 import가 여기 한 곳에만 있다
 frontend/src/private.ts              로그인 영역. fetchMe와 api.ts·endpoints.ts·env.ts는 여기서부터만 닿는다
 frontend/src/home/ demo/ kana/       공개 화면. API 모듈과 private.ts에 닿지 않는다
+frontend/src/ui/speech.ts            소리 재생 (MVP-03). 공개 화면과 로그인 영역 양쪽에서 쓴다.
+                                     API 모듈에 닿지 않으므로 공개 그래프에 있어도 된다
 ```
 
 -   **불변식 14는 아래 격리 검사와 런타임 단정으로 지킨다.** `fetchMe`를 부를 수 있는 모듈은 `private.ts` 그래프
@@ -118,6 +141,7 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
                      - 네트워크 원시 API fetch, XMLHttpRequest, navigator.sendBeacon, WebSocket, EventSource (api.ts 밖)
                      - new Worker / new SharedWorker
                      - eval, Function 생성자, 첫 인자가 함수가 아닌 setTimeout / setInterval, require()
+                     - speechSynthesis, SpeechSynthesisUtterance (ui/speech.ts 밖)   MVP-03
                      - document.createElement의 인자가 문자열 리터럴이 아님, 또는 'script' 리터럴
                        (document.createElementNS의 태그 인자도 같다)
                      - HTML 삽입: innerHTML, outerHTML, insertAdjacentHTML, document.write, document.writeln,
@@ -133,7 +157,8 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
                        (window.window.fetch, top.fetch), document.defaultView를 거친 접근
                      (위 보강 항목: Wave 2 보완 결정, 2026-09-13)
 (e) 빌드 산출물      현재 소스로 빌드한 entry 청크에 API base URL 문자열이 없다. 어떤 청크에는 있다(양성 대조군)
-(f) 브라우저 e2e     API origin에 아무도 listen하지 않는 구성에서 '', '#/demo', '#/kana'를 열고 조작해도
+(f) 브라우저 e2e     API origin에 아무도 listen하지 않는 구성에서 공개 route 전부(MVP-03: '', '#/ja',
+                     '#/en', '#/ja/demo', '#/en/demo', '#/ja/kana')를 열고 조작해도
                      frontend origin 밖으로 나가는 요청 0건 (API origin과 제3자 origin 모두).
                      상단바 로그인을 누르면 GET /api/auth/me가 1건 나간다
 양성 대조군          private.ts 그래프에 endpoints.ts가 있다. (d)의 판정 함수가 합성 소스의 조합 import,
@@ -147,7 +172,8 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
     검사가 동적 import를 놓치던 공백이 닫힌다.
 -   **(e)는 번들러 설정**(청크 합치기 옵션 등)이 API 코드를 entry 청크로 합치는 경우를 본다. 소스 그래프가
     보지 못하는 부분이다.
--   정적 검사와 함께 **런타임 단정**을 둔다. `main.ts`를 `''`, `'#/'`, `'#/demo'`, `'#/kana'`, `'#/kana/<하위>'`,
+-   정적 검사와 함께 **런타임 단정**을 둔다. `main.ts`를 `''`, `'#/'`, `'#/ja'`, `'#/en'`, `'#/ja/demo'`,
+    `'#/en/demo'`, `'#/ja/kana'`, `'#/ja/kana/<하위>'`, 옛 경로 `'#/demo'`·`'#/kana'`,
     모르는 hash로 부팅하고 **가짜 타이머를 충분히 진행한 뒤에도** 던지는 `fetch` 스텁이 불리지 않는다. 상단바
     `로그인`을 누르면 정확히 1회 불린다. `fetchMe` 대기 중 화면을 떠나면 늦게 온 응답 뒤에 다음 요청이 나가지
     않는다.
@@ -161,26 +187,35 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
     (`location.href =`, `location.assign`, `location.replace`, `window.open`, `a.href =`)에는 고정 route 상수만 쓴다.
     DOM은 `textContent`와 요소 생성으로만 만든다. 위 (d)가 AST로 검사한다. 학습 콘텐츠·fixture·서버 응답은 모두
     텍스트로만 들어간다.
--   **URL에서 온 값(hash, `#/kana` 하위 경로 등)은 고정 허용 목록과 비교만 하고 화면에 그대로 출력하지 않는다.**
+-   **URL에서 온 값(hash, `#/ja/kana` 하위 경로 등)은 고정 허용 목록과 비교만 하고 화면에 그대로 출력하지 않는다.**
     모르는 값은 기본 화면으로 보낸다.
 -   **CSP(Content-Security-Policy) 도입은 MVP-02 범위 밖이다.** API origin을 코드에 하드코딩하지 않고 정적 헤더에
     주입하는 설계가 먼저 필요하다. `updates/backlog.md`에 기록했다. 그때까지 위 AST 검사가 스크립트 주입 경로를
     코드 수준에서 막는다.
 -   결정 배경과 버린 대안은 ADR-022다.
 
-## localStorage 사용 범위 (MVP-02 확정)
+## localStorage 사용 범위 (MVP-02 확정) --- MVP-03에서 key 네 개
 
 브라우저 저장소 사용의 canonical 정의다(불변식 18). frontend가 브라우저에 남기는 것은 아래 세
-용도뿐이다.
+용도뿐이고, **MVP-03에서 demo 진도 key가 언어별로 갈려 key가 넷이 되었다.** 용도는 늘지 않았다.
 
 ``` text
 key              용도           저장하는 것                                       값 형식을 정하는 곳
 nc.furigana.v1   후리가나 설정  {"on": boolean}                                   frontend/src/ui/furigana.ts
+                 (일본어 전용)
 nc.kana.v1       가나 진도      글자·단어별 맞음/틀림 수, 전체 마지막 학습 시각     frontend/src/kana/
-nc.demo.v1       demo 진도      fixture 식별자, 현재 위치, 표현별 자기평가,         frontend/src/demo/
-                                다시 보기 대기열, 본 문장 수, probe로 물은 표현,
-                                다시 보기를 마친 문장
+                 (일본어 전용)
+nc.demo.ja.v1    일본어 demo    fixture 식별자, 현재 위치, 표현별 자기평가,         frontend/src/demo/
+nc.demo.en.v1    영어 demo      다시 보기 대기열, 본 문장 수, probe로 물은 표현,
+                 (값 형식 동일)  다시 보기를 마친 문장
 ```
+
+-   **`nc.demo.v1`은 `nc.demo.ja.v1`로 개명했고 옛 값을 옮기지 않는다.** 형식을 호환되지 않게
+    바꿀 때의 기존 규칙과 같다(아래 `key 이름은 네임스페이스`). 지우지도 않는다 --- 지우는 코드를
+    두면 `local-store.ts`가 `LOCAL_STORE_KEYS` 밖의 key를 다루게 되고 그 성질을 AST 검사가 단정한다.
+-   **두 demo key의 값 형식은 같다.** 한 `isValid` 구현을 fixture만 바꿔 재사용한다.
+-   **소리 재생은 아무것도 저장하지 않는다**(불변식 25). 재생 여부·횟수·마지막 재생 시각을 남기지
+    않는다.
 
 demo 진도 값의 키는 다음과 같다(Wave 3 보완 결정, 2026-09-13). 다른 키는 없다.
 
@@ -200,7 +235,9 @@ reviewed      다시 보기로 이미 보여준 문장 순번의 목록 (한 문
 -   **localStorage 접근은 `frontend/src/local-store.ts` 한 모듈에만 있다.** 그 모듈이 위 세 key만 다룬다.
 
     ``` ts
-    export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.v1'] as const
+    export const LOCAL_STORE_KEYS = [
+      'nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1', 'nc.demo.en.v1',
+    ] as const
     export type LocalSlot<T> = {
       read: () => T | undefined   // 없거나 읽을 수 없거나 JSON이 아니거나 isValid가 거르면 undefined. 던지지 않는다
       write: (value: T) => void   // isValid를 통과한 값만 메모리에 쓰고 저장을 시도한다. 던지지 않는다
@@ -213,8 +250,12 @@ reviewed      다시 보기로 이미 보여준 문장 순번의 목록 (한 문
     ``` text
     slot 소유   nc.furigana.v1 -> frontend/src/ui/furigana.ts
                 nc.kana.v1     -> frontend/src/kana/ 한 모듈
-                nc.demo.v1     -> frontend/src/demo/ 한 모듈
+                nc.demo.ja.v1  -> frontend/src/demo/ 한 모듈 (두 key를 이 모듈이 소유한다)
+                nc.demo.en.v1  -> 같은 모듈
     ```
+
+    `localSlot` 호출은 **key마다 정확히 한 번**이다. demo 모듈이 두 번 부르는 것은 key가 둘이기
+    때문이며 한 key를 두 번 부르는 것이 아니다.
 
     임의 key·임의 값을 쓰는 함수는 없다. **`localSlot` 호출은 key마다 정확히 한 번이고 위 소유 위치에만 있다.**
     페이지가 살아 있는 동안은 메모리 Map이 기준값이다. 저장이 안 되는 브라우저에서도 그 페이지 안에서는 진도가
@@ -236,6 +277,7 @@ reviewed      다시 보기로 이미 보여준 문장 순번의 목록 (한 문
     ```
 
 -   **로그인 영역(`private.ts` 그래프) 안의 `localSlot` 호출은 `nc.furigana.v1` 하나뿐이다.** AST로 확인한다.
+    두 demo key는 공개 화면 쪽에만 있다.
 -   **key 이름은 네임스페이스 `nc.`와 끝의 형식 버전이다.** 형식을 호환되지 않게 바꾸면 버전을 올리고
     (`nc.demo.v2`) 옛 key는 옮기지 않는다. fixture가 바뀐 경우는 key 버전이 아니라 값 안의 fixture
     식별자로 판정한다.
@@ -256,7 +298,8 @@ reviewed      다시 보기로 이미 보여준 문장 순번의 목록 (한 문
     (`spec/mvp-02-onboarding/00_SCOPE.md`).
 -   민감도: 세 값은 공개 정적 데이터 위의 표시 설정과 진도뿐이다. 같은 origin의 스크립트가 읽어도
     private data나 인증 수단이 드러나지 않는다. 그래서 위 "넣지 않는 것"이 이 결론의 전제다.
--   **접근 범위 검사(AST):** `localStorage` 식별자가 `frontend/src/local-store.ts`에만 나온다. 위 금지 저장소가
+-   **접근 범위 검사(AST):** `localStorage` 식별자가 `frontend/src/local-store.ts`에만 나오고,
+    `speechSynthesis`·`SpeechSynthesisUtterance` 식별자가 `frontend/src/ui/speech.ts`에만 나온다. 위 금지 저장소가
     `frontend/src/`에 없고 history state 인자가 `null`뿐이다. **계산된 속성 접근을 막는다:** `globalThis`,
     `window`, `self`, `document`, `navigator`, `history`, `location`에 대한 `[...]` 접근은 금지이고, 문자열 리터럴
     안의 `Storage`, `cookie`, `indexedDB` 조각도 `local-store.ts` 밖에서는 위반이다(`globalThis['local' + 'Storage']`
@@ -268,6 +311,47 @@ reviewed      다시 보기로 이미 보여준 문장 순번의 목록 (한 문
 -   **한계:** localStorage는 브라우저·설치 형태마다 따로다. iOS에서 Safari와 홈 화면에 설치한 앱은 저장소를
     공유하지 않고, WebKit은 설치하지 않은 사이트의 스크립트 저장소를 일정 기간 상호작용이 없으면 지울 수
     있다. 방문자가 하루쯤 쓴다는 전제에서 받아들인다(ADR-022).
+
+## 소리 재생의 경계 (MVP-03 확정)
+
+영어 문장·예문의 소리 재생이 격리를 깨지 않는 이유의 canonical 정의다(불변식 24). 결정 배경은
+ADR-025 결정 4다.
+
+``` text
+구현        window.speechSynthesis + SpeechSynthesisUtterance  (브라우저 내장. 새 의존성 없음)
+쓰는 음성   voice.localService === true 이고 voice.lang이 'en'으로 시작하는 것만
+            그 안에서 'en-US' 우선, 없으면 목록 순서 첫 번째
+없으면      재생 버튼을 그리지 않는다 (비활성으로 두지 않는다)
+접근 모듈   frontend/src/ui/speech.ts 하나.  AST 검사가 식별자 위치를 단정한다
+서버        audio endpoint가 없다. 오디오 파일을 만들지도 저장하지도 않는다
+저장        재생에 관한 어떤 값도 localStorage에 쓰지 않는다
+전송        재생에 관한 어떤 값도 서버로 보내지 않는다 (불변식 25)
+```
+
+### 왜 `localService`인가
+
+Web Speech API의 음성 중 일부는 **브라우저가 외부 서버에 요청해서 합성한다**(Chrome의 Google
+음성 등). `SpeechSynthesisVoice.localService`가 `false`면 그 음성이다.
+
+-   불변식 13의 "서버"는 API origin이므로 네트워크 음성이 제3자 서버로 가는 것은 글자 그대로는
+    불변식 13 위반이 아니다. **그러나 격리 검사 (f)는 frontend origin 밖 요청 전부를 센다.**
+-   네트워크 음성을 허용하면 영어 demo의 e2e가 깨지거나, 깨지지 않게 하려고 검사 (f)를 느슨하게
+    고쳐야 한다. **검사를 느슨하게 고치지 않는다** --- 그 검사가 지금 격리를 지탱하고 있고,
+    한 번 구멍을 내면 그 구멍으로 무엇이 더 나갈 수 있는지 추적할 수단이 없다.
+-   그래서 로컬 합성 음성만 쓴다. 로컬 합성은 네트워크로 나가지 않는다.
+
+### 사용자 데이터가 섞이지 않는 이유
+
+재생에 넘기는 문자열은 **화면에 이미 보이는 문장 하나**다. 공개 화면에서는 공개 정적 fixture의
+문장이고, 로그인 영역에서는 그 사용자에게 방금 제시된 학습 문장이다. 두 경우 모두 브라우저
+밖으로 나가지 않는다(`localService` 음성이므로). `login_id`, 쿠키, mastery, id 같은 값을 재생
+문자열에 넣지 않는다.
+
+### 떠날 때 멈춘다
+
+화면의 `signal`이 abort되면 `speechSynthesis.cancel()`을 부른다. 부르지 않으면 다음 화면에서
+이전 문장이 계속 들린다. 새 재생을 시작하기 전에도 항상 `cancel()`을 먼저 부른다(두 문장이
+겹쳐 나오지 않게).
 
 ## Security
 
@@ -722,6 +806,11 @@ restore 절차도 실제 검증한다.
 -   DB backup
 -   실제 secret
 -   사용자 개인 export
+-   **외부 어휘 자료 원본**(`data/wordlists/`, MVP-03). 불변식 27. secret이라서가 아니라
+    라이선스 때문이다 --- NGSL·SUBTLEX는 CC BY-SA라서 전량 복사가 저장소에 share-alike를
+    전파하고, PHaVE·PHRASE는 CC가 아닌 저자 배포본이라 제3자 재배포 허가가 없다. 커밋하는
+    것은 선별 결과(`seed/en/*.yaml`), 선별 스크립트, 출처 표기(`seed/en/README.md`)뿐이다
+    (ADR-024 결정 1)
 
 ## Portability
 

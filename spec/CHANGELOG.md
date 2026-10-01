@@ -1952,3 +1952,194 @@ Wave 3 보완 결정(2026-09-13)으로 채웠다. 위 서술 중 아래가 바�
         붙여 넣는다는 안내와 문제 해결 행을 더했다.
 
 코드·테스트와 `spec/mvp-01-core/*`, `spec/mvp-02-onboarding/*`의 조항은 변경하지 않았다.
+
+## MVP-03 English 명세 --- 2026-10-01
+
+사용자 결정(2026-10-01, `updates/U-006-english-learning.md`)에 따라 **영어 학습을 기능으로
+더하는** 명세를 반영했다. 새 앱이 아니라 기존 Learning Engine·FSRS·mastery·LLM 생성
+파이프라인을 그대로 쓰고 **학습 대상 언어를 콘텐츠의 축으로** 넣는다. 새 버전 번호를 만들지
+않았다(Spec Version v0.2 유지). 번호는 위 MVP-02 절의 [113]에 이어 붙였다.
+
+**아직 구현하지 않았다.** 이 절은 명세·ADR·요청서 변경만 기록한다. 코드·테스트·`config/`·
+`seed/`·운영 DB는 건드리지 않았다.
+
+### 신설 문서
+
+``` text
+spec/mvp-03-english/00_SCOPE.md               범위 delta, 불변식 21~28, 알려진 공백
+spec/mvp-03-english/01_ENGLISH_CONTENT.md     영어 콘텐츠 기준 (선별 절차, 태그 집합, 작성 예, 검증)
+spec/mvp-03-english/12_TEST_PLAN.md           MVP-03 테스트 delta
+spec/mvp-03-english/13_ACCEPTANCE_CRITERIA.md MVP-03 합격 기준 delta
+docs/decisions/ADR-023-multilingual-content-model.md
+docs/decisions/ADR-024-english-content-sourcing.md
+docs/decisions/ADR-025-language-home-and-speech.md
+updates/U-006-english-learning.md
+```
+
+### 사용자 결정 (2026-10-01)
+
+``` text
+D-1  언어 분리      learning_items / sentences에 language 컬럼. 계정은 하나
+D-2  첫 화면        언어 먼저 고르고 언어별 홈으로
+D-3  소리           브라우저 내장 TTS 추가
+D-4  듣기의 지위     재생 버튼만. 학습 신호가 아니다
+D-5  seed 출처      공개 빈도자료 선별 + LLM 예문·설명 생성 후 검수
+D-6  seed 규모      1차 300표현 / 문장 약 1000
+D-7  item 타입      기존 3종 유지. 성격은 topic_tags로
+D-8  컬럼 이름      sentences.japanese를 중립 이름으로 리네임
+D-9  회화 청크      공개 목록 중심 + LLM 보완
+D-10 외부 자료 수급  Claude가 직접 받는다
+```
+
+### 변경 번호
+
+-   **[114] 다언어 콘텐츠 모델** (ADR-023, `spec/03_DOMAIN_MODEL.md`, `04_DB_SPEC.md`,
+    `05_API_SPEC.md`, `06_LEARNING_ENGINE.md`, `08_LLM_SPEC.md`, `09_BACKGROUND_JOBS.md`):
+    -   `language TEXT NOT NULL CHECK (ja|en)`을 `learning_items`, `sentences`,
+        `study_sessions`, `prompt_versions`, `generation_jobs`에 둔다. **사용자별 학습 테이블
+        여덟 개에는 두지 않는다**(불변식 21) --- `learning_item_id`가 이미 언어를 결정하고,
+        같은 값을 두 곳에 두면 갈라진다. `server_default`를 두지 않는다.
+    -   `spec/03_DOMAIN_MODEL.md`에 `Language` 절을 신설했다. 언어별로 갈리는 것은 콘텐츠,
+        표시 보조(후리가나·가나는 ja, 소리는 en), 정규화·길이 상한 셋뿐이다.
+    -   `spec/01_PRODUCT_PRINCIPLES.md`에 원칙 12(One Engine, Many Languages)를 더하고 원칙
+        8을 `Real/Natural Spoken Japanese`에서 `Spoken Language`로 넓혔다.
+-   **[115] `sentences.japanese` → `sentences.text` 리네임** (ADR-023 결정 2, 네 계층):
+    DB·모델·API payload·LLM 응답 스키마·seed 파일 키가 함께 바뀐다. `avoid_japanese` →
+    `avoid_examples`, 사유 코드 `empty_japanese` → `empty_text`. **LLM 응답 스키마가 바뀌므로
+    일본어 prompt version도 한 번 올라간다**(`sentence_gen_v2` 등). `korean_translation`은
+    두 언어 모두 한국어 번역이므로 이름을 유지한다. rename은 데이터를 보존한다. 배포 중
+    구버전 frontend가 잠시 깨지는 것은 받아들이고 호환 기간을 두지 않는다.
+-   **[116] `reading` nullable** (ADR-023 결정 3): `learning_items.reading`과
+    `sentence_item_explanations.reading`의 NOT NULL을 푼다. **영어는 발음 표기를 하지 않는다**
+    (IPA는 읽을 줄 모르면 소음이고 한글 근사는 음운을 왜곡한다). 발음은 TTS가 맡는다. 언어별
+    필수 여부는 DB가 아니라 seed loader와 생성 validation(검사 14 `reading_language_mismatch`)이
+    강제한다 --- `sentence_item_explanations`에 `language` 컬럼이 없어 교차 테이블 CHECK를 걸 수
+    없기 때문이다. UI는 `null`이면 그 줄을 **그리지 않는다**(빈 줄이나 `-`가 아니다).
+-   **[117] seed 안정 키와 증분 적재** (ADR-023 결정 4, `04_DB_SPEC.md`의 `Seed Data`):
+    -   **MVP-01이 남긴 `알려진 공백 --- 추가 적재 의미론이 없다`를 해소했다.** 그것이 없으면
+        운영 DB에 영어 seed를 넣을 수 없다 --- loader가 seed 행이 있으면 적재 전체를 거부하고
+        운영 DB는 reset하지 않는다.
+    -   `learning_items.seed_id` / `sentences.seed_id` (TEXT NULL, partial UNIQUE). loader에
+        `--incremental`을 더한다: 없는 `seed_id`만 INSERT하고 **기존 행을 UPDATE하지 않는다**
+        (학습 기록이 붙은 item의 내용 변경은 적재가 아니라 콘텐츠 마이그레이션이고 그
+        의미론을 정한 적이 없다). 기존 일본어 행은 `metadata_json.seed_order`로 대조해
+        `scripts/backfill_seed_id.py`가 채우며 **대조가 어긋나면 아무것도 쓰지 않고 exit 2**다.
+    -   seed를 `seed/ja/`와 `seed/en/`으로 나눈다. `seed_order`는 언어 안에서 이어 붙인다.
+    -   `알려진 공백`의 남은 절반("seed 규모를 정하지 않았다")은 그대로 두되, **공급 수단이
+        생겨 더는 막다른 길이 아니라는 사실**을 적었다.
+-   **[118] 언어별 prompt** (ADR-023 결정 5, ADR-024 결정 5): `prompt_versions.language`를
+    더하고 유일성을 `(task_type, language, version)`, active 유일성을 `(task_type, language)`로
+    바꾼다. version 문자열에도 언어를 적는다(`sentence_gen_en_v1`) --- `provenance_json`의
+    `prompt_version`이 문자열 하나라서 그 값만으로 어느 prompt였는지 알 수 있어야 한다. 본문은
+    `backend/app/llm/prompts/<language>/`에 둔다. **한 언어의 active 행이 없으면 그 언어 job만
+    `dead_letter`다.** 영어 prompt는 구어체·축약형 허용·`nuance`의 격식 수준 명시를 추가로
+    요구한다(일본어 prompt에 없던 조항이며, 모델이 영어에서 문어체로 기울기 때문이다).
+-   **[119] 세션 언어와 409** (ADR-023 결정 7, `05_API_SPEC.md`, `06_LEARNING_ENGINE.md`,
+    `10_ERROR_HANDLING.md`): `study_sessions.language`를 두고 `POST /api/study/session`이
+    `language`를 필수로 받는다(기본값 없음, 없으면 422). 열린 세션과 다른 언어면 **409이고
+    아무것도 바꾸지 않는다** --- 조용히 닫으면 `active_seconds`와 `summary_json`이 끊긴다.
+    화면은 오류가 아니라 두 선택지를 준다. Ready Pool·materialization·mix·backlog·exploration·
+    probe·cold start가 전부 세션 언어 범위에서 돈다(불변식 22). **특히 backlog를 언어별로
+    센다** --- 합쳐 세면 한쪽을 며칠 안 한 것만으로 다른 쪽이 backlog 모드가 된다.
+    `06_LEARNING_ENGINE.md` 머리에 `언어 범위` 절을 신설했다.
+-   **[120] 일본어 전용 기능의 경계** (ADR-023 결정 6, 불변식 23): `sentences`에
+    `CHECK (language = 'ja' OR ruby_json IS NULL)`을 건다(ruby **내용** 무결성에 CHECK를 두지
+    않는다는 기존 규칙과 다른 층위다 --- 같은 행의 컬럼 하나만 본다). seed 적재·worker 저장·
+    demo fixture 생성이 영어면 분석기를 부르지 않고, `backfill_ruby.py`의 대상 조회에
+    `language = 'ja'`를 더한다(더하지 않으면 영어 문장이 전부 계산 실패로 집계되어 exit 2다).
+    **worker 부팅의 분석기 적재 검사는 유지한다** --- 같은 worker가 일본어 job도 처리한다.
+    가나 학습도 일본어 전용이다. 설명·번역은 두 언어 모두 한국어다.
+-   **[121] 영어 콘텐츠 기준** (ADR-024, `spec/mvp-03-english/01_ENGLISH_CONTENT.md`):
+    -   학습 대상은 **"아는 단어로 되어 있는데 못 알아듣는 것"**이다. 난이도의 축이 단어의
+        희귀성이 아니라 쓰임의 불투명성이다. 생산보다 **인식**이 먼저다.
+    -   자료: PHRASE List(Martinez & Schmitt 2012, 구문 표현 506개, 구어 ★★★ 314개),
+        PHaVE List(Garnier & Schmitt 2015, 구동사 150개와 의미 sense 비율), SUBTLEX-US
+        (자막 5100만 어절 빈도, CC BY-SA), NGSL / NGSL-Spoken(CC BY-SA). Oxford 3000(OUP
+        저작권), COCA 전체(유료), OpenSubtitles 원본(저작권 불명확)은 거른다.
+    -   **원본을 저장소에 커밋하지 않는다**(불변식 27). CC BY-SA는 share-alike를 전파하고
+        PHaVE·PHRASE는 제3자 재배포 허가가 없다. `data/wordlists/`를 gitignore에 더했다.
+        커밋하는 것은 선별 결과·선별 스크립트·출처 표기뿐이고, **외부 자료의 예문을 베끼지
+        않는다.**
+    -   선별 7단계(후보 → 중복 제거 → LLM 난이도 분류 → 상위 300 + LLM 보완 최소 60 →
+        **사용자 확인** → `frequency_rank` → 예문·설명 생성과 검수). 스크립트가 하는 일과
+        판단이 드는 일을 분리한다. 5단계가 유일한 사실 확인이다.
+    -   `topic_tags` 고정 집합(언어 성격 7 + 상황 9)을 정의하고 **loader가 강제한다**(DB CHECK로
+        배열 원소를 제약하면 집합을 바꿀 때마다 migration이 필요하다).
+    -   **영어 설명의 핵심 칸은 `nuance`**다 --- 격식 수준, 누가 누구에게, 교과서 영어와의 차이,
+        인식 전용 여부. 사용자가 `you good?`을 못 알아들은 이유가 단어가 아니라 이 정보였다.
+    -   **커버리지 퍼센트를 적지 않는다.** "3000개면 95%"는 Nation (2006)의 단어족 기준이고
+        표현 단위 seed에 그대로 적용되지 않는다.
+-   **[122] 언어별 정규화와 길이 상한** (ADR-024 결정 6, `08_LLM_SPEC.md`,
+    `14_CONFIGURATION.md`):
+    -   `content.max_sentence_length_chars`를 **스칼라에서 언어별 맵으로** 바꾼다(`ja: 60`,
+        `en: 120`). 60은 일본어에 맞춘 값이고 영어는 같은 내용에 2배 가까운 문자가 든다.
+        **config 로더 변경이며 production override 전체 사본을 다시 만들어야 한다**(안 하면
+        기동 실패. 시끄러운 실패라 받아들인다).
+    -   `normalized_hash` 규칙을 언어별로 나눈다. **일본어 규칙은 한 글자도 바꾸지 않는다** ---
+        바꾸면 적재된 765문장의 해시가 비교 불가능해져 duplicate 검사가 seed를 못 본다. 영어는
+        `NFKC → casefold → 연속 공백을 하나로 → strip`이다(casefold가 없으면 대소문자만 바꾼
+        중복이 계속 통과하고, 공백을 전부 지우면 단어 경계가 사라진다). 분기는
+        `normalized_sentence_text(text, language)` 한 함수 안에만 둔다. duplicate corpus도 언어로
+        좁힌다. `duplicate_similarity_threshold`는 두 언어가 같은 값이다(실측한 적이 없어 근거
+        없는 두 번째 숫자를 만들지 않는다).
+-   **[123] 언어 선택 홈과 route 중첩** (ADR-025 결정 1·2, `03_UI_UX_SPEC.md`, `01_USER_FLOW.md`,
+    `spec/04_SECURITY_AND_DATA.md`):
+    -   `#/`를 언어 선택 홈으로 바꾸고 공개 route를 한 단계 중첩한다(`#/ja/demo`, `#/en/demo`,
+        `#/ja/kana`). MVP-02의 `선택 홈`은 일본어 홈으로 내려갔다. 옛 경로 `#/demo`·`#/kana`는
+        `history.replaceState`로 영구 리다이렉트한다(이미 배포되어 북마크에 남아 있다).
+    -   **공개 화면이 셋에서 여섯으로 늘었고 규칙은 한 글자도 바뀌지 않았다**(불변식 28).
+        격리 검사 (b)가 디렉터리 기준이라 새 화면을 자동으로 포함한다.
+    -   **앱 이름 `Nihongo Context`를 바꾸지 않는다**(사용자 결정). 영어 홈에 카드가 하나뿐인
+        것을 그대로 둔다 --- 카드 하나를 채우려고 없는 기능(파닉스·발음기호 표)을 만들지 않는다.
+    -   로그인 영역에 **언어 선택 화면**을 더한다(hash route 없음). 열린 세션이 있으면 묻지
+        않고 건너뛴다(원칙 2). "마지막에 고른 언어"를 저장하지 않는다.
+    -   demo 진도 key를 `nc.demo.ja.v1` / `nc.demo.en.v1`로 가른다. **옛 `nc.demo.v1`을 옮기지도
+        지우지도 않는다**(지우는 코드를 두면 `local-store.ts`가 `LOCAL_STORE_KEYS` 밖의 key를
+        다루게 되고 그 성질을 AST 검사가 단정한다). 불변식 18이 "네 key, 세 용도"가 되었다.
+-   **[124] 소리 재생** (ADR-025 결정 4, `03_UI_UX_SPEC.md`의 신설 절 `소리 재생`,
+    `spec/04_SECURITY_AND_DATA.md`의 신설 절 `소리 재생의 경계`, `00_SCOPE.md`, `AGENTS.md`):
+    -   MVP-01의 `Audio 일체가 범위 밖이다` 다섯 줄 중 **`TTS 없음`과 `audio button 없음` 두
+        줄만** 해제한다. audio API, audio event, listening review는 그대로다.
+    -   **`voice.localService === true`인 음성만 쓴다.** Chrome의 일부 음성은 외부 서버에서
+        합성되어 격리 검사 (f)("frontend origin 밖 요청 0건")를 깬다. **검사를 느슨하게 고치지
+        않는다** --- 그 검사가 지금 격리를 지탱하고 한 번 구멍을 내면 무엇이 더 나갈 수 있는지
+        추적할 수단이 없다. 쓸 음성이 없으면 **버튼을 그리지 않는다**(비활성 버튼이 아니다).
+    -   영어 전용이다. 일본어는 범위 통제를 위해 열지 않는다(나중에 여는 것은 작은 변경이다).
+    -   **학습 신호가 아니다**(불변식 25). LearningEvent·exposure·mastery를 만들지 않고 서버로
+        보내지 않으며 브라우저에도 저장하지 않는다. `listening_mastery`는 계속 NULL이다 ---
+        들었는지, 알아들었는지 아무것도 모른다. `learning_events`의 event type 목록이 늘지
+        않는다. 재생 속도·음높이·음성 선택 UI와 자동 재생을 두지 않는다.
+    -   접근 경계: `speechSynthesis`·`SpeechSynthesisUtterance` 식별자가 `ui/speech.ts`에만
+        있다(격리 검사 (d)에 한 줄 추가). 화면 `signal` abort 시 `cancel()`을 부른다.
+-   **[125] ADR-025 초안 철회 --- 완료 화면의 언어 전환 버튼** (ADR-025 결정 2,
+    `03_UI_UX_SPEC.md`의 `언어 선택 화면`): 초안은 완료 화면에 `다른 언어로`를 두려 했으나
+    `완료 화면`이 **"새 세션 시작 버튼을 두지 않는다"**를 이미 금지하고 있다(세션 행이 부풀고
+    "한 번 더 하시죠"라는 압박이 된다 --- `Session End`의 overdue/streak punishment 금지의
+    결과다). 언어 전환 버튼은 정확히 그 버튼이므로 **초안을 철회했다.** 새 UI가 필요 없다 ---
+    세션을 끝낸 뒤 앱 이름 → 언어 선택 홈 → `로그인`을 누르면 열린 세션이 없으므로 언어 선택
+    화면이 자연히 나온다.
+-   **[126] 불변식 21\~28과 알려진 공백** (`spec/mvp-03-english/00_SCOPE.md`): MVP-01의 1\~12,
+    MVP-02의 13\~20에 이어 여덟을 더했다. 불변식 19("additive migration만")는 불변식 26에서
+    **비파괴 전체**로 넓어졌다(컬럼 추가·리네임·NOT NULL 완화·제약 교체까지. DROP은 하지
+    않는다). 결정하지 않은 것 일곱 가지를 `알려진 공백`에 사실로 적었다 --- 특히
+    **`users.starting_level`이 계정에 하나뿐이라 두 언어에 같은 값이 간다.**
+-   **[127] 문서 상위 계층** (`spec/00_PRODUCT_VISION.md`, `01_PRODUCT_PRINCIPLES.md`,
+    `02_ARCHITECTURE.md`, `05_LEARNING_SYSTEM_VISION.md`, `06_LLM_ENGINEERING_PRINCIPLES.md`,
+    `11_OBSERVABILITY.md`, `AGENTS.md`, `README.md`): 비전을 두 언어로 다시 쓰고 영어 쪽 목표를
+    명시했다(시험이 아니라 드라마·팟캐스트 이해). 아키텍처에 language 축·공개 화면 여섯·소리
+    경계·MVP-03 모듈 위치를 더했다. 관측에 `language` 차원 절을 더했다(**새 컬럼·새 로그
+    이벤트를 만들지 않는다.** 사용량 한도는 언어로 나누지 않는다 --- 계정 전체에 하나다).
+    `AGENTS.md`에 source of truth `mvp-03`, audio/TTS 부분 해제, `언어` 절을 더했다. README는
+    **영어가 아직 구현되지 않았음을 명시**하고 `다음에 만들 것` 절에 계획만 적었다.
+
+### 바꾸지 않은 것
+
+``` text
+FSRS scheduling, mastery EMA, probe 정책, context stage ladder, meaningful exposure 규칙
+mvp-01-core / mvp-02-onboarding의 모든 기준 (회귀로 유지)
+일본어 normalized_hash 규칙, 후리가나 계산 알고리즘과 algorithm_version
+duplicate_similarity_threshold, 학습 정책 config 값
+인증·쿠키·CORS·password 규칙, 회원가입 없음
+공개 저장소 규칙 (README 사이트 주소 1개 예외)
+코드, 테스트, config/default.yaml, seed/, 운영 DB
+```

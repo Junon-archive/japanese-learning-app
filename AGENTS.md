@@ -21,13 +21,30 @@
 
 **Global/Future 문서에 숫자나 아이디어가 존재한다는 이유만으로 구현하지
 않는다.** MVP 구현 source of truth는 `spec/mvp-01-core/*` +
-`spec/mvp-02-onboarding/*`(MVP-02 delta)다.
+`spec/mvp-02-onboarding/*`(MVP-02 delta) + `spec/mvp-03-english/*`(MVP-03 delta)다.
 
 특히 다음은 MVP 구현 대상이 아니다: audio/TTS, `ANALYZE_SENTENCE`,
 comprehensible-input 난이도 밴드, source mix 비율, Busy/Deadline 모드,
 register/sense/multidimensional difficulty, 형태소 분석기, embedding
 duplicate detector, golden eval harness, admin UI, export.
 
-단 **형태소 분석기는 MVP-02에서 해제되었다.** 콘텐츠를 적재·생성하는 시점에 후리가나를 계산하는
-용도에 한해 허용하며, API 요청 경로와 브라우저에서는 쓰지 않는다
-(`spec/mvp-02-onboarding/00_SCOPE.md`). 나머지 항목은 그대로 구현 대상이 아니다.
+위 목록에서 **두 가지가 부분적으로 해제되었다.** 나머지 항목은 그대로 구현 대상이 아니다.
+
+-   **형태소 분석기 (MVP-02).** 콘텐츠를 적재·생성하는 시점에 후리가나를 계산하는 용도에 한해
+    허용한다. API 요청 경로와 브라우저에서는 쓰지 않는다(`spec/mvp-02-onboarding/00_SCOPE.md`).
+    **MVP-03: `language = 'ja'` 콘텐츠에만 쓴다.** 영어용 분석기·lemmatizer는 도입하지 않는다.
+-   **audio/TTS (MVP-03).** **브라우저 내장 `speechSynthesis`의 로컬 음성으로 영어 문장·예문을
+    재생하는 것**까지만 허용한다. 서버 TTS, 오디오 파일 생성·저장, audio endpoint, 듣기 probe,
+    `listening_mastery` 갱신은 계속 범위 밖이다. 재생은 학습 신호가 아니다
+    (`spec/mvp-03-english/00_SCOPE.md`, ADR-025).
+
+## 언어 (MVP-03)
+
+학습 대상 언어는 **일본어와 영어** 둘이다.
+
+-   **언어는 콘텐츠의 축이다.** 엔진·SRS·mastery·이벤트 경로를 언어별로 복제하지 않는다
+    (`spec/03_DOMAIN_MODEL.md`의 `Language`, ADR-023).
+-   **사용자별 학습 테이블에 `language`를 두지 않는다.** `learning_item_id`가 이미 언어를
+    결정한다.
+-   **외부 어휘 자료 원본을 커밋하지 않는다.** `data/wordlists/`는 gitignore다. 커밋하는 것은
+    선별 결과(`seed/en/*.yaml`), 선별 스크립트, 출처 표기다(ADR-024).

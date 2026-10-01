@@ -62,7 +62,10 @@ content:
   translation_default_visible: false
   reading_default_visible: false
   # deterministic validation (08_LLM_SPEC.md)
-  max_sentence_length_chars: 60
+  # MVP-03: 언어별이다. 60은 일본어에 맞춘 값이고 영어는 같은 내용에 2배 가까운 문자가 든다
+  max_sentence_length_chars:
+    ja: 60
+    en: 120
   duplicate_similarity_threshold: 0.90
 
 jobs:
@@ -167,6 +170,22 @@ tappable 수 상한으로 쓴다(`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`, Wave
 선호값을 어겼다는 이유로 생성된 문장을 버리지 않는다 --- 버리면 비용을 치른
 자연스러운 문장을 숫자 하나 때문에 폐기하게 된다.
 
+### max_sentence_length_chars가 맵인 것 (MVP-03 확정)
+
+이 키는 **언어 코드를 key로 갖는 맵**이며 `ja`와 `en` 두 key가 **둘 다 있어야 한다.** 값은
+양의 정수다. 소비처는 생성 validation 3번과 요청 context의 `max_length`이고, 둘 다 그 job의
+`language`로 꺼내 쓴다(`08_LLM_SPEC.md`).
+
+-   **60은 일본어에 맞춘 값이었다.** 영어는 같은 내용에 2배 가까운 문자가 들어서 60자 상한은
+    자연스러운 구어 문장을 거의 다 떨어뜨린다. 120은 승인값이고 실사용 후 바뀐다.
+-   **스칼라에서 맵으로 바꾸는 것은 로더 변경이다.** 로더가 "누락 키와 모르는 키를 모두
+    거부"하므로 **production override 파일(전체 사본)도 함께 갱신해야 한다.** 안 하면 기동이
+    실패하고, 그것은 시끄러운 실패라 받아들인다(아래 `전체 사본이 만드는 두 가지 실패`).
+-   **언어 key를 늘리는 것은 이 파일과 `language` CHECK를 같은 커밋에서 고치는 일이다.**
+-   `duplicate_similarity_threshold`는 **맵이 아니다.** 두 언어가 같은 값을 쓴다. 영어에 다른
+    값이 필요한지 실측한 적이 없고 근거 없는 두 번째 숫자를 만들지 않는다
+    (`spec/mvp-03-english/00_SCOPE.md`의 `알려진 공백`).
+
 `jobs`의 새 키(`poll_interval_seconds`, `claim_lease_seconds`,
 `heartbeat_interval_seconds`, `heartbeat_stale_seconds`)와 `llm`의
 `sentences_per_batch` / `avoid_examples_per_item`은 모두 **양의 정수**다.
@@ -227,6 +246,13 @@ MVP-02의 demo 전용 상수(`DEMO_REVIEW_AFTER_SENTENCES`, `DEMO_PROBE_EVERY_SE
 학습의 라운드 규칙도 **이 파일에 두지 않는다.** 학습 정책값이 아니라 static fixture 체험 흐름의
 간격이고 서버가 쓰지 않는다. canonical 정의는 `03_UI_UX_SPEC.md`의 `Demo`와 `가나 학습`이다.
 
+MVP-03의 **소리 재생에 관한 값도 이 파일에 두지 않는다.** 재생 속도·음높이·음성 이름은 아예
+설정값이 아니다(기본값 고정, 음성은 런타임 탐색). 서버가 쓰지 않고 학습 정책값도 아니다.
+canonical 정의는 `03_UI_UX_SPEC.md`의 `소리 재생`과 ADR-025 결정 4다.
+
+MVP-03의 **영어 seed 선별 파라미터**(LLM 보완 항목의 최소 개수 등)도 이 파일에 두지 않는다.
+선별 스크립트의 인자이며 런타임이 읽지 않는다(`spec/mvp-03-english/01_ENGLISH_CONTENT.md`).
+
 MVP-02 후리가나 계산의 **교정 표(`CORRECTION_RULES`)와 `algorithm_version`도 이 파일에 두지 않는다.**
 실사용 후 튜닝하는 학습 정책값이 아니라 읽기의 사실 교정이며, demo fixture 일치 테스트에 묶인 알고리즘의
 일부라서 `backend/app/furigana.py`의 코드 상수로 같은 커밋에서 바뀐다. 이 파일에 두면 production의 전체
@@ -242,6 +268,9 @@ repo의 `config/default.yaml`에서 `daily_request_limit`과 `daily_token_limit`
 repo 기본값   config/default.yaml                두 한도 null
 production    NC_CONFIG_PATH -> 전체 파일 사본   default.yaml과 두 한도 줄만 다르다
 ```
+
+**MVP-03 배포에서 사본을 반드시 다시 만든다.** `max_sentence_length_chars`가 스칼라에서 맵으로
+바뀌어 옛 사본으로는 기동하지 않는다. 절차는 `infra/DEPLOY.md`가 적는다.
 
 -   **부분 override는 없다.** 로더가 누락 키와 모르는 키를 모두 거부하므로 override
     파일은 `default.yaml`의 **전체 사본**이어야 한다. 두 키만 담은 파일로는 기동하지

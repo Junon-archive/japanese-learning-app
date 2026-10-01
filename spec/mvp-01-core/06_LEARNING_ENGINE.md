@@ -1,9 +1,32 @@
 # Learning Engine
 
+## 언어 범위 (MVP-03 확정)
+
+**엔진은 언어를 모른다.** 아래 모든 규칙은 item과 sentence만 보며 언어별로 분기하지 않는다.
+언어는 **조회 범위**로만 들어온다.
+
+``` text
+모든 조회·집계의 범위 = 그 study session의 language        (04_DB_SPEC.md의 세션 언어)
+
+해당하는 것   Ready Pool, Candidate Materialization, Category Mix, Review Ordering,
+              Review Reason 선택, Backlog 판정, Probe 대상, Exploration 후보와 정렬,
+              Cold Start, Pool Fallback
+```
+
+-   **한 세션에 두 언어가 섞이지 않는다**(불변식 22). 섞으면 70/20/10이 두 언어에 걸쳐 계산되어
+    한 언어의 review backlog가 다른 언어의 신규 공급을 줄인다. 그 결합에 학습상 근거가 없다.
+-   **범위를 어디서 거는가:** `user_sentence_candidates`에 `language`가 없으므로(불변식 21)
+    `sentences`를 join해 `sentences.language = <세션 언어>`로 거른다. `learning_item` 기준
+    조회는 `learning_items.language`로 거른다. denormalize하지 않는 이유는 ADR-023 결정 1에 있다.
+-   **사용자별 상태 테이블은 거를 필요가 없다.** `user_mastery` 등은 `learning_item_id`로
+    조인되므로 item 쪽 필터가 이미 범위를 정한다.
+-   **`difficulty_label` ladder와 `frequency_rank`는 언어를 넘어 비교하지 않는다.** 범위가 세션
+    언어 안이라 비교할 일이 없다. 두 언어의 `frequency_rank`는 각자의 목록 안 순위다.
+
 ## Inputs
 
 due FSRS, exposure count, mastery, recent events, mix, topics, Ready
-Pool, backlog.
+Pool, backlog. **전부 세션 언어 범위 안의 값이다**(위 `언어 범위`).
 
 ## Outputs
 
@@ -25,6 +48,7 @@ Sentence 자체(global content)와 사용자별 Ready Pool을 분리한다.
 
 ``` text
 Ready Pool = 해당 user의 user_sentence_candidates 중 status = ready 인 집합
+             (MVP-03: 그중 sentence의 language가 세션 언어인 것)
 ```
 
 candidate는 "이 사용자에게 지금 어떤 목적으로 보여주는가"를 가진다.
@@ -86,8 +110,8 @@ POST /api/study/session/{id}/next  선택된 category에 ready candidate가 없�
 그 사이에 materialization은 한 번만 일어난다. 순서의 canonical 정의는 이
 문서의 `Pool Fallback`이다.
 
-대상은 **요청을 보낸 인증 사용자 한 명**이다. 전체 사용자를 순회하지
-않는다. 한 번의 실행에서 `presentation_role`별로 최대
+대상은 **요청을 보낸 인증 사용자 한 명**이고 **그 세션의 언어 하나**다(MVP-03). 전체 사용자를
+순회하지 않고 다른 언어의 콘텐츠를 candidate로 만들지 않는다. 한 번의 실행에서 `presentation_role`별로 최대
 `candidate_materialization_batch_size`개까지 만든다
 (`14_CONFIGURATION.md`). 상한이 없으면 첫 세션 한 번에 seed 전체가
 candidate로 복제된다.
@@ -670,7 +694,11 @@ item 단위로 이미 보장하고, 세션 단위 budget 축소는 그 위에 �
 
 ``` text
 backlog = 현재 시점 기준 eligible due item count
+          (MVP-03: 그중 learning_item의 language가 세션 언어인 것만 센다)
 ```
+
+**영어를 쉬는 동안 쌓인 영어 복습이 일본어 세션의 비율을 바꾸지 않는다**(불변식 22). 두 언어를
+합쳐 세면 한쪽을 며칠 안 한 것만으로 다른 쪽이 backlog 모드에 들어가 신규 공급이 멈춘다.
 
 `backlog_threshold` 이상이면 configured review ratio를 높이고 new ratio를
 낮출 수 있다. threshold와 adjusted ratio는 config다.
@@ -693,6 +721,7 @@ Exploration은 희귀어 랜덤 공급이 아니라 **mastery 정보가 부족�
 다음을 모두 만족하는 `learning_item`만 exploration target이 된다.
 
 ``` text
+0. learning_items.language = 세션 언어                     (MVP-03)
 1. user_mastery 행이 없거나 comprehension_mastery IS NULL
 2. user_item_learning_state 행이 없거나
    is_active_learning_target = false
@@ -828,10 +857,16 @@ set**을 둔다.
 
 -   초급 사용자의 첫 몇 세션을 시작할 수 있게 하는 것이 목적이다.
 -   everyday high-frequency word/grammar/expression 중심.
--   정확한 개수는 제품 명세에 고정하지 않는다.
+-   일본어의 정확한 개수는 제품 명세에 고정하지 않는다. **영어 1차는 300표현 / 문장 약
+    1000이다**(`spec/mvp-03-english/01_ENGLISH_CONTENT.md`).
 
 seed data 요구사항은 `04_DB_SPEC.md`의 Seed Data 절을 따른다. 초기 세션의
 exploration 대상 선정은 위 `Exploration Item 선정` 절을 따른다.
+
+**Cold start는 언어마다 따로 일어난다(MVP-03).** 일본어를 두 달 쓴 사용자도 영어 첫 세션에서는
+`user_item_learning_state` 행이 하나도 없어 exploration만 나온다. `starting_level`은 계정에
+하나뿐이라 두 언어에 같은 값이 쓰인다 --- 알려진 공백이다
+(`spec/mvp-03-english/00_SCOPE.md`).
 
 ## Pool Fallback
 

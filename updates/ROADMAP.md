@@ -11,6 +11,7 @@
 | U-003 | [후리가나 on/off](done/U-003-furigana.md) | 높음 | 완료 | `03_UI_UX_SPEC`, `04_DB_SPEC`, `05_API_SPEC`, `08_LLM_SPEC`, `14_CONFIGURATION` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 8b89619, 82e9794, a55ce3a, ec581a7 |
 | U-004 | [히라가나·가타카나 학습](done/U-004-kana-learning.md) | 높음 | 완료 | `00_SCOPE`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 db32fc7, 6b131ab |
 | U-005 | [demo 확장과 방문자 진도 저장](done/U-005-demo-expansion.md) | 높음 | 완료 | `01_USER_FLOW`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 1305fc2 · 직접 526a48d |
+| U-006 | [영어 학습 추가](U-006-english-learning.md) | 높음 | 명세 반영 | `spec/mvp-03-english/*`, `spec/00~06`, `spec/mvp-01-core/*` 거의 전부, ADR-023·024·025 | - |
 | - | 비밀번호 규칙과 로그인 방식 | - | 검토 후 유지 | `03_UI_UX_SPEC`의 `Login`, `05_API_SPEC`의 `Authentication` | - |
 | - | README 스크린샷 | - | 보류 | `README.md`(U-002) | - |
 
@@ -24,6 +25,30 @@
 -   **비밀번호 규칙과 로그인 방식:** 검토했고 바꾸지 않는다. 로그인 폼, 쿠키, 401 단일 문구,
     password 규칙(16 code point)은 그대로다. 회원가입·비밀번호 재설정·소셜 로그인은 계속 없다.
 -   **README 스크린샷:** U-002에서 넣지 않는다. 나중에 넣을 자리로 이 행을 남긴다.
+-   **앱 이름(U-006):** 영어가 더해져도 `Nihongo Context`를 바꾸지 않는다. 사용자 결정
+    (2026-10-01). PWA manifest, 상단바, README, Workers 이름, 저장소 이름 전부 그대로다.
+-   **외부 어휘 자료(U-006):** 원본을 저장소에 커밋하지 않는다. `data/wordlists/`는
+    gitignore이고 커밋하는 것은 선별 결과·선별 스크립트·출처 표기다(ADR-024 결정 1).
+
+## MVP-03 진행 순서 (U-006)
+
+| Wave | 방식 | 내용 |
+|---|---|---|
+| 0 | 직렬, main | **(완료)** 외부 자료 확보, 결정 수집, ADR-023·024·025, `spec/mvp-03-english/` 신설, 기존 명세 제자리 수정, 요청서 U-006 |
+| 1 | 직렬, main | DB migration(리네임·`language`·`seed_id`·제약)과 모델 |
+| 2 | 직렬, main | 리네임 전파 --- 모델·API·LLM 스키마·seed 파일·프론트·테스트 |
+| 3 | 병렬 레인 | `engine-lang` · `seed-infra` · `prompt-lang` |
+| 4 | 직렬, main | 영어 seed 생성·선별·검수(**사용자 확인 필요**)와 `seed/en/*.yaml` 커밋 |
+| 5 | 병렬 레인 | `home-route` · `demo-en` · `speech` |
+| 6 | 직렬, main | 배포 절차 문서, README, 상태 갱신 |
+
+-   Wave 3 머지 순서: `seed-infra` → `prompt-lang` → `engine-lang`
+-   Wave 5 머지 순서: `home-route` → `demo-en` → `speech`
+-   **Wave 1\~2는 쪼개지 않는다.** 리네임이 끝나기 전에 레인을 열면 모든 레인이 같은 파일에서
+    충돌한다.
+-   배포는 Wave 6 뒤에 사용자가 한다. 운영 적용 순서가 있다: schema migration →
+    `backfill_seed_id` → prompt 등록 → 영어 seed 증분 적재 → config override 사본 재작성 →
+    API·worker 재시작 → frontend 배포.
 
 ## MVP-02 진행 순서
 

@@ -102,6 +102,19 @@ flowchart LR
 -   이 값은 서버로 보내지 않아요.
 -   화면 파일은 일반 웹사이트처럼 정적 호스팅을 거쳐 받아요.
 
+## 다음에 만들 것
+
+**영어 학습을 기능으로 더해요.** 지금은 명세만 쓴 상태이고 화면에는 아직 없어요.
+
+-   첫 화면에서 일본어와 영어 중에 골라요.
+-   영어는 시험 어휘가 아니라 **드라마와 대화에서 실제로 쓰는 표현**을 다뤄요.
+    아는 단어인데 안 들리는 것들이요.
+-   학습 방식은 일본어와 같아요. 같은 반복 학습 엔진을 써요.
+-   영어 문장은 브라우저가 읽어 줄 수 있어요. 소리는 브라우저 안에서만 만들어요.
+
+범위와 하지 않을 것은 [`spec/mvp-03-english/00_SCOPE.md`](spec/mvp-03-english/00_SCOPE.md)에
+있어요.
+
 ## 개발자용
 
 ### 로컬 실행
@@ -144,16 +157,18 @@ make demo-fixture ARGS=--check     # 커밋된 체험 문장과 같은지만 확
 ### 문서 지도
 
 명세 버전은 v0.2예요.
-지금 마일스톤은 MVP-02 Onboarding이에요.
-MVP-02는 MVP-01 Core Learning 위에 더하는 차이(delta)예요.
+배포되어 있는 것은 MVP-02 Onboarding까지예요.
+**지금은 MVP-03 English의 명세 단계예요. 영어 학습은 아직 만들지 않았어요.**
+각 마일스톤은 앞 마일스톤 위에 더하는 차이(delta)예요.
 
 -   [`spec/00~06`](spec/): 오래 유지할 제품·학습·기술 원칙
--   [`spec/mvp-01-core/`](spec/mvp-01-core/): 현재 구현 범위. MVP-02 규칙도 제자리에서 반영했어요
+-   [`spec/mvp-01-core/`](spec/mvp-01-core/): 현재 구현 범위. MVP-02·MVP-03 규칙도 제자리에서 반영했어요
 -   [`spec/mvp-02-onboarding/`](spec/mvp-02-onboarding/): MVP-02 범위 delta, 테스트 계획, 합격 기준
+-   [`spec/mvp-03-english/`](spec/mvp-03-english/): MVP-03 범위 delta, 영어 콘텐츠 기준, 테스트 계획, 합격 기준
 -   [`spec/future/`](spec/future/): 지금 구현하지 않지만 보존할 장기 설계
 -   [`spec/reference/ui/`](spec/reference/ui/): 시각·인터랙션 reference
 -   [`spec/CHANGELOG.md`](spec/CHANGELOG.md): 명세 변경 기록
--   [`docs/decisions/`](docs/decisions/): 되돌리기 비싼 결정(ADR-001~022)
+-   [`docs/decisions/`](docs/decisions/): 되돌리기 비싼 결정(ADR-001~025)
 -   [`AGENTS.md`](AGENTS.md): 구현 에이전트 규칙
 -   [`seed/README.md`](seed/README.md): starter seed 형식과 적재
 -   [`infra/DEPLOY.md`](infra/DEPLOY.md): 운영 배포 문서
@@ -164,7 +179,7 @@ MVP-02는 MVP-01 Core Learning 위에 더하는 차이(delta)예요.
 
 ``` text
 MVP 구현 source of truth:
-    spec/mvp-01-core/* + spec/mvp-02-onboarding/* (delta)
+    spec/mvp-01-core/* + spec/mvp-02-onboarding/* + spec/mvp-03-english/* (delta)
 
 Global 문서 (spec/00~06):
     제품/기술 제약을 주지만 MVP Scope를 넓히지 않아요.
@@ -175,7 +190,7 @@ Future (spec/future/*):
 
 충돌하면 이 순서를 따라요.
 
-1.  `spec/mvp-01-core/*` + `spec/mvp-02-onboarding/*`(delta)의 승인된 기능/상태 규칙
+1.  `spec/mvp-01-core/*` + `spec/mvp-02-onboarding/*` + `spec/mvp-03-english/*`(delta)의 승인된 기능/상태 규칙
 2.  Global principles (`spec/00~06`)
 3.  UI reference (`spec/reference/ui/`)
 4.  구현 편의

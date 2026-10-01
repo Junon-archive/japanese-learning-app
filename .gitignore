@@ -30,6 +30,9 @@ data/backups/*
 data/pgdata/
 # pytest용 pgserver data 디렉터리 (ADR-002). 세션 간 재사용하므로 고정 경로다.
 data/pgtest/
+# 외부 어휘 빈도 자료 (MVP-03 영어). 원본 목록은 저장소에 커밋하지 않는다.
+# 선별 결과만 seed/에 우리 형식으로 커밋한다.
+data/wordlists/
 
 # Working notes (구현 지시서 §9)
 temp/

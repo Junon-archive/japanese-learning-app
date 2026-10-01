@@ -3,6 +3,10 @@
 MVP tasks: - `GENERATE_SENTENCE_BATCH` - `EXPLAIN_ITEM` (background
 repair job 전용) - `GENERATE_REVIEW_CONTEXT`
 
+**MVP-03: task 이름은 언어와 무관하게 셋 그대로다.** 언어는 `prompt_versions.language`와
+`generation_jobs.language`가 들고, worker는 `(job_type, language)`로 prompt를 고른다. task_type에
+언어별 값을 더하지 않는다(ADR-023 결정 5).
+
 이 세 이름은 `generation_jobs.job_type` 값과 그대로 같다. 허용값 집합의
 canonical 정의는 `04_DB_SPEC.md`의 `generation_jobs`에 있다.
 
@@ -53,6 +57,9 @@ GENERATE_REVIEW_CONTEXT  -> worker only
 EXPLAIN_ITEM             -> worker only (missing explanation repair job)
 ```
 
+**한 job의 target item은 전부 같은 언어다**(MVP-03). enqueue 쪽이 보장하며 job에 `language`가
+컬럼으로 있다(`04_DB_SPEC.md`의 `generation_jobs`의 `language`).
+
 `GENERATE_SENTENCE_BATCH`는 가능한 한 한 번의 structured output으로
 다음까지 생성한다.
 
@@ -74,14 +81,18 @@ contextual explanations
 
 ``` text
 어떤 client 코드를 쓰는가    환경변수 LLM_PROVIDER = openai  (기본값 없음)
-어떤 모델에 무엇을 보내는가  prompt_versions 행 (task_type, version, provider, model)
+어떤 모델에 무엇을 보내는가  prompt_versions 행 (task_type, language, version, provider, model)
+어떤 prompt 본문을 쓰는가    backend/app/llm/prompts/<language>/            MVP-03
 ```
 
 -   **모델명과 provider 이름을 코드나 config YAML에 고정하지 않는다**
-    (원칙 8). worker는 job의 `job_type`으로 `prompt_versions`에서
+    (원칙 8). worker는 job의 **`(job_type, language)`**로 `prompt_versions`에서
     `active = true`인 행 하나를 읽고 그 행의 `model`을 요청에 쓴다. 행이
     없으면 재시도해도 결과가 같으므로 그 job은 `dead_letter`다
-    (`09_BACKGROUND_JOBS.md`의 `failed와 dead_letter의 경계`).
+    (`09_BACKGROUND_JOBS.md`의 `failed와 dead_letter의 경계`). **한 언어의 active 행이 없으면
+    그 언어의 job만 막힌다.** 다른 언어는 영향받지 않는다.
+-   **언어별로 다른 모델을 쓸 수 있다.** `prompt_versions` 행이 언어별이므로 `model`도 행마다
+    다를 수 있다. 쓸지 말지는 운영 판단이고 명세가 정하지 않는다.
 -   `LLM_API_KEY`는 **worker 프로세스에만** 주입한다. API 프로세스는
     provider client를 만들지 않으므로 키를 읽지 않는다. 두 환경변수의
     canonical 정의는 `spec/04_SECURITY_AND_DATA.md`의
@@ -131,7 +142,7 @@ fixture만 그 행을 만든다. 이 기록이 있어야 stub으로 만든 콘�
 {
   "sentences": [
     {
-      "japanese": "...",
+      "text": "...",
       "korean_translation": "...",
       "difficulty_label": "beginner | intermediate | advanced",
       "items": [
@@ -157,10 +168,17 @@ fixture만 그 행을 만든다. 이 기록이 있어야 stub으로 만든 콘�
 }
 ```
 
+-   **스키마는 두 언어가 같다(MVP-03).** 문장 원문 필드는 `text`이며 MVP-03에서 `japanese`를
+    리네임했다(`04_DB_SPEC.md`의 `text 리네임`). 본문이 바뀌었으므로 **일본어 prompt version도
+    한 번 올라간다.**
 -   모든 field는 스키마에서 **required**이고, `null`을 허용하는 것은
-    `explanation`(item 단위)과 `explanation.example_translation`뿐이다.
-    strict structured output은 optional field를 잘 다루지 못하므로
+    `explanation`(item 단위), `explanation.example_translation`, 그리고 **MVP-03에서 더한
+    `explanation.reading`**이다. strict structured output은 optional field를 잘 다루지 못하므로
     "없음"은 field 생략이 아니라 `null`로 표현한다.
+-   **`explanation.reading`은 `language = 'ja'`에서 non-null이고 `'en'`에서 `null`이다.**
+    영어에 발음 표기를 하지 않는다(`04_DB_SPEC.md`의 `sentence_item_explanations`). 스키마는
+    둘 다 허용하고 **아래 validation이 언어별로 강제한다** --- 스키마를 언어별로 둘로 나누면
+    같은 구조를 두 벌 관리하게 된다.
 -   **모델이 id를 만들지 않는다.** 응답에 `sentence_id`,
     `learning_item_id`, `sentence_item_id` 같은 우리 쪽 식별자가 없다.
     item 지시는 요청에 실어 보낸 불투명 라벨 `item_ref`로만 한다.
@@ -177,10 +195,11 @@ fixture만 그 행을 만든다. 이 기록이 있어야 stub으로 만든 콘�
     응답이 아니라 worker의 실행 context에서 채운다.
 -   `difficulty_label`의 허용값은 `06_LEARNING_ENGINE.md`의 difficulty
     ladder와 같은 3단계다. 다른 값은 스키마 parsing 단계에서 걸린다.
--   `spans`는 `japanese`에 대한 **Unicode code point index**이며
+-   `spans`는 `text`에 대한 **Unicode code point index**이며
     `[start_codepoint, end_codepoint)` 반열림 구간이다(`04_DB_SPEC.md`의
     `sentence_item_spans`). 불연속 표현은 span 여러 개로 표현하고
-    `span_order`는 0부터 증가한다.
+    `span_order`는 0부터 증가한다. **두 언어가 같은 규칙이다** --- 영어에서도 code point
+    index이며 공백도 한 글자로 센다.
 
 ### 요청 context
 
@@ -190,17 +209,44 @@ fixture만 그 행을 만든다. 이 기록이 있어야 stub으로 만든 콘�
 ``` text
 learner_level      users.starting_level
 target_items       [{item_ref, type, lemma, reading, default_meaning}]
-                   개수 상한은 llm.sentences_per_batch
+                   개수 상한은 llm.sentences_per_batch.  reading은 en에서 null이다
 preferred_targets  문장당 선호 target 수 = learning.preferred_new_items_per_sentence
 max_targets        문장당 상한         = learning.max_new_items_per_sentence
-max_length         content.max_sentence_length_chars
-avoid_japanese     target item이 이미 등장한 기존 문장의 japanese.
+max_length         content.max_sentence_length_chars[<job의 language>]     MVP-03: 언어별 맵
+avoid_examples     target item이 이미 등장한 기존 문장의 text.             MVP-03: 개명
                    item당 최대 llm.avoid_examples_per_item개
 ```
 
-`avoid_japanese`는 중복 생성을 줄이기 위한 힌트이고 실제 판정은 아래
+`avoid_examples`는 중복 생성을 줄이기 위한 힌트이고 실제 판정은 아래
 deterministic duplicate 검사가 한다. 사용자 식별자, `login_id`, event
-원문, mastery 수치를 프롬프트에 싣지 않는다.
+원문, mastery 수치를 프롬프트에 싣지 않는다. **언어를 프롬프트에 따로 싣지 않는다** ---
+prompt 본문 자체가 언어별이다.
+
+**`learner_level`은 계정에 하나뿐이라 두 언어에 같은 값이 간다.** 알려진 공백이다
+(`spec/mvp-03-english/00_SCOPE.md`).
+
+### 언어별 prompt 본문 (MVP-03 확정)
+
+``` text
+backend/app/llm/prompts/ja/     기존 본문을 옮겼다. 변경은 응답 필드 이름 하나(japanese -> text)
+backend/app/llm/prompts/en/     신규
+```
+
+영어 prompt가 **일본어와 다르게 요구하는 것**이다. canonical 목록은 ADR-024 결정 5이고 여기
+요약한다.
+
+``` text
+1 구어체를 쓴다. 문어·학술·시험 영어를 쓰지 않는다
+2 축약형을 피하지 않는다 (I'm, don't, gonna, wanna). 교과서처럼 풀어 쓰지 않는다
+3 nuance에 격식 수준과 누가 누구에게 쓰는가를 반드시 적는다
+4 explanation.reading 은 null이다
+5 설명·번역은 한국어다
+```
+
+-   **1·2가 일본어 prompt에 없던 조항이다.** 일본어는 `spec/01_PRODUCT_PRINCIPLES.md` 원칙 8이
+    같은 뜻을 담고 있으나, 영어는 모델이 기본적으로 문어체·시험체로 기울기 때문에 명시한다.
+-   **3이 이 제품에서 영어가 실제로 가르치는 것이다.** 사용자가 `you good?`을 못 알아들은
+    이유는 단어가 아니라 그 정보였다(`spec/mvp-03-english/01_ENGLISH_CONTENT.md`).
 
 **알려진 공백 --- 출력 토큰 상한:** provider 요청에 출력 토큰 상한을 싣는 조항이
 없고, 현재 구현도 싣지 않는다. 출력이 폭주하면 호출 1회가 모델의 최대 출력 길이까지
@@ -292,8 +338,9 @@ provider를 호출하지 않고 `completed`로 끝낸다(at-least-once 대비).
 Ready 처리 전 최소 검사 항목:
 
 1.  Structured schema parsing 성공
-2.  일본어 sentence non-empty
+2.  sentence `text`가 non-empty
 3.  configurable max sentence length 이하
+    (**MVP-03: `content.max_sentence_length_chars[<job의 language>]`**)
 4.  Korean translation 존재
 5.  target LearningItem 수가 1 이상이고
     `learning.max_new_items_per_sentence` 이하 (기본값 2,
@@ -310,6 +357,10 @@ Ready 처리 전 최소 검사 항목:
 12. simple similarity가 `content.duplicate_similarity_threshold`를
     초과하지 않음
 13. 응답의 모든 `item_ref`가 요청이 보낸 집합 안에 있음
+14. **(MVP-03) `explanation.reading`의 언어별 요구**
+    --- `language = 'ja'`이면 non-empty 문자열, `'en'`이면 `null`이어야 한다.
+    스키마는 둘 다 허용하므로(위 `Structured Output 스키마`) 강제는 여기다. 어긋나면 그 문장을
+    버린다(사유 코드 `reading_language_mismatch`)
 
 단, `near_original` 목적으로 **의도적으로 생성된 review context는 일반
 duplicate 제거와 별도로 취급한다.** 의도된 near-original 재노출을
@@ -371,25 +422,38 @@ is_tappable = true 인 item은 반드시 explanation 6 field를 가진다
 
 `sentences.normalized_hash`의 계산 규칙은 다음이 canonical이다.
 
+**규칙이 언어별이다(MVP-03).**
+
 ``` text
-normalized = NFKC(japanese) 에서 모든 Unicode whitespace 제거
-hash       = sha256(normalized.encode("utf-8")) 의 소문자 hex 64자
+ja   normalized = NFKC(text) 에서 모든 Unicode whitespace 제거          (바뀌지 않았다)
+en   normalized = NFKC(text) -> casefold -> 연속 whitespace를 공백 하나로 -> 앞뒤 strip
+공통 hash       = sha256(normalized.encode("utf-8")) 의 소문자 hex 64자
 ```
 
-이미 seed loader가 이 규칙으로 seed 문장의 해시를 채웠다. **규칙을 바꾸면
+이미 seed loader가 일본어 규칙으로 seed 문장의 해시를 채웠다. **규칙을 바꾸면
 기존 seed 행의 해시가 새 값과 비교 불가능해져 duplicate 검사가 seed를 못
-본다.** 그래서 현행 규칙을 그대로 승계하고, seed loader와 worker가 **같은
-함수 하나**를 쓴다. 대소문자·구두점·표기 흔들림을 더 접는 정규화는
-Future다.
+본다.** 그래서 **일본어 규칙은 한 글자도 바꾸지 않고** 승계하고, seed loader와 worker가 **같은
+함수 하나**를 쓴다. 함수 signature가 `normalized_sentence_text(text, language)`가 되며
+**언어 분기는 그 함수 안에만 있다**(ADR-024 결정 6).
+
+-   **영어에 casefold가 필요하다.** `Come on.`과 `come on.`은 같은 문장인데 NFKC는 대소문자를
+    접지 않는다. 접지 않으면 생성이 같은 문장을 대문자만 바꿔 계속 통과시킨다.
+-   **영어에서 공백을 전부 지우지 않는다.** 일본어는 공백을 의미 있게 쓰지 않지만 영어는 단어
+    경계다. 전부 지우면 서로 다른 문장이 같은 문자열로 접힐 수 있고 `difflib` 유사도의 의미도
+    흐려진다.
+-   **비교는 같은 언어끼리만 한다.** duplicate corpus를 세션·job의 언어로 좁힌다(아래
+    `duplicate 비교 corpus`). 언어가 다르면 애초에 같은 문장일 수 없고, 좁히면 비교량도 준다.
+-   일본어 쪽의 "대소문자·구두점·표기 흔들림을 더 접는 정규화"는 여전히 Future다.
 
 ### duplicate 비교 corpus (MVP 확정)
 
 검사 11·12번의 "최근/Ready pool"은 다음을 뜻한다.
 
 ``` text
-비교 대상 = sentences 전체 중 status != 'retired'
+비교 대상 = sentences 중 status != 'retired' 이고 language = <job의 language>
             (draft / validated / quarantined 를 모두 포함한다)
 사용자별로 자르지 않는다 --- sentences는 global content다
+언어로는 자른다 (MVP-03) --- 언어가 다르면 같은 문장일 수 없다
 ```
 
 -   **`quarantined`를 반드시 포함한다.** 빼면 사용자가 flag해서 격리한
@@ -410,7 +474,11 @@ Future다.
     (`spec/06_LLM_ENGINEERING_PRINCIPLES.md`의 `MVP 구현 의무 범위`).
 -   **한계:** 12번은 corpus 전체를 훑는 O(N) 비교다. 개인 사용 규모에서는
     충분하고, corpus가 커져 문제가 되면 그때 후보를 좁힌다. 지금 좁히는
-    규칙을 만들면 근거 없는 숫자가 하나 더 생긴다.
+    규칙을 만들면 근거 없는 숫자가 하나 더 생긴다. MVP-03의 언어 필터가 비교량을 대략 절반으로
+    줄이지만 그것이 목적은 아니다.
+-   **`duplicate_similarity_threshold`는 두 언어가 같은 값(0.90)을 쓴다.** 영어에 다른 값이
+    필요한지 실측한 적이 없고, 근거 없는 두 번째 숫자를 지금 만들지 않는다
+    (`spec/mvp-03-english/00_SCOPE.md`의 `알려진 공백`).
 
 ### 탈락한 콘텐츠의 처리 (MVP 확정)
 
@@ -433,7 +501,7 @@ failure 집계 단위다). 오른쪽은 위 검사 번호다.
 
 ``` text
 schema_parse_failed         1
-empty_japanese              2
+empty_text                  2    MVP-03: empty_japanese 에서 개명
 sentence_too_long           3
 missing_translation         4
 target_count_out_of_range   5
@@ -445,14 +513,23 @@ too_many_targets           10
 duplicate_hash             11
 duplicate_similarity       12
 unknown_item_ref           13
+reading_language_mismatch  14    MVP-03
 ```
 
-### 검증 뒤 후리가나(ruby) 계산 (MVP-02 확정)
+-   **`empty_japanese`를 `empty_text`로 개명했다.** 컬럼 리네임과 짝이다. 이 코드는 로그와
+    `generation_jobs.result_ref.rejected[].reason`에만 쓰이고 DB 제약이 아니므로 개명이
+    데이터를 깨지 않는다. 옛 이름이 남은 과거 `result_ref` 값은 그대로 둔다 --- 그 시점의 사실을
+    기록한 immutable 값이다.
+
+### 검증 뒤 후리가나(ruby) 계산 (MVP-02 확정) --- 일본어 전용 (MVP-03)
 
 통과한 문장을 저장하는 단계에서 worker가 후리가나를 계산해 `sentences.ruby_json`에 넣는다
 (`04_DB_SPEC.md`의 `ruby_json`, ADR-021). **LLM이 만드는 값이 아니다.**
 
--   **위치:** 검증(위 13항목)이 끝난 뒤, 문장 행을 만드는 직전이다. `GENERATE_REVIEW_CONTEXT`도 같은 저장
+**`language = 'ja'`인 job에서만 한다(불변식 23).** 영어 job은 이 단계 전체를 건너뛰고 분석기를
+부르지 않는다. 영어 문장의 `ruby_json`은 NULL이고 DB CHECK가 그것을 강제한다.
+
+-   **위치:** 검증(위 14항목)이 끝난 뒤, 문장 행을 만드는 직전이다. `GENERATE_REVIEW_CONTEXT`도 같은 저장
     경로를 지나므로 포함된다. `EXPLAIN_ITEM`은 문장·span을 바꾸지 않으므로 다시 계산하지 않는다.
 -   **입력:** 원문, 그 문장의 tappable item span, 같은 payload의 `explanation.reading`. 계산은 형태소
     분석기(SudachiPy + SudachiDict-core)와 결정적 정렬·교정 규칙으로 하고 provider를 부르지 않는다.
@@ -469,6 +546,9 @@ unknown_item_ref           13
 -   **worker 부팅 검사:** worker 진입점(`scripts/run_worker.py`)이 부팅에서 분석기를 적재하고 실패를 잡지
     않는다. 분석기나 사전이 이미지에 없으면 worker가 뜨지 않는다(fail-closed). `LLM_PROVIDER` 검사와 같은
     판단이다. worker가 뜨지 않는 동안 학습 세션은 Ready Pool로 계속된다.
+    **MVP-03에서도 이 검사를 유지한다** --- 같은 worker가 일본어 job도 처리하므로, 영어 job만
+    있다고 해서 분석기 없이 뜨게 하면 일본어 job이 런타임에 실패한다. 검사를 언어로 나누지
+    않는다.
 -   분석기 계산은 provider 호출이 아니고 문장당 짧은 CPU 작업이므로 저장 트랜잭션 안에서 해도 "provider
     호출 중 트랜잭션 금지"(ADR-015)와 부딪히지 않는다.
 

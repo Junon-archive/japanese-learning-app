@@ -1,5 +1,9 @@
 # Acceptance Criteria
 
+MVP-02가 더한 기준은 `spec/mvp-02-onboarding/13_ACCEPTANCE_CRITERIA.md`, MVP-03이 더한 기준은
+`spec/mvp-03-english/13_ACCEPTANCE_CRITERIA.md`에 있다. **이 문서의 기준은 두 마일스톤 뒤에도
+모두 유지한다**(회귀). MVP-03은 두 언어 모두에서 아래 기준이 성립할 것을 요구한다.
+
 -   모바일에서 세션 시작/진행/종료 가능
 -   item tap 설명 즉시 표시
 -   reading 표시, 번역 reveal

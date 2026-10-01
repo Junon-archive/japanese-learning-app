@@ -12,6 +12,7 @@ Browser는 OpenAI secret을 받지 않는다. normal tap은 live LLM에 의존�
 익명 요청을 받는 학습 API도 두지 않는다
 (`spec/04_SECURITY_AND_DATA.md`의 Public Demo 구조). 모든 학습 API는
 인증된 private user 전용이다. MVP-02에서 API를 쓰지 않는 화면은 **선택 홈, Public Demo, 가나 학습**
+(MVP-03에서 여섯: 언어 선택 홈, 일본어 홈, 영어 홈, 일본어 demo, 영어 demo, 가나 학습)
 셋이다. 가나 학습 endpoint, 후리가나 설정 endpoint, 방문자 진도 endpoint를 만들지 않는다.
 `GET /api/auth/me`는 계약이 그대로이고 부르는 시점만 바뀌었다 --- 상단바 `로그인`을 누를 때만
 부른다(`03_UI_UX_SPEC.md`의 `상단바`).
@@ -215,6 +216,44 @@ POST /api/study/session/{id}/extend    extra_session_minutes 만큼 연장
 `POST /session`은 idle timeout 이내면 기존 세션을 resume하고, 초과면 새
 세션을 만든다(`04_DB_SPEC.md`의 `study_sessions`,
 `14_CONFIGURATION.md`의 `study_session_idle_timeout_minutes`).
+
+### 세션 언어와 409 (MVP-03 확정)
+
+**한 세션은 한 언어다**(불변식 22, ADR-023 결정 7).
+
+``` text
+POST /api/study/session   body: {"language": "ja" | "en"}        필수
+GET  /api/study/session   응답에 language가 있다 (열린 세션이 없으면 null 그대로)
+```
+
+`POST /session`의 분기는 셋이다.
+
+``` text
+열린 세션 없음                      -> 그 language로 새 세션. 201
+열린 세션 있고 language가 같다       -> resume. 200
+열린 세션 있고 language가 다르다     -> 409. 아무것도 바꾸지 않는다
+```
+
+409 응답 body:
+
+``` json
+{
+  "error": "session_language_mismatch",
+  "open_session": {"id": 412, "language": "ja"}
+}
+```
+
+-   **열린 세션을 조용히 닫지 않는다.** `active_seconds`와 `summary_json`이 남는 기록이고,
+    사용자가 의도하지 않은 종료로 그 값이 끊기면 안 된다. 화면은 "일본어 학습이 진행 중이에요"를
+    보여주고, 사용자가 누르면 `POST /session/{id}/finish` 뒤 새 `POST /session`을 보낸다
+    (`03_UI_UX_SPEC.md`의 `언어 선택`).
+-   **idle timeout을 넘긴 세션은 이 분기에 닿지 않는다.** 초과면 어차피 새 세션이므로 요청한
+    언어로 만든다.
+-   **`language`가 없거나 허용값이 아니면 422다.** 기본값을 두지 않는다 --- 기본값이 있으면
+    언어를 빠뜨린 요청이 조용히 일본어 세션을 연다.
+-   409는 **열린 세션의 id와 language만** 알려준다. 그 세션의 진행 상황·문장을 싣지 않는다.
+-   `POST /session` 직후의 Candidate Materialization도 **그 세션의 language 범위**에서 돈다
+    (`06_LEARNING_ENGINE.md`).
 
 `POST /session`은 세션을 만들거나 resume한 직후
 `06_LEARNING_ENGINE.md`의 `Candidate Materialization`을 **요청 사용자
@@ -483,7 +522,7 @@ GET /api/study/session 을 한 번 다시 호출해 session payload를 갱신한
 {
   "presentation_id": 4821,
   "sentence_id": 1907,
-  "japanese": "今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。",
+  "text": "今日は研究室に行くつもりだったけど、なんとなく気が乗らなくて家にいた。",
   "render_segments": [
     {"text": "今日は", "sentence_item_id": null,
      "ruby": [{"text": "今日", "reading": "きょう"}, {"text": "は", "reading": null}]},
@@ -513,6 +552,12 @@ GET /api/study/session 을 한 번 다시 호출해 session payload를 갱신한
     반환하여 `translation_revealed` event가 의미 있게 남도록 한다.
 -   `probe`가 non-null이면 해당 presentation에 probe를 함께 표시한다.
 -   `ruby`는 MVP-02에서 더한 후리가나 표시 조각이다(아래 `render_segments[].ruby`).
+-   **`text`는 MVP-03에서 `japanese`를 리네임한 것이다**(`04_DB_SPEC.md`의 `text 리네임`).
+    payload에 `language`를 따로 싣지 않는다 --- 세션이 이미 언어를 알고 있고
+    (`GET /api/study/session`), 화면은 세션 단위로 그려진다. 같은 값을 두 곳에 두지 않는다.
+-   **영어 문장의 `ruby`는 모든 segment에서 `[]`다.** `sentences.ruby_json`이 NULL이기
+    때문이다(불변식 23). 필드를 생략하지는 않는다 --- 모양이 언어에 따라 달라지면 frontend에
+    분기가 생긴다.
 
 ### `render_segments[].ruby` (MVP-02 확정)
 
@@ -666,6 +711,10 @@ Explanation 응답은 **precomputed DB data**(`sentence_item_explanations`)를
 
 `reading`은 **문장 속 표면형의 읽기**다(위 예시에서 span `気が乗らなくて`의 읽기). 기본형 `canonical_form`의
 읽기가 아니다(`04_DB_SPEC.md`의 `sentence_item_explanations`).
+
+**`reading`은 `null`일 수 있다(MVP-03).** 영어 item은 발음 표기를 하지 않으므로 항상 `null`이다.
+**UI는 `null`이면 설명 패널에서 그 줄을 그리지 않는다** --- 빈 줄이나 `-`를 넣지 않는다
+(`03_UI_UX_SPEC.md`의 `Explanation`). 필드를 생략하지는 않는다.
 
 해당 item에 explanation이 없으면 그 문장은 애초에 Ready가 아니다
 (`08_LLM_SPEC.md`의 Ready invariant). 즉 이 endpoint는 **live LLM fallback을 하지

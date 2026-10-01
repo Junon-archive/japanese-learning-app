@@ -59,6 +59,30 @@ worker liveness            worker_heartbeats.last_heartbeat_at (05_API_SPEC.md)
 자체가 아니라 unknown token 때문일 수 있으므로, **멈춤 로그에 token이 `null`인
 job 수를 함께 싣는다.**
 
+## MVP-03 추가: language 차원
+
+위 `MVP 필수 범위`의 닫힌 집합과 `04_DB_SPEC.md`의 `result_ref 구조`는 **바꾸지 않는다.**
+metrics 전용 테이블을 만들지 않는다는 규칙도 그대로다. MVP-03이 더하는 것은 **기존 항목을
+언어로 나눠 볼 수 있다는 사실**뿐이다.
+
+``` text
+job count / tokens / cost / failure    generation_jobs.language 로 GROUP BY
+ready pool size                        user_sentence_candidates -> sentences.language 로 GROUP BY
+validation failure 사유                 로그의 language 필드
+```
+
+-   **새 컬럼·새 로그 이벤트를 만들지 않는다.** 언어는 이미 `generation_jobs.language`와
+    `sentences.language`에 있다.
+-   **worker의 구조화 로그에 `language` 필드를 싣는다.** 어느 언어의 job이 실패했는지 모르면
+    "한 언어의 `prompt_versions` active 행이 없어 그 언어만 `dead_letter`"인 상태를 구분할 수
+    없다(`08_LLM_SPEC.md`).
+-   **사용량 한도 관련 로그는 언어로 나누지 않는다.** 한도가 계정 전체에 하나다
+    (`09_BACKGROUND_JOBS.md`의 `Cost Guard`).
+-   **소리 재생은 아무 로그도 남기지 않는다**(불변식 25). 브라우저 안에서만 일어나고 서버로
+    아무것도 보내지 않는다.
+-   `ruby.*` 이벤트는 **일본어에서만** 발생한다(불변식 23). 영어 job에서 `ruby.computed`가
+    0건인 것이 정상이며, 그것을 이상 신호로 읽지 않는다.
+
 `cached tokens`는 **MVP 필수가 아니다.** 위 `MVP 필수 범위` 목록이 닫힌
 집합이고 거기에 없다. MVP는 기록하지 않으며 `usage` 구조에 키를 추가하지
 않는다(`04_DB_SPEC.md`의 `result_ref 구조`가 MVP 확정이다). 문서 맨 위

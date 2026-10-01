@@ -1,8 +1,14 @@
 # Test Plan
 
 MVP-02에서 더한 테스트(공개 화면 격리, 로그인 진입, 후리가나, 가나 학습, demo 확장,
-localStorage, 불변식 13\~20의 변이 검증)는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 있다. 이
-문서의 항목은 그대로 유지한다.
+localStorage, 불변식 13\~20의 변이 검증)는 `spec/mvp-02-onboarding/12_TEST_PLAN.md`에 있다.
+MVP-03에서 더한 테스트(다언어 모델, 세션 언어, 영어 seed와 증분 적재, 언어별 prompt·정규화,
+route 중첩, 소리 재생, 불변식 21\~28의 변이 검증)는 `spec/mvp-03-english/12_TEST_PLAN.md`에
+있다. 이 문서의 항목은 그대로 유지한다.
+
+**MVP-03의 리네임(`Sentence.japanese` → `text`, payload·LLM 스키마·seed 키·격리 route 이름)은
+이 문서의 많은 항목에 기계적 수정을 일으킨다.** 수정 목록은 `spec/mvp-03-english/12_TEST_PLAN.md`의
+`이름 변경에 따른 기존 테스트 수정`에 있고, 단언 내용은 바뀌지 않는다.
 
 ## Unit
 
