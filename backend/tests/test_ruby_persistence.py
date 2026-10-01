@@ -155,7 +155,7 @@ def test_a_generated_sentence_gets_ruby_that_next_presents(
     assert sentence.ruby_json is not None
     assert sentence.ruby_json["spans"] == EXPECTED_SPANS
     # 원문과 span 행은 payload 그대로다. ruby는 옆 컬럼이다.
-    assert sentence.japanese == JAPANESE
+    assert sentence.text == JAPANESE
     assert _span_rows(observer, sentence.id) == [(5, 8, 0)]
     computed = [r for r in caplog.records if r.getMessage() == observability.RUBY_COMPUTED]
     assert [record.__dict__["sentence_id"] for record in computed] == [sentence.id]
@@ -231,7 +231,7 @@ def test_explain_item_does_not_change_ruby(
     stored_ruby = {"spans": [[3, 4, "きみ"]], "marker": "unchanged"}
     with committed_db() as setup:
         item = factories.make_learning_item(setup, lemma=SURFACE)
-        sentence = factories.make_sentence(setup, japanese="それは君に任せる。")
+        sentence = factories.make_sentence(setup, text="それは君に任せる。")
         sentence.ruby_json = stored_ruby
         sentence_item = factories.make_sentence_item(setup, sentence, item, surface_form=SURFACE)
         factories.make_span(setup, sentence_item, start=5, end=8)
@@ -253,5 +253,5 @@ def test_explain_item_does_not_change_ruby(
     reloaded = observer.get(Sentence, sentence_id)
     assert reloaded is not None
     assert reloaded.ruby_json == stored_ruby
-    assert reloaded.japanese == "それは君に任せる。"
+    assert reloaded.text == "それは君に任せる。"
     assert _span_rows(observer, sentence_id) == [(5, 8, 0)]

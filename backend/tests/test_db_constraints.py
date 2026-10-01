@@ -32,6 +32,7 @@ from app.models.enums import (
     ContextStage,
     EventType,
     ExposureModality,
+    Language,
     LlmTaskType,
     PresentationRole,
 )
@@ -441,6 +442,7 @@ def _make_prompt_version(
 ) -> PromptVersion:
     row = PromptVersion(
         task_type=task_type,
+        language=Language.JA,
         version=version,
         provider=PROVIDER_FILLER,
         model=MODEL_FILLER,
@@ -458,20 +460,20 @@ def test_two_active_prompt_versions_for_one_task_are_rejected(db_session: Sessio
     둘이 되면 `sentences.provenance_json.prompt_version`이 어느 prompt에서 나온
     것인지 사후에 결정할 수 없다.
     """
-    _make_prompt_version(db_session, version="sentence_gen_v1", active=True)
+    _make_prompt_version(db_session, version="sentence_gen_v2", active=True)
 
     with pytest.raises(IntegrityError):
-        _make_prompt_version(db_session, version="sentence_gen_v2", active=True)
+        _make_prompt_version(db_session, version="sentence_gen_v3", active=True)
 
 
 def test_deactivating_a_version_frees_the_active_slot(db_session: Session) -> None:
     """partial인 이유. 전체 unique로 만들면 이 rollback/전환이 불가능하다."""
-    first = _make_prompt_version(db_session, version="sentence_gen_v1", active=True)
+    first = _make_prompt_version(db_session, version="sentence_gen_v2", active=True)
 
     first.active = False
     db_session.flush()
 
-    second = _make_prompt_version(db_session, version="sentence_gen_v2", active=True)
+    second = _make_prompt_version(db_session, version="sentence_gen_v3", active=True)
     assert second.id != first.id
 
 

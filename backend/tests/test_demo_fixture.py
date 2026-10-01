@@ -512,9 +512,9 @@ def test_summary_lines_are_printed(
 # --------------------------------------------------------------------------
 
 
-def _seed_sentences_by_japanese() -> dict[str, dict[str, Any]]:
+def _seed_sentences_by_text() -> dict[str, dict[str, Any]]:
     entries = yaml.safe_load((SEED_DIR / "sentences.yaml").read_text(encoding="utf-8"))
-    return {entry["japanese"]: entry for entry in entries}
+    return {entry["text"]: entry for entry in entries}
 
 
 def _seed_items() -> list[dict[str, Any]]:
@@ -530,13 +530,13 @@ def _committed(module: ModuleType) -> tuple[str, list[dict[str, Any]]]:
 
 
 def test_ruby_equals_an_independent_recomputation(fixture_script: ModuleType) -> None:
-    seeds = _seed_sentences_by_japanese()
+    seeds = _seed_sentences_by_text()
     _, data = _committed(fixture_script)
     assert data
     with_ruby = 0
     for entry in data:
         presentation = entry["presentation"]
-        seed = seeds[presentation["japanese"]]
+        seed = seeds[presentation["text"]]
         tappable = [item for item in seed["items"] if item["is_tappable"]]
         ids = presentation["tappable_items"]
         assert len(ids) == len(tappable)
@@ -560,7 +560,7 @@ def test_ruby_equals_an_independent_recomputation(fixture_script: ModuleType) ->
             for item in tappable
         ]
         computation = compute_ruby(
-            presentation["japanese"], ruby_items, now=fixture_script.RUBY_COMPUTED_AT
+            presentation["text"], ruby_items, now=fixture_script.RUBY_COMPUTED_AT
         )
         expected = [
             {
@@ -568,9 +568,7 @@ def test_ruby_equals_an_independent_recomputation(fixture_script: ModuleType) ->
                 "sentence_item_id": segment.sentence_item_id,
                 "ruby": [{"text": part.text, "reading": part.reading} for part in segment.ruby],
             }
-            for segment in build_render_segments(
-                presentation["japanese"], refs, ruby=computation.spans
-            )
+            for segment in build_render_segments(presentation["text"], refs, ruby=computation.spans)
         ]
         assert presentation["render_segments"] == expected, seed["seed_id"]
         with_ruby += any(segment["ruby"] for segment in expected)
@@ -582,7 +580,7 @@ def test_segments_follow_the_render_segments_ruby_rules(fixture_script: ModuleTy
     for entry in data:
         presentation = entry["presentation"]
         segments = presentation["render_segments"]
-        assert "".join(segment["text"] for segment in segments) == presentation["japanese"]
+        assert "".join(segment["text"] for segment in segments) == presentation["text"]
         for segment in segments:
             parts = segment["ruby"]
             if not parts:
@@ -674,7 +672,7 @@ def test_generated_file_shape(fixture_script: ModuleType) -> None:
 def test_every_sentence_translation_and_explanation_comes_from_seed(
     fixture_script: ModuleType,
 ) -> None:
-    seeds = _seed_sentences_by_japanese()
+    seeds = _seed_sentences_by_text()
     items = _seed_items()
     learning_ids = {item["seed_id"]: index + 1 for index, item in enumerate(items)}
     items_by_id = {item["seed_id"]: item for item in items}
@@ -689,7 +687,7 @@ def test_every_sentence_translation_and_explanation_comes_from_seed(
         assert presentation["probe"] is None
         assert presentation["translation_revealed"] is False
 
-        seed = seeds[presentation["japanese"]]
+        seed = seeds[presentation["text"]]
         assert entry["korean_translation"] == seed["korean_translation"]
         tappable = [item for item in seed["items"] if item["is_tappable"]]
         expected_ids = [

@@ -93,7 +93,7 @@ pytestmark = pytest.mark.integration
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = REPO_ROOT / "backend"
-SEED_DIR = REPO_ROOT / "seed"
+SEED_DIR = REPO_ROOT / "seed" / "ja"
 
 ORIGIN = "https://app.test"
 PASSWORD = "correct horse battery staple"

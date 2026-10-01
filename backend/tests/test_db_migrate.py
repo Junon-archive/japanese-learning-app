@@ -41,7 +41,7 @@ pytestmark = pytest.mark.integration
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
-SEED_DIR = REPO_ROOT / "seed"
+SEED_DIR = REPO_ROOT / "seed" / "ja"
 PG_BIN = Path(pgserver.__file__).parent / "pginstall" / "bin"
 
 BEFORE_REVISION = "0002"
@@ -96,8 +96,30 @@ def _failing_pg_bin(tmp_path: Path) -> Path:
     return bin_dir
 
 
-# migration 0003 이후가 더하는 컬럼. 명세 밖의 컬럼이 생기면 보존 검사가 실패한다.
-ADDED_COLUMNS: dict[str, tuple[str, ...]] = {"sentences": ("ruby_json",)}
+# migration 0002 이후가 더하는 컬럼(순서는 실제 ADD COLUMN 발행 순서). 명세 밖의 컬럼이
+# 생기면 보존 검사가 실패한다.
+ADDED_COLUMNS: dict[str, tuple[str, ...]] = {
+    "learning_items": ("language", "seed_id"),
+    "sentences": ("ruby_json", "language", "seed_id"),
+    "study_sessions": ("language",),
+    "prompt_versions": ("language",),
+    "generation_jobs": ("language",),
+}
+
+# `ALTER ... RENAME COLUMN`은 ordinal position을 유지한다 --- migration 0005가 리네임한
+# 컬럼은 `before_columns`의 자리에 새 이름으로 그대로 남는다.
+RENAMED: dict[tuple[str, str], str] = {("sentences", "japanese"): "text"}
+
+# migration 0005의 `LANGUAGE_TABLES`·`SEED_ID_TABLES`와 같은 테이블 집합이다(값 자체는
+# `scripts/backfill_seed_id.py`가 메우므로 여기서는 기존 행이 전부 NULL/'ja'인지만 본다).
+LANGUAGE_TABLES = (
+    "learning_items",
+    "sentences",
+    "study_sessions",
+    "prompt_versions",
+    "generation_jobs",
+)
+SEED_ID_TABLES = ("learning_items", "sentences")
 
 
 def _columns(dsn: URL) -> dict[str, tuple[str, ...]]:
@@ -196,7 +218,14 @@ def test_pending_migrations_are_backed_up_then_applied_in_production(
     assert head != BEFORE_REVISION, "0002가 head면 이 테스트는 pending을 보지 않는다"
     before_columns = _columns(dsn)
     del before_columns[ALEMBIC_VERSION_TABLE]
-    before = _contents_of_columns(dsn, before_columns)
+    # `sentences.japanese`는 0005가 `text`로 리네임하므로 업그레이드 후에는 그 이름의 컬럼이
+    # 없다. 해시 비교는 리네임되지 않은 컬럼들의 보존만 본다 --- 값 자체가 보존됐다는 증거는
+    # `test_migrations.py`(Wave 1)의 "text 값이 옛 japanese 값과 같다" 테스트가 맡는다.
+    hash_columns = {
+        table: tuple(name for name in names if (table, name) not in RENAMED)
+        for table, names in before_columns.items()
+    }
+    before = _contents_of_columns(dsn, hash_columns)
     assert any(rows for rows, _ in before.values())
     backup_dir = tmp_path / "backups"
 
@@ -206,26 +235,44 @@ def test_pending_migrations_are_backed_up_then_applied_in_production(
     assert code == 0, output.err
     assert _revision(dsn) == head
 
-    # 테이블별 내용이 migration 전 컬럼 전부에서 보존된다. alembic_version만 바뀐다.
+    # 테이블별 내용이 migration 전 컬럼 전부에서 보존된다(리네임은 이름만 바뀐다).
+    # alembic_version만 비교에서 빠진다.
     after_columns = _columns(dsn)
     del after_columns[ALEMBIC_VERSION_TABLE]
     assert after_columns == {
-        table: (*names, *ADDED_COLUMNS.get(table, ())) for table, names in before_columns.items()
+        table: (*(RENAMED.get((table, n), n) for n in names), *ADDED_COLUMNS.get(table, ()))
+        for table, names in before_columns.items()
     }
-    assert _contents_of_columns(dsn, before_columns) == before
+    assert _contents_of_columns(dsn, hash_columns) == before
 
-    # 더해진 컬럼은 기존 행에서 전부 NULL이다(미계산, backfill 대상).
+    # 더해진 컬럼의 성격별 기대값. ruby_json·seed_id는 이 migration이 채우지 않으므로
+    # 기존 행에서 전부 NULL이다(미계산 / backfill_seed_id.py는 Wave 3). language는 2단계의
+    # UPDATE가 기존 행 전부를 'ja'로 채우므로 다섯 테이블 전부에서 'ja'가 아닌 행이 없다.
     engine = sa.create_engine(dsn, poolclass=NullPool)
     try:
         with engine.connect() as connection:
-            filled = connection.execute(
+            ruby_filled = connection.execute(
                 sa.text("SELECT count(*) FROM sentences WHERE ruby_json IS NOT NULL")
             ).scalar_one()
             sentences = connection.execute(sa.text("SELECT count(*) FROM sentences")).scalar_one()
+            seed_id_filled = {
+                table: connection.execute(
+                    sa.text(f"SELECT count(*) FROM {table} WHERE seed_id IS NOT NULL")  # noqa: S608
+                ).scalar_one()
+                for table in SEED_ID_TABLES
+            }
+            non_ja = {
+                table: connection.execute(
+                    sa.text(f"SELECT count(*) FROM {table} WHERE language <> 'ja'")  # noqa: S608
+                ).scalar_one()
+                for table in LANGUAGE_TABLES
+            }
     finally:
         engine.dispose()
     assert sentences > 0
-    assert filled == 0
+    assert ruby_filled == 0
+    assert seed_id_filled == dict.fromkeys(SEED_ID_TABLES, 0)
+    assert non_ja == dict.fromkeys(LANGUAGE_TABLES, 0)
 
     # 대상 출력이 백업보다 먼저이고, 멈춤 전제가 출력된다.
     assert output.out.index(f"database={dsn.database}") < output.out.index("backup verified:")
