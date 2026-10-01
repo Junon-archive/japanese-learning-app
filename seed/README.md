@@ -38,7 +38,7 @@ YAML을 쓰는 이유는 중첩된 span/explanation 구조와 여러 줄 일본�
   `seed_order`가 전부 밀린다.
 - `frequency_rank`가 없어도 `seed_order`를 `frequency_rank`로
   승격시키지 않는다. 하나는 언어 빈도이고 다른 하나는 파일 위치다.
-- `start_codepoint` / `end_codepoint`는 `japanese`의 **Unicode code point
+- `start_codepoint` / `end_codepoint`는 `text`의 **Unicode code point
   index**이고 반열린 구간 `[start, end)`다. byte offset도 UTF-16 code
   unit도 아니다. loader가 실제 문자열과 대조하며, 어긋나면 적재 전체가
   실패하고 DB에는 아무것도 남지 않는다.

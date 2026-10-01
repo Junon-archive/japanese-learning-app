@@ -658,7 +658,7 @@ def test_every_seed_ruby_json_has_the_stored_shape() -> None:
     entries: list[dict[str, Any]] = yaml.safe_load(Path(SEED_SENTENCES).read_text("utf-8"))
     checked_spans = 0
     for entry in entries:
-        japanese: str = entry["japanese"]
+        japanese: str = entry["text"]
         items = _seed_items(entry)
         stored = compute_ruby(japanese, items, now=NOW).ruby_json
         label = entry["seed_id"]
@@ -702,7 +702,7 @@ def test_seed_boundary_omission_ratio() -> None:
     summary = RubySummary()
     spans = rescued = ambiguous = unaligned = uncomparable = 0
     for entry in entries:
-        result = compute_ruby(entry["japanese"], _seed_items(entry), now=NOW)
+        result = compute_ruby(entry["text"], _seed_items(entry), now=NOW)
         summary.add(entry["seed_id"], result)
         spans += len(result.spans)
         rescued += result.rescued_by_split

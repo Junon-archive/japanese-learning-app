@@ -1,6 +1,6 @@
 # starter seed sentences.
 #
-# start_codepoint / end_codepoint는 `japanese`의 Unicode code point index이며 반열린 구간
+# start_codepoint / end_codepoint는 `text`의 Unicode code point index이며 반열린 구간
 # [start, end)다. loader가 문장 문자열과 다시 대조한다.
 #
 # 문장 순서 = sentences.id 순서. exploration과 anchor 지정은 아직 안 본 문장 중 id가 작은 것을
@@ -12,7 +12,7 @@
 # 이 문장에는 it_shigoto sentence_item을 두지 않는다. 문장당 target은 1~2개다
 # (08_LLM_SPEC.md의 Deterministic Content Validation 5번).
 - seed_id: sn_0001
-  japanese: この仕事、田中さんに任せてもいい？
+  text: この仕事、田中さんに任せてもいい？
   korean_translation: 이 일, 다나카 씨에게 맡겨도 될까?
   items:
     - item_seed_id: it_makaseru
@@ -42,7 +42,7 @@
         example_translation: 여기 앉아도 될까요?
 
 - seed_id: sn_0002
-  japanese: ちょっと手伝ってもらえますか？
+  text: ちょっと手伝ってもらえますか？
   korean_translation: 좀 도와주실 수 있나요?
   items:
     - item_seed_id: it_chotto
@@ -72,7 +72,7 @@
         example_translation: 이사를 도와줘서 고마워.
 
 - seed_id: sn_0003
-  japanese: お疲れ様でした。あとは私に任せてください。
+  text: お疲れ様でした。あとは私に任せてください。
   korean_translation: 수고하셨습니다. 나머지는 저에게 맡겨 주세요.
   items:
     - item_seed_id: it_otsukaresama
@@ -103,7 +103,7 @@
 
 # 불연속 span 예시. 「気が乗る」가 「気が全然乗らない」로 갈라진다.
 - seed_id: sn_0004
-  japanese: 今日はなぜか気が全然乗らない。
+  text: 今日はなぜか気が全然乗らない。
   korean_translation: 오늘은 왠지 전혀 마음이 내키지 않는다.
   items:
     - item_seed_id: it_kiganoru
@@ -123,7 +123,7 @@
 # ---- 샘플
 
 - seed_id: sn_0005
-  japanese: 大丈夫？顔色があまりよくないよ。
+  text: 大丈夫？顔色があまりよくないよ。
   korean_translation: 괜찮아? 안색이 별로 안 좋아.
   items:
     - item_seed_id: it_daijoubu
@@ -140,7 +140,7 @@
         example_translation: 다친 데는 괜찮으세요?
 
 - seed_id: sn_0006
-  japanese: すみません、この席は空いていますか。
+  text: すみません、この席は空いていますか。
   korean_translation: 저기요, 이 자리 비어 있나요?
   items:
     - item_seed_id: it_sumimasen
@@ -157,7 +157,7 @@
         example_translation: 저기요, 물 좀 주세요.
 
 - seed_id: sn_0007
-  japanese: 今週は忙しいから、来週にしない？
+  text: 今週は忙しいから、来週にしない？
   korean_translation: 이번 주는 바쁘니까 다음 주로 하지 않을래?
   items:
     - item_seed_id: it_isogashii
@@ -174,7 +174,7 @@
         example_translation: 요즘 바빠서 잘 시간이 없다.
 
 - seed_id: sn_0008
-  japanese: やっぱりこの店のラーメンが一番おいしい。
+  text: やっぱりこの店のラーメンが一番おいしい。
   korean_translation: 역시 이 가게 라멘이 제일 맛있어.
   items:
     - item_seed_id: it_yappari
@@ -191,7 +191,7 @@
         example_translation: 역시 집이 제일 편하다.
 
 - seed_id: sn_0009
-  japanese: 電車に傘を忘れてしまった。
+  text: 電車に傘を忘れてしまった。
   korean_translation: 전철에 우산을 두고 내려 버렸다.
   items:
     - item_seed_id: it_wasureru
@@ -221,7 +221,7 @@
         example_translation: 중요한 메일을 지워 버렸다.
 
 - seed_id: sn_0010
-  japanese: すみません、電車が遅れているので少し遅くなります。
+  text: すみません、電車が遅れているので少し遅くなります。
   korean_translation: 죄송해요, 전철이 늦어지고 있어서 조금 늦을 것 같아요.
   items:
     - item_seed_id: it_sumimasen
@@ -251,7 +251,7 @@
         example_translation: 사고로 비행기가 한 시간 늦어졌다.
 
 - seed_id: sn_0011
-  japanese: 今出れば、まだ終電に間に合う。
+  text: 今出れば、まだ終電に間に合う。
   korean_translation: 지금 나가면 아직 막차를 탈 수 있어.
   items:
     - item_seed_id: it_maniau
@@ -268,7 +268,7 @@
         example_translation: 마감에 맞췄다.
 
 - seed_id: sn_0012
-  japanese: 旅行の日にち、そろそろ決めない？
+  text: 旅行の日にち、そろそろ決めない？
   korean_translation: 여행 날짜, 슬슬 정하지 않을래?
   items:
     - item_seed_id: it_sorosoro
@@ -298,7 +298,7 @@
         example_translation: 모일 시간을 정하자.
 
 - seed_id: sn_0013
-  japanese: 今日からよろしくお願いします。
+  text: 今日からよろしくお願いします。
   korean_translation: 오늘부터 잘 부탁드립니다.
   items:
     - item_seed_id: it_yoroshiku
@@ -315,7 +315,7 @@
         example_translation: 처음 뵙겠습니다, 김입니다. 잘 부탁드립니다.
 
 - seed_id: sn_0014
-  japanese: 明日は早いから、もう寝なきゃ。
+  text: 明日は早いから、もう寝なきゃ。
   korean_translation: 내일은 일찍 나가야 하니까 이제 자야겠다.
   items:
     - item_seed_id: it_nakya
@@ -332,7 +332,7 @@
         example_translation: 내일까지 리포트를 써야 해.
 
 - seed_id: sn_0015
-  japanese: 週末は家でゆっくりするつもりです。
+  text: 週末は家でゆっくりするつもりです。
   korean_translation: 주말에는 집에서 푹 쉴 생각이에요.
   items:
     - item_seed_id: it_tsumori
@@ -349,7 +349,7 @@
         example_translation: 내년에 일본으로 유학 갈 생각입니다.
 
 - seed_id: sn_0016
-  japanese: 使ったものは、ちゃんと片付けてね。
+  text: 使ったものは、ちゃんと片付けてね。
   korean_translation: 쓴 물건은 제대로 치워 줘.
   items:
     - item_seed_id: it_katazukeru
@@ -366,7 +366,7 @@
         example_translation: 책상 위를 정리해 주세요.
 
 - seed_id: sn_0017
-  japanese: 夜道は暗いから、気をつけて帰ってね。
+  text: 夜道は暗いから、気をつけて帰ってね。
   korean_translation: 밤길은 어두우니까 조심해서 들어가.
   items:
     - item_seed_id: it_kiwotsukeru
@@ -383,7 +383,7 @@
         example_translation: 조심해서 다녀오세요.
 
 - seed_id: sn_0018
-  japanese: 新しい職場にはもう慣れた？
+  text: 新しい職場にはもう慣れた？
   korean_translation: 새 직장에는 이제 익숙해졌어?
   items:
     - item_seed_id: it_nareru
@@ -400,7 +400,7 @@
         example_translation: 일본 생활에는 이제 익숙해졌어요.
 
 - seed_id: sn_0019
-  japanese: なるほど、そういうことだったんですね。
+  text: なるほど、そういうことだったんですね。
   korean_translation: 그렇구나, 그런 거였군요.
   items:
     - item_seed_id: it_naruhodo
@@ -417,7 +417,7 @@
         example_translation: 과연, 좋은 생각이네요.
 
 - seed_id: sn_0020
-  japanese: 雨の日は出かけるのが面倒くさい。
+  text: 雨の日は出かけるのが面倒くさい。
   korean_translation: 비 오는 날은 나가기가 귀찮다.
   items:
     - item_seed_id: it_mendoukusai
@@ -434,7 +434,7 @@
         example_translation: 매일 요리하는 건 귀찮다.
 
 - seed_id: sn_0021
-  japanese: せっかく来たんだから、写真を撮ろうよ。
+  text: せっかく来たんだから、写真を撮ろうよ。
   korean_translation: 모처럼 왔으니까 사진 찍자.
   items:
     - item_seed_id: it_sekkaku
@@ -451,7 +451,7 @@
         example_translation: 모처럼 쉬는 날이니까 어디 가자.
 
 - seed_id: sn_0022
-  japanese: この曲、懐かしいね。高校のころよく聞いた。
+  text: この曲、懐かしいね。高校のころよく聞いた。
   korean_translation: 이 노래 옛날 생각난다. 고등학교 때 자주 들었어.
   items:
     - item_seed_id: it_natsukashii
@@ -468,7 +468,7 @@
         example_translation: 어릴 때 사진을 보니 옛날 생각이 났다.
 
 - seed_id: sn_0023
-  japanese: 袋は大丈夫です。そのままでいいです。
+  text: 袋は大丈夫です。そのままでいいです。
   korean_translation: 봉투는 괜찮아요. 그냥 주셔도 돼요.
   items:
     - item_seed_id: it_daijoubu
@@ -485,7 +485,7 @@
         example_translation: 영수증은 괜찮아요(필요 없어요).
 
 - seed_id: sn_0024
-  japanese: お忙しいところすみません、少しお時間いいですか。
+  text: お忙しいところすみません、少しお時間いいですか。
   korean_translation: 바쁘신데 죄송합니다, 잠깐 시간 괜찮으세요?
   items:
     - item_seed_id: it_isogashii
@@ -515,7 +515,7 @@
         example_translation: 밤늦게 죄송합니다.
 
 - seed_id: sn_0025
-  japanese: 行こうと思ったけど、やっぱりやめておく。
+  text: 行こうと思ったけど、やっぱりやめておく。
   korean_translation: 가려고 했는데 아무래도 그만둘래.
   items:
     - item_seed_id: it_yappari
@@ -532,7 +532,7 @@
         example_translation: 아무래도 커피 말고 홍차로 할게요.
 
 - seed_id: sn_0026
-  japanese: 明日の約束、忘れないでね。
+  text: 明日の約束、忘れないでね。
   korean_translation: 내일 약속, 잊지 마.
   items:
     - item_seed_id: it_wasureru
@@ -549,7 +549,7 @@
         example_translation: 숙제 내는 걸 깜빡했다.
 
 - seed_id: sn_0027
-  japanese: 急がないと、会議に遅れるよ。
+  text: 急がないと、会議に遅れるよ。
   korean_translation: 서두르지 않으면 회의에 늦어.
   items:
     - item_seed_id: it_okureru
@@ -566,7 +566,7 @@
         example_translation: 약속 장소에 5분 늦었다.
 
 - seed_id: sn_0028
-  japanese: 走ったけど、バスに間に合わなかった。
+  text: 走ったけど、バスに間に合わなかった。
   korean_translation: 뛰었는데 버스를 놓쳤다.
   items:
     - item_seed_id: it_maniau
@@ -583,7 +583,7 @@
         example_translation: 이대로면 수업에 늦겠다.
 
 - seed_id: sn_0029
-  japanese: もう遅いし、そろそろ帰ろうか。
+  text: もう遅いし、そろそろ帰ろうか。
   korean_translation: 이제 늦었으니 슬슬 갈까?
   items:
     - item_seed_id: it_sorosoro
@@ -600,7 +600,7 @@
         example_translation: 그럼 슬슬 가 보겠습니다.
 
 - seed_id: sn_0030
-  japanese: 何を食べるか、まだ決めていない。
+  text: 何を食べるか、まだ決めていない。
   korean_translation: 뭘 먹을지 아직 못 정했다.
   items:
     - item_seed_id: it_kimeru
@@ -617,7 +617,7 @@
         example_translation: 여름휴가 계획은 벌써 정했어?
 
 - seed_id: sn_0031
-  japanese: 資料の確認、よろしくお願いします。
+  text: 資料の確認、よろしくお願いします。
   korean_translation: 자료 확인 부탁드립니다.
   items:
     - item_seed_id: it_yoroshiku
@@ -634,7 +634,7 @@
         example_translation: 내일 건, 잘 부탁드립니다.
 
 - seed_id: sn_0032
-  japanese: ケーキを全部食べちゃった。
+  text: ケーキを全部食べちゃった。
   korean_translation: 케이크를 다 먹어 버렸어.
   items:
     - item_seed_id: it_teshimau
@@ -651,7 +651,7 @@
         example_translation: 전철에서 잠들어 버렸다.
 
 - seed_id: sn_0033
-  japanese: 友達が来る前に部屋を片付けなきゃ。
+  text: 友達が来る前に部屋を片付けなきゃ。
   korean_translation: 친구가 오기 전에 방을 치워야 해.
   items:
     - item_seed_id: it_katazukeru
@@ -681,7 +681,7 @@
         example_translation: 슬슬 가야 해.
 
 - seed_id: sn_0034
-  japanese: 今年こそ、毎日日本語を勉強するつもりだ。
+  text: 今年こそ、毎日日本語を勉強するつもりだ。
   korean_translation: 올해야말로 매일 일본어를 공부할 생각이다.
   items:
     - item_seed_id: it_tsumori
@@ -698,7 +698,7 @@
         example_translation: 일찍 잘 생각이었는데 아침까지 게임을 해 버렸다.
 
 - seed_id: sn_0035
-  japanese: 熱いので、気をつけてください。
+  text: 熱いので、気をつけてください。
   korean_translation: 뜨거우니 조심하세요.
   items:
     - item_seed_id: it_kiwotsukeru
@@ -715,7 +715,7 @@
         example_translation: 감기 조심하세요.
 
 - seed_id: sn_0036
-  japanese: 朝早く起きることに、なかなか慣れない。
+  text: 朝早く起きることに、なかなか慣れない。
   korean_translation: 아침 일찍 일어나는 것에 좀처럼 익숙해지지 않는다.
   items:
     - item_seed_id: it_nareru
@@ -732,7 +732,7 @@
         example_translation: 새 스마트폰에 아직 익숙하지 않다.
 
 - seed_id: sn_0037
-  japanese: なるほど、だから駅がこんなに混んでいるのか。
+  text: なるほど、だから駅がこんなに混んでいるのか。
   korean_translation: 아하, 그래서 역이 이렇게 붐비는구나.
   items:
     - item_seed_id: it_naruhodo
@@ -749,7 +749,7 @@
         example_translation: 아하, 그렇게 쓰는 거구나.
 
 - seed_id: sn_0038
-  japanese: 面倒くさいけど、やっぱり自分で作ろう。
+  text: 面倒くさいけど、やっぱり自分で作ろう。
   korean_translation: 귀찮지만 역시 직접 만들어야겠다.
   items:
     - item_seed_id: it_mendoukusai
@@ -779,7 +779,7 @@
         example_translation: 비싸지만 역시 이걸 사야겠다.
 
 - seed_id: sn_0039
-  japanese: せっかく作ったのに、誰も食べてくれなかった。
+  text: せっかく作ったのに、誰も食べてくれなかった。
   korean_translation: 애써 만들었는데 아무도 먹어 주지 않았다.
   items:
     - item_seed_id: it_sekkaku
@@ -796,7 +796,7 @@
         example_translation: 모처럼 일찍 일어났는데 비 때문에 취소됐다.
 
 - seed_id: sn_0040
-  japanese: 久しぶりに地元に帰ったら、懐かしい気持ちになった。
+  text: 久しぶりに地元に帰ったら、懐かしい気持ちになった。
   korean_translation: 오랜만에 고향에 갔더니 옛 생각에 마음이 따뜻해졌다.
   items:
     - item_seed_id: it_natsukashii
@@ -813,7 +813,7 @@
         example_translation: 이 맛, 옛날 생각난다.
 
 - seed_id: sn_0041
-  japanese: まだ時間あるから大丈夫、間に合うよ。
+  text: まだ時間あるから大丈夫、間に合うよ。
   korean_translation: 아직 시간 있으니까 괜찮아, 늦지 않을 거야.
   items:
     - item_seed_id: it_daijoubu
@@ -845,7 +845,7 @@
 # ---- round0 추가분
 
 - seed_id: sn_0042
-  japanese: 仕事が終わったら、電話するね。
+  text: 仕事が終わったら、電話するね。
   korean_translation: 일 끝나면 전화할게.
   items:
     - item_seed_id: it_shigoto
@@ -862,7 +862,7 @@
         example_translation: 내일은 일이 쉬는 날이에요.
 
 - seed_id: sn_0043
-  japanese: 仕事が忙しくて、最近あまり寝ていない。
+  text: 仕事が忙しくて、最近あまり寝ていない。
   korean_translation: 일이 바빠서 요즘 잠을 별로 못 잔다.
   items:
     - item_seed_id: it_shigoto
@@ -892,7 +892,7 @@
         example_translation: 바빠서 점심 먹을 시간도 없었다.
 
 - seed_id: sn_0044
-  japanese: お仕事は何をされているんですか。
+  text: お仕事は何をされているんですか。
   korean_translation: 무슨 일을 하세요?
   items:
     - item_seed_id: it_shigoto
@@ -909,7 +909,7 @@
         example_translation: 아버지의 직업은 교사입니다.
 
 - seed_id: sn_0045
-  japanese: ゴミ出しは弟の仕事だ。
+  text: ゴミ出しは弟の仕事だ。
   korean_translation: 쓰레기 내놓기는 남동생 담당이다.
   items:
     - item_seed_id: it_shigoto
@@ -926,7 +926,7 @@
         example_translation: 설거지는 제 담당이에요.
 
 - seed_id: sn_0046
-  japanese: 夕飯のメニューは君に任せるよ。
+  text: 夕飯のメニューは君に任せるよ。
   korean_translation: 저녁 메뉴는 너한테 맡길게.
   items:
     - item_seed_id: it_makaseru
@@ -943,7 +943,7 @@
         example_translation: 행선지는 당신에게 맡길게요.
 
 - seed_id: sn_0047
-  japanese: 今日はおまかせでお願いします。
+  text: 今日はおまかせでお願いします。
   korean_translation: 오늘은 알아서 골라 주세요.
   items:
     - item_seed_id: it_makaseru
@@ -960,7 +960,7 @@
         example_translation: 머리 스타일은 미용사에게 맡겼다.
 
 - seed_id: sn_0048
-  japanese: 明日なら手伝ってもいいよ。
+  text: 明日なら手伝ってもいいよ。
   korean_translation: 내일이라면 도와줘도 괜찮아.
   items:
     - item_seed_id: it_tetsudau
@@ -990,7 +990,7 @@
         example_translation: 그 가격이면 사도 괜찮아.
 
 - seed_id: sn_0049
-  japanese: もう帰ってもいいですよ。
+  text: もう帰ってもいいですよ。
   korean_translation: 이제 돌아가셔도 돼요.
   items:
     - item_seed_id: it_temoii
@@ -1007,7 +1007,7 @@
         example_translation: 이 방은 자유롭게 써도 됩니다.
 
 - seed_id: sn_0050
-  japanese: 高くてもいいから、静かな店にしよう。
+  text: 高くてもいいから、静かな店にしよう。
   korean_translation: 비싸도 괜찮으니까 조용한 가게로 하자.
   items:
     - item_seed_id: it_temoii
@@ -1024,7 +1024,7 @@
         example_translation: 좀 멀어도 괜찮으니 넓은 방을 찾고 있어요.
 
 - seed_id: sn_0051
-  japanese: 何か手伝おうか？
+  text: 何か手伝おうか？
   korean_translation: 뭐 좀 도와줄까?
   items:
     - item_seed_id: it_tetsudau
@@ -1041,7 +1041,7 @@
         example_translation: 준비 도와줄까?
 
 - seed_id: sn_0052
-  japanese: 昨日は妹の宿題を手伝った。
+  text: 昨日は妹の宿題を手伝った。
   korean_translation: 어제는 여동생 숙제를 도와줬다.
   items:
     - item_seed_id: it_tetsudau
@@ -1058,7 +1058,7 @@
         example_translation: 주말에는 본가 밭일을 돕고 있다.
 
 - seed_id: sn_0053
-  japanese: 今夜はちょっと…。また今度誘って。
+  text: 今夜はちょっと…。また今度誘って。
   korean_translation: 오늘 밤은 좀…. 다음에 또 불러 줘.
   items:
     - item_seed_id: it_chotto
@@ -1075,7 +1075,7 @@
         example_translation: 그날은 좀 사정이 안 돼요.
 
 - seed_id: sn_0054
-  japanese: 砂糖はちょっとだけ入れてください。
+  text: 砂糖はちょっとだけ入れてください。
   korean_translation: 설탕은 조금만 넣어 주세요.
   items:
     - item_seed_id: it_chotto
@@ -1092,7 +1092,7 @@
         example_translation: 소금을 조금 더 넣어 봐.
 
 - seed_id: sn_0055
-  japanese: ちょっと、これ見て！
+  text: ちょっと、これ見て！
   korean_translation: 야, 이것 좀 봐!
   items:
     - item_seed_id: it_chotto
@@ -1109,7 +1109,7 @@
         example_translation: 잠깐만요, 밀지 마세요.
 
 - seed_id: sn_0056
-  japanese: お疲れ様です。頼まれた資料、机に置いておきました。
+  text: お疲れ様です。頼まれた資料、机に置いておきました。
   korean_translation: 수고하십니다. 부탁하신 자료, 책상에 두었어요.
   items:
     - item_seed_id: it_otsukaresama
@@ -1126,7 +1126,7 @@
         example_translation: 수고하십니다. 내일 건으로 연락드렸습니다.
 
 - seed_id: sn_0057
-  japanese: 練習お疲れ様でした。ゆっくり休んでね。
+  text: 練習お疲れ様でした。ゆっくり休んでね。
   korean_translation: 연습하느라 수고했어. 푹 쉬어.
   items:
     - item_seed_id: it_otsukaresama
@@ -1143,7 +1143,7 @@
         example_translation: 시험 보느라 수고했어.
 
 - seed_id: sn_0058
-  japanese: 今日の会議はここまでです。皆さん、お疲れ様でした。
+  text: 今日の会議はここまでです。皆さん、お疲れ様でした。
   korean_translation: 오늘 회의는 여기까지입니다. 모두 수고하셨습니다.
   items:
     - item_seed_id: it_otsukaresama
@@ -1160,7 +1160,7 @@
         example_translation: 오늘 수고 많으셨습니다. 조심해서 들어가세요.
 
 - seed_id: sn_0059
-  japanese: せっかく誘ってもらったけど、あまり気が乗らない。
+  text: せっかく誘ってもらったけど、あまり気が乗らない。
   korean_translation: 모처럼 불러 줬는데 별로 내키지 않는다.
   items:
     - item_seed_id: it_sekkaku
@@ -1190,7 +1190,7 @@
         example_translation: 사람 많은 곳은 내키지 않는다.
 
 - seed_id: sn_0060
-  japanese: 気が乗らない仕事から先に片付けよう。
+  text: 気が乗らない仕事から先に片付けよう。
   korean_translation: 내키지 않는 일부터 먼저 해치우자.
   items:
     - item_seed_id: it_kiganoru
@@ -1220,7 +1220,7 @@
         example_translation: 오전 중에 메일 답장을 처리했다.
 
 - seed_id: sn_0061
-  japanese: 友達と話していたら、だんだん気が乗ってきた。
+  text: 友達と話していたら、だんだん気が乗ってきた。
   korean_translation: 친구랑 이야기하다 보니 점점 할 마음이 생겼다.
   items:
     - item_seed_id: it_kiganoru
@@ -1237,7 +1237,7 @@
         example_translation: 날씨가 좋으면 산책도 내킨다.
 
 - seed_id: sn_0062
-  japanese: 明日の三時で大丈夫ですか。
+  text: 明日の三時で大丈夫ですか。
   korean_translation: 내일 3시 괜찮으세요?
   items:
     - item_seed_id: it_daijoubu
@@ -1254,7 +1254,7 @@
         example_translation: 결제는 카드도 괜찮나요?
 
 - seed_id: sn_0063
-  japanese: わざわざ届けてくれたんですか。すみません。
+  text: わざわざ届けてくれたんですか。すみません。
   korean_translation: 일부러 가져다준 거예요? 고마워요.
   items:
     - item_seed_id: it_sumimasen
@@ -1271,7 +1271,7 @@
         example_translation: 자리를 양보해 주셔서 감사합니다.
 
 - seed_id: sn_0064
-  japanese: 忙しいのに、来てくれてありがとう。
+  text: 忙しいのに、来てくれてありがとう。
   korean_translation: 바쁜데 와 줘서 고마워.
   items:
     - item_seed_id: it_isogashii
@@ -1288,7 +1288,7 @@
         example_translation: 바쁜데 도와 달라고 해서 미안해.
 
 - seed_id: sn_0065
-  japanese: やっぱり雨が降ってきた。傘を持ってきてよかった。
+  text: やっぱり雨が降ってきた。傘を持ってきてよかった。
   korean_translation: 역시 비가 오기 시작했다. 우산 가져오길 잘했다.
   items:
     - item_seed_id: it_yappari
@@ -1305,7 +1305,7 @@
         example_translation: 역시 생각한 대로였다.
 
 - seed_id: sn_0066
-  japanese: パスワードを忘れて、ログインできない。
+  text: パスワードを忘れて、ログインできない。
   korean_translation: 비밀번호를 잊어버려서 로그인을 못 한다.
   items:
     - item_seed_id: it_wasureru
@@ -1322,7 +1322,7 @@
         example_translation: 그녀 전화번호를 잊어버렸다.
 
 - seed_id: sn_0067
-  japanese: 嫌なことは早く忘れよう。
+  text: 嫌なことは早く忘れよう。
   korean_translation: 싫은 일은 빨리 잊자.
   items:
     - item_seed_id: it_wasureru
@@ -1339,7 +1339,7 @@
         example_translation: 일 생각은 잊고 즐기자.
 
 - seed_id: sn_0068
-  japanese: 会議中なのに、つい笑ってしまった。
+  text: 会議中なのに、つい笑ってしまった。
   korean_translation: 회의 중인데 그만 웃어 버렸다.
   items:
     - item_seed_id: it_teshimau
@@ -1356,7 +1356,7 @@
         example_translation: 한밤중에 그만 단것을 먹게 된다.
 
 - seed_id: sn_0069
-  japanese: レポートは昨日のうちに書いてしまった。
+  text: レポートは昨日のうちに書いてしまった。
   korean_translation: 리포트는 어제 다 써 버렸다.
   items:
     - item_seed_id: it_teshimau
@@ -1373,7 +1373,7 @@
         example_translation: 귀찮은 일은 먼저 해 버리자.
 
 - seed_id: sn_0070
-  japanese: 返事が遅れてごめんね。
+  text: 返事が遅れてごめんね。
   korean_translation: 답장이 늦어서 미안해.
   items:
     - item_seed_id: it_okureru
@@ -1390,7 +1390,7 @@
         example_translation: 제출이 하루 늦어 버렸다.
 
 - seed_id: sn_0071
-  japanese: この時計、五分遅れている。
+  text: この時計、五分遅れている。
   korean_translation: 이 시계, 5분 느리다.
   items:
     - item_seed_id: it_okureru
@@ -1407,7 +1407,7 @@
         example_translation: 손목시계가 조금 느려서 맞췄다.
 
 - seed_id: sn_0072
-  japanese: もう決めた。明日から毎日走る。
+  text: もう決めた。明日から毎日走る。
   korean_translation: 이제 정했어. 내일부터 매일 달릴 거야.
   items:
     - item_seed_id: it_kimeru
@@ -1424,7 +1424,7 @@
         example_translation: 올해는 담배를 끊기로 마음먹었다.
 
 - seed_id: sn_0073
-  japanese: 誰が行くか、じゃんけんで決めよう。
+  text: 誰が行くか、じゃんけんで決めよう。
   korean_translation: 누가 갈지 가위바위보로 정하자.
   items:
     - item_seed_id: it_kimeru
@@ -1441,7 +1441,7 @@
         example_translation: 자리는 제비뽑기로 정합니다.
 
 - seed_id: sn_0074
-  japanese: そろそろ桜が咲くころだね。
+  text: そろそろ桜が咲くころだね。
   korean_translation: 슬슬 벚꽃이 필 때네.
   items:
     - item_seed_id: it_sorosoro
@@ -1458,7 +1458,7 @@
         example_translation: 슬슬 장마가 끝난다고 한다.
 
 - seed_id: sn_0075
-  japanese: そろそろ本気で勉強しないと。
+  text: そろそろ本気で勉強しないと。
   korean_translation: 이제 슬슬 제대로 공부해야 해.
   items:
     - item_seed_id: it_sorosoro
@@ -1475,7 +1475,7 @@
         example_translation: 슬슬 새 폰으로 바꿔야겠다.
 
 - seed_id: sn_0076
-  japanese: お母さんによろしく伝えてね。
+  text: お母さんによろしく伝えてね。
   korean_translation: 어머니께 안부 전해 줘.
   items:
     - item_seed_id: it_yoroshiku
@@ -1492,7 +1492,7 @@
         example_translation: 모두에게 안부 전해 주세요.
 
 - seed_id: sn_0077
-  japanese: 今年もよろしくお願いします。
+  text: 今年もよろしくお願いします。
   korean_translation: 올해도 잘 부탁드립니다.
   items:
     - item_seed_id: it_yoroshiku
@@ -1509,7 +1509,7 @@
         example_translation: 내년에도 잘 부탁드립니다.
 
 - seed_id: sn_0078
-  japanese: あ、もうこんな時間。帰らなきゃ。
+  text: あ、もうこんな時間。帰らなきゃ。
   korean_translation: 아, 벌써 시간이 이렇게 됐네. 가야겠다.
   items:
     - item_seed_id: it_nakya
@@ -1526,7 +1526,7 @@
         example_translation: 이제 나가야지, 안 그러면 전철 놓친다.
 
 - seed_id: sn_0079
-  japanese: 来週までにビザを更新しなきゃ。
+  text: 来週までにビザを更新しなきゃ。
   korean_translation: 다음 주까지 비자를 갱신해야 해.
   items:
     - item_seed_id: it_nakya
@@ -1543,7 +1543,7 @@
         example_translation: 세금 내야 해.
 
 - seed_id: sn_0080
-  japanese: 冗談のつもりで言ったのに、本気にされた。
+  text: 冗談のつもりで言ったのに、本気にされた。
   korean_translation: 농담으로 한 말인데 진담으로 받아들여졌다.
   items:
     - item_seed_id: it_tsumori
@@ -1560,7 +1560,7 @@
         example_translation: 친절하게 한다는 게 폐였던 것 같다.
 
 - seed_id: sn_0081
-  japanese: 夏休みはどこか行くつもり？
+  text: 夏休みはどこか行くつもり？
   korean_translation: 여름휴가에는 어디 갈 생각이야?
   items:
     - item_seed_id: it_tsumori
@@ -1577,7 +1577,7 @@
         example_translation: 그 옷 입고 나갈 생각이야?
 
 - seed_id: sn_0082
-  japanese: 結構です。うちはもう間に合っていますので。
+  text: 結構です。うちはもう間に合っていますので。
   korean_translation: 괜찮습니다. 저희는 이미 충분해서요.
   items:
     - item_seed_id: it_maniau
@@ -1594,7 +1594,7 @@
         example_translation: 일손은 이미 충분합니다.
 
 - seed_id: sn_0083
-  japanese: パーティーが終わってから、みんなで片付けた。
+  text: パーティーが終わってから、みんなで片付けた。
   korean_translation: 파티가 끝난 뒤 다 같이 뒷정리를 했다.
   items:
     - item_seed_id: it_katazukeru
@@ -1611,7 +1611,7 @@
         example_translation: 다 먹으면 스스로 치워.
 
 - seed_id: sn_0084
-  japanese: 目上の人と話すときは、言葉遣いに気をつけて。
+  text: 目上の人と話すときは、言葉遣いに気をつけて。
   korean_translation: 윗사람과 이야기할 때는 말투를 조심해.
   items:
     - item_seed_id: it_kiwotsukeru
@@ -1628,7 +1628,7 @@
         example_translation: 과식하지 않도록 조심하고 있다.
 
 - seed_id: sn_0085
-  japanese: 寒くなってきたから、体に気をつけてね。
+  text: 寒くなってきたから、体に気をつけてね。
   korean_translation: 추워졌으니까 몸 조심해.
   items:
     - item_seed_id: it_kiwotsukeru
@@ -1645,7 +1645,7 @@
         example_translation: 건강 조심하며 지내세요.
 
 - seed_id: sn_0086
-  japanese: この辺りの道にも、だいぶ慣れてきた。
+  text: この辺りの道にも、だいぶ慣れてきた。
   korean_translation: 이 근처 길에도 꽤 익숙해졌다.
   items:
     - item_seed_id: it_nareru
@@ -1662,7 +1662,7 @@
         example_translation: 혼자 사는 것에도 조금씩 익숙해지고 있다.
 
 - seed_id: sn_0087
-  japanese: 慣れない敬語で話すと、すごく疲れる。
+  text: 慣れない敬語で話すと、すごく疲れる。
   korean_translation: 익숙하지 않은 존댓말로 이야기하면 엄청 피곤하다.
   items:
     - item_seed_id: it_nareru
@@ -1679,7 +1679,7 @@
         example_translation: 익숙하지 않은 신발 때문에 발이 아프다.
 
 - seed_id: sn_0088
-  japanese: なるほど、その案でやってみましょう。
+  text: なるほど、その案でやってみましょう。
   korean_translation: 좋네요, 그 안으로 해 봅시다.
   items:
     - item_seed_id: it_naruhodo
@@ -1696,7 +1696,7 @@
         example_translation: 그렇군요, 그렇다면 안심이네요.
 
 - seed_id: sn_0089
-  japanese: 説明書を読んで、なるほどと思った。
+  text: 説明書を読んで、なるほどと思った。
   korean_translation: 설명서를 읽고 과연 그렇구나 싶었다.
   items:
     - item_seed_id: it_naruhodo
@@ -1713,7 +1713,7 @@
         example_translation: 이야기를 듣고 과연 그렇다고 납득했다.
 
 - seed_id: sn_0090
-  japanese: あの人は話が長くて面倒くさい。
+  text: あの人は話が長くて面倒くさい。
   korean_translation: 저 사람은 말이 길어서 성가시다.
   items:
     - item_seed_id: it_mendoukusai
@@ -1730,7 +1730,7 @@
         example_translation: 성가신 손님을 만났다.
 
 - seed_id: sn_0091
-  japanese: 手続きが面倒くさくて、まだ申し込んでいない。
+  text: 手続きが面倒くさくて、まだ申し込んでいない。
   korean_translation: 절차가 귀찮아서 아직 신청을 안 했다.
   items:
     - item_seed_id: it_mendoukusai
@@ -1747,7 +1747,7 @@
         example_translation: 답장이 귀찮아서 방치해 버렸다.
 
 - seed_id: sn_0092
-  japanese: せっかくですが、今回は遠慮しておきます。
+  text: せっかくですが、今回は遠慮しておきます。
   korean_translation: 모처럼이지만 이번에는 사양하겠습니다.
   items:
     - item_seed_id: it_sekkaku
@@ -1764,7 +1764,7 @@
         example_translation: 모처럼 불러 주셨는데 그날은 일정이 있어요.
 
 - seed_id: sn_0093
-  japanese: 懐かしい！小学校の友達に会うのは十年ぶりだ。
+  text: 懐かしい！小学校の友達に会うのは十年ぶりだ。
   korean_translation: 반갑다! 초등학교 친구를 만나는 건 10년 만이다.
   items:
     - item_seed_id: it_natsukashii
@@ -1781,7 +1781,7 @@
         example_translation: 반가운 얼굴들이 모였다.
 
 - seed_id: sn_0094
-  japanese: この写真、懐かしいね。みんな若いなあ。
+  text: この写真、懐かしいね。みんな若いなあ。
   korean_translation: 이 사진 옛날 생각난다. 다들 젊네.
   items:
     - item_seed_id: it_natsukashii
@@ -1800,7 +1800,7 @@
 # ---- round1 추가분
 
 - seed_id: sn_0095
-  japanese: 分かりました。すぐ行きます。
+  text: 分かりました。すぐ行きます。
   korean_translation: 알겠습니다. 바로 갈게요.
   items:
     - item_seed_id: it_wakaru
@@ -1817,7 +1817,7 @@
         example_translation: 알았어, 나중에 연락할게.
 
 - seed_id: sn_0096
-  japanese: この店、雰囲気がいいね。
+  text: この店、雰囲気がいいね。
   korean_translation: 이 가게 분위기 좋다.
   items:
     - item_seed_id: it_ii
@@ -1834,7 +1834,7 @@
         example_translation: 오늘은 날씨가 좋네요.
 
 - seed_id: sn_0097
-  japanese: 今日はたくさん歩いて、疲れた。
+  text: 今日はたくさん歩いて、疲れた。
   korean_translation: 오늘 많이 걸어서 피곤해.
   items:
     - item_seed_id: it_tsukareru
@@ -1851,7 +1851,7 @@
         example_translation: 아, 피곤해.
 
 - seed_id: sn_0098
-  japanese: 熱があるなら、無理しないでね。
+  text: 熱があるなら、無理しないでね。
   korean_translation: 열이 있으면 무리하지 마.
   items:
     - item_seed_id: it_muri
@@ -1868,7 +1868,7 @@
         example_translation: 바쁘겠지만 무리하지 마세요.
 
 - seed_id: sn_0099
-  japanese: 今、晩ご飯を作っている。
+  text: 今、晩ご飯を作っている。
   korean_translation: 지금 저녁밥을 만들고 있어.
   items:
     - item_seed_id: it_teiru
@@ -1885,7 +1885,7 @@
         example_translation: 남동생은 방에서 게임을 하고 있다.
 
 - seed_id: sn_0100
-  japanese: え、もう九時？
+  text: え、もう九時？
   korean_translation: 어, 벌써 9시야?
   items:
     - item_seed_id: it_mou
@@ -1902,7 +1902,7 @@
         example_translation: 벌써 12월이네.
 
 - seed_id: sn_0101
-  japanese: 昨日のテスト、全然できなかった。
+  text: 昨日のテスト、全然できなかった。
   korean_translation: 어제 시험, 하나도 못 풀었어.
   items:
     - item_seed_id: it_zenzen
@@ -1919,7 +1919,7 @@
         example_translation: 전혀 몰랐어.
 
 - seed_id: sn_0102
-  japanese: 財布をなくして困った。
+  text: 財布をなくして困った。
   korean_translation: 지갑을 잃어버려서 난감했다.
   items:
     - item_seed_id: it_komaru
@@ -1936,7 +1936,7 @@
         example_translation: 길을 몰라서 난감했다.
 
 - seed_id: sn_0103
-  japanese: 一度、食べてみて。おいしいから。
+  text: 一度、食べてみて。おいしいから。
   korean_translation: 한번 먹어 봐. 맛있으니까.
   items:
     - item_seed_id: it_temiru
@@ -1953,7 +1953,7 @@
         example_translation: 이 신발 신어 보세요.
 
 - seed_id: sn_0104
-  japanese: この店、結構おいしいね。
+  text: この店、結構おいしいね。
   korean_translation: 이 가게 꽤 맛있네.
   items:
     - item_seed_id: it_kekkou
@@ -1970,7 +1970,7 @@
         example_translation: 오늘 꽤 춥네.
 
 - seed_id: sn_0105
-  japanese: 来週の旅行、楽しみだね。
+  text: 来週の旅行、楽しみだね。
   korean_translation: 다음 주 여행 기대된다.
   items:
     - item_seed_id: it_tanoshimi
@@ -1987,7 +1987,7 @@
         example_translation: 내일 시합 기대돼요.
 
 - seed_id: sn_0106
-  japanese: 友達が駅まで送ってくれた。
+  text: 友達が駅まで送ってくれた。
   korean_translation: 친구가 역까지 바래다줬다.
   items:
     - item_seed_id: it_tekureru
@@ -2004,7 +2004,7 @@
         example_translation: 엄마가 도시락을 싸 줬다.
 
 - seed_id: sn_0107
-  japanese: 先輩に書類をチェックしてもらった。
+  text: 先輩に書類をチェックしてもらった。
   korean_translation: 선배가 서류를 봐 줬다.
   items:
     - item_seed_id: it_temorau
@@ -2021,7 +2021,7 @@
         example_translation: 친구가 사진을 찍어 줬다.
 
 - seed_id: sn_0108
-  japanese: 車で送っていただいて、助かりました。
+  text: 車で送っていただいて、助かりました。
   korean_translation: 차로 바래다주셔서 정말 감사했어요.
   items:
     - item_seed_id: it_tasukaru
@@ -2038,7 +2038,7 @@
         example_translation: 미리 알려 주셔서 도움이 됐어요.
 
 - seed_id: sn_0109
-  japanese: 週末、何か予定ある？
+  text: 週末、何か予定ある？
   korean_translation: 주말에 뭐 일정 있어?
   items:
     - item_seed_id: it_yotei
@@ -2055,7 +2055,7 @@
         example_translation: 오늘 밤은 일정이 없어요.
 
 - seed_id: sn_0110
-  japanese: この歌、知ってる？
+  text: この歌、知ってる？
   korean_translation: 이 노래 알아?
   items:
     - item_seed_id: it_shiru
@@ -2085,7 +2085,7 @@
         example_translation: 지금 뭐 해?
 
 - seed_id: sn_0111
-  japanese: それ、違うよ。私の傘はこっち。
+  text: それ、違うよ。私の傘はこっち。
   korean_translation: 그거 아니야. 내 우산은 이쪽이야.
   items:
     - item_seed_id: it_chigau
@@ -2102,7 +2102,7 @@
         example_translation: 아뇨, 아닙니다. 저는 야마다예요.
 
 - seed_id: sn_0112
-  japanese: 野菜もちゃんと食べなさい。
+  text: 野菜もちゃんと食べなさい。
   korean_translation: 채소도 제대로 먹어.
   items:
     - item_seed_id: it_chanto
@@ -2119,7 +2119,7 @@
         example_translation: 숙제 제대로 해.
 
 - seed_id: sn_0113
-  japanese: 無事に着いてよかった。
+  text: 無事に着いてよかった。
   korean_translation: 무사히 도착해서 다행이다.
   items:
     - item_seed_id: it_yokatta
@@ -2136,7 +2136,7 @@
         example_translation: 크게 다치지 않아서 다행이다.
 
 - seed_id: sn_0114
-  japanese: 雨なら仕方ない。また今度にしよう。
+  text: 雨なら仕方ない。また今度にしよう。
   korean_translation: 비가 오면 어쩔 수 없지. 다음에 하자.
   items:
     - item_seed_id: it_shikatanai
@@ -2153,7 +2153,7 @@
         example_translation: 매진이면 어쩔 수 없지.
 
 - seed_id: sn_0115
-  japanese: 日本語が少し分かるようになった。
+  text: 日本語が少し分かるようになった。
   korean_translation: 일본어를 조금 알아듣게 됐다.
   items:
     - item_seed_id: it_wakaru
@@ -2170,7 +2170,7 @@
         example_translation: 영어 아는 사람 있어요?
 
 - seed_id: sn_0116
-  japanese: その気持ち、すごく分かる。
+  text: その気持ち、すごく分かる。
   korean_translation: 그 마음 정말 알아.
   items:
     - item_seed_id: it_wakaru
@@ -2187,7 +2187,7 @@
         example_translation: 알지 알지, 나도 그랬어.
 
 - seed_id: sn_0117
-  japanese: 名前は知っているけど、どんな人かは分からない。
+  text: 名前は知っているけど、どんな人かは分からない。
   korean_translation: 이름은 알지만 어떤 사람인지는 모르겠다.
   items:
     - item_seed_id: it_shiru
@@ -2217,7 +2217,7 @@
         example_translation: 이 문제의 답을 모르겠다.
 
 - seed_id: sn_0118
-  japanese: いえ、いいです。自分でやりますから。
+  text: いえ、いいです。自分でやりますから。
   korean_translation: 아뇨, 괜찮아요. 제가 할게요.
   items:
     - item_seed_id: it_ii
@@ -2234,7 +2234,7 @@
         example_translation: 영수증은 됐어요.
 
 - seed_id: sn_0119
-  japanese: 飲み物は水でいいよ。
+  text: 飲み物は水でいいよ。
   korean_translation: 음료는 물이면 돼.
   items:
     - item_seed_id: it_ii
@@ -2251,7 +2251,7 @@
         example_translation: 자리는 어디든 괜찮아요.
 
 - seed_id: sn_0120
-  japanese: 山田さんって、本当にいい人だね。
+  text: 山田さんって、本当にいい人だね。
   korean_translation: 야마다 씨는 정말 좋은 사람이네.
   items:
     - item_seed_id: it_ii
@@ -2268,7 +2268,7 @@
         example_translation: 좋은 친구를 둬서 행복하다.
 
 - seed_id: sn_0121
-  japanese: 人に気を使うのは疲れる。
+  text: 人に気を使うのは疲れる。
   korean_translation: 남에게 신경 쓰는 건 피곤하다.
   items:
     - item_seed_id: it_tsukareru
@@ -2285,7 +2285,7 @@
         example_translation: 만원 전철은 정말 피곤하다.
 
 - seed_id: sn_0122
-  japanese: 長い時間パソコンを使うと、目が疲れる。
+  text: 長い時間パソコンを使うと、目が疲れる。
   korean_translation: 오랜 시간 컴퓨터를 쓰면 눈이 피로하다.
   items:
     - item_seed_id: it_tsukareru
@@ -2302,7 +2302,7 @@
         example_translation: 서서 하는 일이라 다리가 피곤하다.
 
 - seed_id: sn_0123
-  japanese: 最近、寝ても疲れが取れない。
+  text: 最近、寝ても疲れが取れない。
   korean_translation: 요즘 자도 피로가 안 풀린다.
   items:
     - item_seed_id: it_tsukareru
@@ -2319,7 +2319,7 @@
         example_translation: 온천에 들어갔더니 피로가 풀렸다.
 
 - seed_id: sn_0124
-  japanese: この量を一日で終わらせるのは無理だ。
+  text: この量を一日で終わらせるのは無理だ。
   korean_translation: 이 양을 하루에 끝내는 건 무리다.
   items:
     - item_seed_id: it_muri
@@ -2336,7 +2336,7 @@
         example_translation: 내일까지는 무리예요.
 
 - seed_id: sn_0125
-  japanese: 虫を触るなんて、絶対無理！
+  text: 虫を触るなんて、絶対無理！
   korean_translation: 벌레를 만지다니, 절대 못 해!
   items:
     - item_seed_id: it_muri
@@ -2353,7 +2353,7 @@
         example_translation: 매운 요리는 좀 못 먹어.
 
 - seed_id: sn_0126
-  japanese: 無理に誘ってごめんね。
+  text: 無理に誘ってごめんね。
   korean_translation: 억지로 불러서 미안해.
   items:
     - item_seed_id: it_muri
@@ -2370,7 +2370,7 @@
         example_translation: 억지로 안 먹어도 돼.
 
 - seed_id: sn_0127
-  japanese: 田中さんはもう結婚している。
+  text: 田中さんはもう結婚している。
   korean_translation: 다나카 씨는 이미 결혼했다.
   items:
     - item_seed_id: it_mou
@@ -2400,7 +2400,7 @@
         example_translation: 창문이 열려 있다.
 
 - seed_id: sn_0128
-  japanese: 毎朝、駅まで歩いている。
+  text: 毎朝、駅まで歩いている。
   korean_translation: 매일 아침 역까지 걸어서 다닌다.
   items:
     - item_seed_id: it_teiru
@@ -2417,7 +2417,7 @@
         example_translation: 일주일에 두 번 헬스장에 다닌다.
 
 - seed_id: sn_0129
-  japanese: あの店にはもう二度と行かない。
+  text: あの店にはもう二度と行かない。
   korean_translation: 그 가게에는 두 번 다시 안 간다.
   items:
     - item_seed_id: it_mou
@@ -2434,7 +2434,7 @@
         example_translation: 이제 배불러서 못 먹겠다.
 
 - seed_id: sn_0130
-  japanese: ビール、もう一杯お願いします。
+  text: ビール、もう一杯お願いします。
   korean_translation: 맥주 한 잔 더 주세요.
   items:
     - item_seed_id: it_mou
@@ -2451,7 +2451,7 @@
         example_translation: 조금만 더 기다려 주세요.
 
 - seed_id: sn_0131
-  japanese: 思ったより全然面白かった。
+  text: 思ったより全然面白かった。
   korean_translation: 생각보다 훨씬 재미있었다.
   items:
     - item_seed_id: it_zenzen
@@ -2468,7 +2468,7 @@
         example_translation: 이쪽이 훨씬 싸.
 
 - seed_id: sn_0132
-  japanese: 写真と全然違う。
+  text: 写真と全然違う。
   korean_translation: 사진이랑 완전 달라.
   items:
     - item_seed_id: it_zenzen
@@ -2498,7 +2498,7 @@
         example_translation: 들었던 이야기와 다르다.
 
 - seed_id: sn_0133
-  japanese: 最近、彼から全然連絡がない。
+  text: 最近、彼から全然連絡がない。
   korean_translation: 요즘 그에게서 통 연락이 없다.
   items:
     - item_seed_id: it_zenzen
@@ -2515,7 +2515,7 @@
         example_translation: 요즘 운동을 통 안 하고 있다.
 
 - seed_id: sn_0134
-  japanese: 困ったなあ、鍵が見つからない。
+  text: 困ったなあ、鍵が見つからない。
   korean_translation: 큰일이네, 열쇠가 안 보여.
   items:
     - item_seed_id: it_komaru
@@ -2532,7 +2532,7 @@
         example_translation: 곤란하네, 배터리가 곧 나갈 것 같아.
 
 - seed_id: sn_0135
-  japanese: 急にそんなことを言われても困ります。
+  text: 急にそんなことを言われても困ります。
   korean_translation: 갑자기 그런 말씀을 하셔도 곤란합니다.
   items:
     - item_seed_id: it_komaru
@@ -2549,7 +2549,7 @@
         example_translation: 여기에 차를 세우시면 곤란합니다.
 
 - seed_id: sn_0136
-  japanese: 困ったときは、いつでも言ってね。
+  text: 困ったときは、いつでも言ってね。
   korean_translation: 곤란할 때는 언제든 말해.
   items:
     - item_seed_id: it_komaru
@@ -2566,7 +2566,7 @@
         example_translation: 곤란한 일이 있으면 상담하세요.
 
 - seed_id: sn_0137
-  japanese: 新しいカフェに行ってみたけど、休みだった。
+  text: 新しいカフェに行ってみたけど、休みだった。
   korean_translation: 새 카페에 가 봤는데 쉬는 날이었다.
   items:
     - item_seed_id: it_temiru
@@ -2583,7 +2583,7 @@
         example_translation: 전화해 봤는데 안 받았다.
 
 - seed_id: sn_0138
-  japanese: 今度、一人で旅行してみようかな。
+  text: 今度、一人で旅行してみようかな。
   korean_translation: 다음에 혼자 여행 가 볼까.
   items:
     - item_seed_id: it_temiru
@@ -2600,7 +2600,7 @@
         example_translation: 주말에 요리를 만들어 보자.
 
 - seed_id: sn_0139
-  japanese: 店に電話して聞いてみます。
+  text: 店に電話して聞いてみます。
   korean_translation: 가게에 전화해서 물어볼게요.
   items:
     - item_seed_id: it_temiru
@@ -2617,7 +2617,7 @@
         example_translation: 담당자에게 확인해 보겠습니다.
 
 - seed_id: sn_0140
-  japanese: おかわりは結構です。お腹いっぱいなので。
+  text: おかわりは結構です。お腹いっぱいなので。
   korean_translation: 더 주시는 건 괜찮습니다. 배불러서요.
   items:
     - item_seed_id: it_kekkou
@@ -2634,7 +2634,7 @@
         example_translation: 설명은 이제 됐습니다.
 
 - seed_id: sn_0141
-  japanese: サインだけで結構です。
+  text: サインだけで結構です。
   korean_translation: 사인만 해 주시면 됩니다.
   items:
     - item_seed_id: it_kekkou
@@ -2651,7 +2651,7 @@
         example_translation: 결제는 나중에 하셔도 됩니다.
 
 - seed_id: sn_0142
-  japanese: 駅から結構歩くよ。
+  text: 駅から結構歩くよ。
   korean_translation: 역에서 꽤 걸어야 해.
   items:
     - item_seed_id: it_kekkou
@@ -2668,7 +2668,7 @@
         example_translation: 이 책 읽는 데 꽤 시간이 걸렸다.
 
 - seed_id: sn_0143
-  japanese: 毎週のドラマが一番の楽しみだ。
+  text: 毎週のドラマが一番の楽しみだ。
   korean_translation: 매주 보는 드라마가 제일 큰 낙이다.
   items:
     - item_seed_id: it_tanoshimi
@@ -2685,7 +2685,7 @@
         example_translation: 일 끝나고 마시는 맥주가 낙이다.
 
 - seed_id: sn_0144
-  japanese: お会いできるのを楽しみにしております。
+  text: お会いできるのを楽しみにしております。
   korean_translation: 뵙기를 기대하고 있겠습니다.
   items:
     - item_seed_id: it_tanoshimi
@@ -2702,7 +2702,7 @@
         example_translation: 당일을 기대하고 있겠습니다.
 
 - seed_id: sn_0145
-  japanese: 続きは来週のお楽しみ。
+  text: 続きは来週のお楽しみ。
   korean_translation: 뒷이야기는 다음 주를 기대해 주세요.
   items:
     - item_seed_id: it_tanoshimi
@@ -2719,7 +2719,7 @@
         example_translation: 내용물은 열어 보고 나서 확인해.
 
 - seed_id: sn_0146
-  japanese: 窓を閉めてくれる？
+  text: 窓を閉めてくれる？
   korean_translation: 창문 좀 닫아 줄래?
   items:
     - item_seed_id: it_tekureru
@@ -2736,7 +2736,7 @@
         example_translation: 소금 좀 집어 줄래?
 
 - seed_id: sn_0147
-  japanese: 何度言っても、夫が話を聞いてくれない。
+  text: 何度言っても、夫が話を聞いてくれない。
   korean_translation: 몇 번을 말해도 남편이 내 말을 안 들어 준다.
   items:
     - item_seed_id: it_tekureru
@@ -2753,7 +2753,7 @@
         example_translation: 아무도 도와주지 않는다.
 
 - seed_id: sn_0148
-  japanese: 代わりに行ってくれて、本当に助かった。
+  text: 代わりに行ってくれて、本当に助かった。
   korean_translation: 대신 가 줘서 정말 살았어.
   items:
     - item_seed_id: it_tekureru
@@ -2783,7 +2783,7 @@
         example_translation: 우산 빌려줘서 살았어.
 
 - seed_id: sn_0149
-  japanese: この荷物、預かってもらえますか。
+  text: この荷物、預かってもらえますか。
   korean_translation: 이 짐 좀 맡아 주실 수 있나요?
   items:
     - item_seed_id: it_temorau
@@ -2800,7 +2800,7 @@
         example_translation: 조금 더 천천히 말씀해 주실 수 있나요?
 
 - seed_id: sn_0150
-  japanese: 熱が下がらないので、病院で診てもらった。
+  text: 熱が下がらないので、病院で診てもらった。
   korean_translation: 열이 안 내려서 병원에서 진찰을 받았다.
   items:
     - item_seed_id: it_temorau
@@ -2817,7 +2817,7 @@
         example_translation: 고장 난 시계를 수리받았다.
 
 - seed_id: sn_0151
-  japanese: 予定を合わせてもらって、ありがとう。
+  text: 予定を合わせてもらって、ありがとう。
   korean_translation: 일정 맞춰 줘서 고마워.
   items:
     - item_seed_id: it_yotei
@@ -2847,7 +2847,7 @@
         example_translation: 이야기를 들어 줘서 마음이 편해졌다.
 
 - seed_id: sn_0152
-  japanese: 明日までに返事をもらえると助かります。
+  text: 明日までに返事をもらえると助かります。
   korean_translation: 내일까지 답을 주시면 감사하겠습니다.
   items:
     - item_seed_id: it_tasukaru
@@ -2864,7 +2864,7 @@
         example_translation: 자료를 먼저 보내 주시면 도움이 되겠습니다.
 
 - seed_id: sn_0153
-  japanese: 事故にあったけど、命は助かった。
+  text: 事故にあったけど、命は助かった。
   korean_translation: 사고를 당했지만 목숨은 건졌다.
   items:
     - item_seed_id: it_tasukaru
@@ -2881,7 +2881,7 @@
         example_translation: 일찍 발견돼서 개는 살았다.
 
 - seed_id: sn_0154
-  japanese: 会議は三時から始まる予定です。
+  text: 会議は三時から始まる予定です。
   korean_translation: 회의는 3시부터 시작할 예정입니다.
   items:
     - item_seed_id: it_yotei
@@ -2898,7 +2898,7 @@
         example_translation: 다음 달에 이사할 예정이에요.
 
 - seed_id: sn_0155
-  japanese: 急に予定が変わって、行けなくなった。
+  text: 急に予定が変わって、行けなくなった。
   korean_translation: 갑자기 일정이 바뀌어서 못 가게 됐다.
   items:
     - item_seed_id: it_yotei
@@ -2915,7 +2915,7 @@
         example_translation: 그날은 이미 일정이 있어요.
 
 - seed_id: sn_0156
-  japanese: その話は知らなかった。
+  text: その話は知らなかった。
   korean_translation: 그 이야기는 몰랐어.
   items:
     - item_seed_id: it_shiru
@@ -2932,7 +2932,7 @@
         example_translation: 그런 가게가 있는 줄 몰랐다.
 
 - seed_id: sn_0157
-  japanese: ニュースで事故を知った。
+  text: ニュースで事故を知った。
   korean_translation: 뉴스를 보고 사고 소식을 알았다.
   items:
     - item_seed_id: it_shiru
@@ -2949,7 +2949,7 @@
         example_translation: 그의 결혼 소식을 SNS로 알게 됐다.
 
 - seed_id: sn_0158
-  japanese: 住所が違うと、荷物が届かないよ。
+  text: 住所が違うと、荷物が届かないよ。
   korean_translation: 주소가 틀리면 짐이 안 와.
   items:
     - item_seed_id: it_chigau
@@ -2966,7 +2966,7 @@
         example_translation: 계산이 틀렸다.
 
 - seed_id: sn_0159
-  japanese: 兄と違って、弟はよく話す。
+  text: 兄と違って、弟はよく話す。
   korean_translation: 형과 달리 남동생은 말이 많다.
   items:
     - item_seed_id: it_chigau
@@ -2983,7 +2983,7 @@
         example_translation: 작년과 달리 올해는 따뜻하다.
 
 - seed_id: sn_0160
-  japanese: 小さいのに、ちゃんとあいさつができるね。
+  text: 小さいのに、ちゃんとあいさつができるね。
   korean_translation: 어린데도 인사를 제대로 잘하네.
   items:
     - item_seed_id: it_chanto
@@ -3000,7 +3000,7 @@
         example_translation: 그는 늘 시간을 제대로 지킨다.
 
 - seed_id: sn_0161
-  japanese: 鍵、ちゃんと閉めた？
+  text: 鍵、ちゃんと閉めた？
   korean_translation: 문 제대로 잠갔어?
   items:
     - item_seed_id: it_chanto
@@ -3017,7 +3017,7 @@
         example_translation: 약 제대로 먹었어?
 
 - seed_id: sn_0162
-  japanese: 面接には、ちゃんとした服で行こう。
+  text: 面接には、ちゃんとした服で行こう。
   korean_translation: 면접에는 제대로 된 옷을 입고 가자.
   items:
     - item_seed_id: it_chanto
@@ -3034,7 +3034,7 @@
         example_translation: 한번 제대로 된 병원에서 진찰받자.
 
 - seed_id: sn_0163
-  japanese: 昨日見た映画、よかったよ。
+  text: 昨日見た映画、よかったよ。
   korean_translation: 어제 본 영화 좋았어.
   items:
     - item_seed_id: it_yokatta
@@ -3051,7 +3051,7 @@
         example_translation: 여행 어땠어? 좋았어?
 
 - seed_id: sn_0164
-  japanese: よかったら、一緒に行きませんか。
+  text: よかったら、一緒に行きませんか。
   korean_translation: 괜찮으시면 같이 가지 않을래요?
   items:
     - item_seed_id: it_yokatta
@@ -3068,7 +3068,7 @@
         example_translation: 괜찮으면 이거 드세요.
 
 - seed_id: sn_0165
-  japanese: 合格したの？よかったね！
+  text: 合格したの？よかったね！
   korean_translation: 합격했어? 잘됐다!
   items:
     - item_seed_id: it_yokatta
@@ -3085,7 +3085,7 @@
         example_translation: 찾아서 다행이다.
 
 - seed_id: sn_0166
-  japanese: 昼ご飯を食べたら、眠くてしょうがない。
+  text: 昼ご飯を食べたら、眠くてしょうがない。
   korean_translation: 점심 먹었더니 졸려 죽겠다.
   items:
     - item_seed_id: it_shikatanai
@@ -3102,7 +3102,7 @@
         example_translation: 결과가 궁금해서 못 견디겠다.
 
 - seed_id: sn_0167
-  japanese: 今さら後悔しても仕方ない。
+  text: 今さら後悔しても仕方ない。
   korean_translation: 이제 와서 후회해도 소용없다.
   items:
     - item_seed_id: it_shikatanai
@@ -3119,7 +3119,7 @@
         example_translation: 고민해도 소용없으니까 해 보자.
 
 - seed_id: sn_0168
-  japanese: 本当にしょうがない人だなあ。
+  text: 本当にしょうがない人だなあ。
   korean_translation: 정말 못 말리는 사람이네.
   items:
     - item_seed_id: it_shikatanai
@@ -3138,7 +3138,7 @@
 # ---- round2 추가분
 
 - seed_id: sn_0169
-  japanese: 今日は早く帰ります。子どもが熱を出したんです。
+  text: 今日は早く帰ります。子どもが熱を出したんです。
   korean_translation: 오늘은 일찍 들어가겠습니다. 아이가 열이 나서요.
   items:
     - item_seed_id: it_ndesu
@@ -3155,7 +3155,7 @@
         example_translation: 어제는 몸이 안 좋았거든요.
 
 - seed_id: sn_0170
-  japanese: そうですね、今日は本当に暑いですね。
+  text: そうですね、今日は本当に暑いですね。
   korean_translation: 그러네요, 오늘 정말 덥네요.
   items:
     - item_seed_id: it_soudesune
@@ -3172,7 +3172,7 @@
         example_translation: 그러네요, 저도 그렇게 생각해요.
 
 - seed_id: sn_0171
-  japanese: 引っ越し、大変でしたね。
+  text: 引っ越し、大変でしたね。
   korean_translation: 이사하느라 고생하셨네요.
   items:
     - item_seed_id: it_taihen
@@ -3189,7 +3189,7 @@
         example_translation: 혼자 아이 키우시기 힘드시겠어요.
 
 - seed_id: sn_0172
-  japanese: とりあえず、ビール二つお願いします。
+  text: とりあえず、ビール二つお願いします。
   korean_translation: 일단 맥주 두 잔 주세요.
   items:
     - item_seed_id: it_toriaezu
@@ -3206,7 +3206,7 @@
         example_translation: 일단 앉아서 이야기하자.
 
 - seed_id: sn_0173
-  japanese: 雨が降りそうだから、傘を持っていったほうがいい。
+  text: 雨が降りそうだから、傘を持っていったほうがいい。
   korean_translation: 비가 올 것 같으니까 우산 가져가는 게 좋아.
   items:
     - item_seed_id: it_hougaii
@@ -3223,7 +3223,7 @@
         example_translation: 일찍 자는 게 좋아.
 
 - seed_id: sn_0174
-  japanese: 別に予定はないけど、どうして？
+  text: 別に予定はないけど、どうして？
   korean_translation: 딱히 일정은 없는데, 왜?
   items:
     - item_seed_id: it_betsuni
@@ -3240,7 +3240,7 @@
         example_translation: 딱히 화 안 났어.
 
 - seed_id: sn_0175
-  japanese: 私は猫が好きです。
+  text: 私は猫が好きです。
   korean_translation: 저는 고양이를 좋아해요.
   items:
     - item_seed_id: it_suki
@@ -3257,7 +3257,7 @@
         example_translation: 형은 야구를 좋아한다.
 
 - seed_id: sn_0176
-  japanese: ここで少し待ってください。
+  text: ここで少し待ってください。
   korean_translation: 여기서 조금 기다려 주세요.
   items:
     - item_seed_id: it_matsu
@@ -3274,7 +3274,7 @@
         example_translation: 역에서 친구를 기다리고 있어요.
 
 - seed_id: sn_0177
-  japanese: 明日、暇？
+  text: 明日、暇？
   korean_translation: 내일 시간 있어?
   items:
     - item_seed_id: it_hima
@@ -3291,7 +3291,7 @@
         example_translation: 이번 주말에 시간 있으면 놀자.
 
 - seed_id: sn_0178
-  japanese: 夏休みに沖縄へ行きたい。
+  text: 夏休みに沖縄へ行きたい。
   korean_translation: 여름휴가에 오키나와에 가고 싶다.
   items:
     - item_seed_id: it_tai
@@ -3308,7 +3308,7 @@
         example_translation: 차가운 물 마시고 싶다.
 
 - seed_id: sn_0179
-  japanese: 明日の試験、頑張ってね。
+  text: 明日の試験、頑張ってね。
   korean_translation: 내일 시험 힘내.
   items:
     - item_seed_id: it_ganbaru
@@ -3325,7 +3325,7 @@
         example_translation: 새 일, 힘내세요.
 
 - seed_id: sn_0180
-  japanese: 久しぶり！元気だった？
+  text: 久しぶり！元気だった？
   korean_translation: 오랜만이야! 잘 지냈어?
   items:
     - item_seed_id: it_hisashiburi
@@ -3342,7 +3342,7 @@
         example_translation: 오랜만이다.
 
 - seed_id: sn_0181
-  japanese: 遠慮しないで、たくさん食べてね。
+  text: 遠慮しないで、たくさん食べてね。
   korean_translation: 사양하지 말고 많이 먹어.
   items:
     - item_seed_id: it_enryo
@@ -3359,7 +3359,7 @@
         example_translation: 사양하지 말고 뭐든 물어보세요.
 
 - seed_id: sn_0182
-  japanese: まずい、先生にばれたかもしれない。
+  text: まずい、先生にばれたかもしれない。
   korean_translation: 큰일이다, 선생님한테 들켰을지도 몰라.
   items:
     - item_seed_id: it_mazui
@@ -3376,7 +3376,7 @@
         example_translation: 큰일이다, 전철 놓치겠다.
 
 - seed_id: sn_0183
-  japanese: 約束したのに、彼は来なかった。
+  text: 約束したのに、彼は来なかった。
   korean_translation: 약속했는데 그는 오지 않았다.
   items:
     - item_seed_id: it_noni
@@ -3393,7 +3393,7 @@
         example_translation: 열심히 공부했는데 시험에 떨어졌다.
 
 - seed_id: sn_0184
-  japanese: 明日は雨だと思う。
+  text: 明日は雨だと思う。
   korean_translation: 내일은 비가 올 것 같아.
   items:
     - item_seed_id: it_omou
@@ -3410,7 +3410,7 @@
         example_translation: 그는 아마 안 올 것 같아.
 
 - seed_id: sn_0185
-  japanese: 来週のご都合はいかがですか。
+  text: 来週のご都合はいかがですか。
   korean_translation: 다음 주 사정은 어떠세요?
   items:
     - item_seed_id: it_tsugou
@@ -3427,7 +3427,7 @@
         example_translation: 편한 날을 알려 주세요.
 
 - seed_id: sn_0186
-  japanese: 小さなミスだから、気にしないで。
+  text: 小さなミスだから、気にしないで。
   korean_translation: 작은 실수니까 신경 쓰지 마.
   items:
     - item_seed_id: it_kinisuru
@@ -3444,7 +3444,7 @@
         example_translation: 저는 전혀 신경 안 써요.
 
 - seed_id: sn_0187
-  japanese: 試験の結果が気になる。
+  text: 試験の結果が気になる。
   korean_translation: 시험 결과가 신경 쓰인다.
   items:
     - item_seed_id: it_kininaru
@@ -3461,7 +3461,7 @@
         example_translation: 뒷이야기가 궁금해서 끝까지 읽었다.
 
 - seed_id: sn_0188
-  japanese: さすがプロだね。料理がすごくおいしい。
+  text: さすがプロだね。料理がすごくおいしい。
   korean_translation: 역시 프로네. 요리가 정말 맛있어.
   items:
     - item_seed_id: it_sasuga
@@ -3478,7 +3478,7 @@
         example_translation: 역시 선배님, 뭐든 아시네요.
 
 - seed_id: sn_0189
-  japanese: どこで買ったんですか。すごくかわいいですね。
+  text: どこで買ったんですか。すごくかわいいですね。
   korean_translation: 어디서 사셨어요? 정말 귀엽네요.
   items:
     - item_seed_id: it_ndesu
@@ -3495,7 +3495,7 @@
         example_translation: 왜 늦으셨어요?
 
 - seed_id: sn_0190
-  japanese: ちょっと聞きたいんですけど、今いいですか。
+  text: ちょっと聞きたいんですけど、今いいですか。
   korean_translation: 좀 여쭤보고 싶은데요, 지금 괜찮으세요?
   items:
     - item_seed_id: it_tai
@@ -3525,7 +3525,7 @@
         example_translation: 길을 잃었는데요….
 
 - seed_id: sn_0191
-  japanese: そうか、今日は休みなんだ。
+  text: そうか、今日は休みなんだ。
   korean_translation: 그렇구나, 오늘은 쉬는 날이구나.
   items:
     - item_seed_id: it_ndesu
@@ -3542,7 +3542,7 @@
         example_translation: 와, 그 사람 결혼하는구나.
 
 - seed_id: sn_0192
-  japanese: そうですね…、ちょっと考えさせてください。
+  text: そうですね…、ちょっと考えさせてください。
   korean_translation: 글쎄요…, 좀 생각해 볼게요.
   items:
     - item_seed_id: it_soudesune
@@ -3559,7 +3559,7 @@
         example_translation: 글쎄요…, 좀 어려울지도 모르겠네요.
 
 - seed_id: sn_0193
-  japanese: そうだね、駅前のカフェにしようか。
+  text: そうだね、駅前のカフェにしようか。
   korean_translation: 그래, 역 앞 카페로 할까.
   items:
     - item_seed_id: it_soudesune
@@ -3576,7 +3576,7 @@
         example_translation: 그래, 조금만 더 기다리자.
 
 - seed_id: sn_0194
-  japanese: そうですね、休みの日はよく料理をします。
+  text: そうですね、休みの日はよく料理をします。
   korean_translation: 글쎄요, 쉬는 날에는 요리를 자주 해요.
   items:
     - item_seed_id: it_soudesune
@@ -3593,7 +3593,7 @@
         example_translation: 글쎄요, 가장 기억에 남는 건 고등학교 축제예요.
 
 - seed_id: sn_0195
-  japanese: 大変！台所から煙が出てる！
+  text: 大変！台所から煙が出てる！
   korean_translation: 큰일이야! 부엌에서 연기 나!
   items:
     - item_seed_id: it_taihen
@@ -3610,7 +3610,7 @@
         example_translation: 큰일이다, 지갑이 없어!
 
 - seed_id: sn_0196
-  japanese: 毎日お弁当を作るのは大変だ。
+  text: 毎日お弁当を作るのは大変だ。
   korean_translation: 매일 도시락 싸는 건 힘들다.
   items:
     - item_seed_id: it_taihen
@@ -3627,7 +3627,7 @@
         example_translation: 이 일은 체력적으로 힘들다.
 
 - seed_id: sn_0197
-  japanese: 本日は大変ありがとうございました。
+  text: 本日は大変ありがとうございました。
   korean_translation: 오늘 대단히 감사했습니다.
   items:
     - item_seed_id: it_taihen
@@ -3644,7 +3644,7 @@
         example_translation: 대단히 죄송합니다.
 
 - seed_id: sn_0198
-  japanese: とりあえず、今日はここまでにしよう。
+  text: とりあえず、今日はここまでにしよう。
   korean_translation: 일단 오늘은 여기까지 하자.
   items:
     - item_seed_id: it_toriaezu
@@ -3661,7 +3661,7 @@
         example_translation: 일단 내일 다시 생각하자.
 
 - seed_id: sn_0199
-  japanese: とりあえず、名前だけ書いておいてください。
+  text: とりあえず、名前だけ書いておいてください。
   korean_translation: 일단 이름만 적어 두세요.
   items:
     - item_seed_id: it_toriaezu
@@ -3678,7 +3678,7 @@
         example_translation: 일단 메일로 보내 둘게요.
 
 - seed_id: sn_0200
-  japanese: 熱はとりあえず下がった。
+  text: 熱はとりあえず下がった。
   korean_translation: 열은 일단 내렸다.
   items:
     - item_seed_id: it_toriaezu
@@ -3695,7 +3695,7 @@
         example_translation: 일단 문제는 해결됐다.
 
 - seed_id: sn_0201
-  japanese: 夜遅くに甘いものは食べないほうがいいよ。
+  text: 夜遅くに甘いものは食べないほうがいいよ。
   korean_translation: 밤늦게 단 건 안 먹는 게 좋아.
   items:
     - item_seed_id: it_hougaii
@@ -3712,7 +3712,7 @@
         example_translation: 무리는 안 하는 게 좋아.
 
 - seed_id: sn_0202
-  japanese: 赤より青のほうがいいと思う。
+  text: 赤より青のほうがいいと思う。
   korean_translation: 빨간색보다 파란색이 나은 것 같아.
   items:
     - item_seed_id: it_hougaii
@@ -3742,7 +3742,7 @@
         example_translation: 이쪽 가게가 더 맛있는 것 같아요.
 
 - seed_id: sn_0203
-  japanese: 医者に「お酒は控えたほうがいい」と言われた。
+  text: 医者に「お酒は控えたほうがいい」と言われた。
   korean_translation: 의사에게 "술은 줄이는 게 좋다"는 말을 들었다.
   items:
     - item_seed_id: it_hougaii
@@ -3759,7 +3759,7 @@
         example_translation: 선생님께 더 연습하는 게 좋다는 말을 들었다.
 
 - seed_id: sn_0204
-  japanese: 何かあったのかと聞いたら、「別に」と言われた。
+  text: 何かあったのかと聞いたら、「別に」と言われた。
   korean_translation: 무슨 일 있냐고 물었더니 "별로"라는 대답이 돌아왔다.
   items:
     - item_seed_id: it_betsuni
@@ -3776,7 +3776,7 @@
         example_translation: 왜 그래? / 아무것도 아니야.
 
 - seed_id: sn_0205
-  japanese: 別に今日じゃなくてもいいよ。
+  text: 別に今日じゃなくてもいいよ。
   korean_translation: 굳이 오늘이 아니어도 돼.
   items:
     - item_seed_id: it_betsuni
@@ -3793,7 +3793,7 @@
         example_translation: 굳이 서두르지 않으셔도 돼요.
 
 - seed_id: sn_0206
-  japanese: 送料は別にかかります。
+  text: 送料は別にかかります。
   korean_translation: 배송비는 따로 들어요.
   items:
     - item_seed_id: it_betsuni
@@ -3810,7 +3810,7 @@
         example_translation: 세금은 따로 내 주세요.
 
 - seed_id: sn_0207
-  japanese: ずっと前から好きでした。
+  text: ずっと前から好きでした。
   korean_translation: 오래전부터 좋아했어요.
   items:
     - item_seed_id: it_suki
@@ -3827,7 +3827,7 @@
         example_translation: 당신을 좋아해요.
 
 - seed_id: sn_0208
-  japanese: 好きな食べ物は何ですか。
+  text: 好きな食べ物は何ですか。
   korean_translation: 좋아하는 음식이 뭐예요?
   items:
     - item_seed_id: it_suki
@@ -3844,7 +3844,7 @@
         example_translation: 좋아하는 색은 파란색이에요.
 
 - seed_id: sn_0209
-  japanese: もう好きにして。
+  text: もう好きにして。
   korean_translation: 이제 네 마음대로 해.
   items:
     - item_seed_id: it_suki
@@ -3861,7 +3861,7 @@
         example_translation: 쉬는 날은 마음대로 보내고 싶다.
 
 - seed_id: sn_0210
-  japanese: 待って、今の話もう一回聞かせて。
+  text: 待って、今の話もう一回聞かせて。
   korean_translation: 잠깐, 방금 얘기 한 번 더 들려줘.
   items:
     - item_seed_id: it_matsu
@@ -3878,7 +3878,7 @@
         example_translation: 잠깐만, 열쇠를 두고 왔어.
 
 - seed_id: sn_0211
-  japanese: お待たせ。行こうか。
+  text: お待たせ。行こうか。
   korean_translation: 기다렸지. 가자.
   items:
     - item_seed_id: it_matsu
@@ -3895,7 +3895,7 @@
         example_translation: 오래 기다리셨습니다. 커피 나왔습니다.
 
 - seed_id: sn_0212
-  japanese: 三十分も待ったのに、バスが来ない。
+  text: 三十分も待ったのに、バスが来ない。
   korean_translation: 30분이나 기다렸는데 버스가 안 온다.
   items:
     - item_seed_id: it_matsu
@@ -3925,7 +3925,7 @@
         example_translation: 일찍 나왔는데 차가 막혀서 늦었다.
 
 - seed_id: sn_0213
-  japanese: 雨で出かけられなくて暇だ。
+  text: 雨で出かけられなくて暇だ。
   korean_translation: 비 때문에 못 나가서 심심하다.
   items:
     - item_seed_id: it_hima
@@ -3942,7 +3942,7 @@
         example_translation: 심심하니까 산책이라도 하자.
 
 - seed_id: sn_0214
-  japanese: 今日はお客さんが少なくて、店が暇だ。
+  text: 今日はお客さんが少なくて、店が暇だ。
   korean_translation: 오늘은 손님이 적어서 가게가 한가하다.
   items:
     - item_seed_id: it_hima
@@ -3959,7 +3959,7 @@
         example_translation: 이 시간에는 가게가 한가해진다.
 
 - seed_id: sn_0215
-  japanese: 最近は料理をする暇もない。
+  text: 最近は料理をする暇もない。
   korean_translation: 요즘은 요리할 짬도 없다.
   items:
     - item_seed_id: it_hima
@@ -3976,7 +3976,7 @@
         example_translation: 쉴 틈이 없다.
 
 - seed_id: sn_0216
-  japanese: 弟が犬を飼いたいと言っている。
+  text: 弟が犬を飼いたいと言っている。
   korean_translation: 남동생이 개를 키우고 싶다고 한다.
   items:
     - item_seed_id: it_tai
@@ -3993,7 +3993,7 @@
         example_translation: 딸이 피아노를 배우고 싶어 한다.
 
 - seed_id: sn_0217
-  japanese: 何が食べたい？
+  text: 何が食べたい？
   korean_translation: 뭐 먹고 싶어?
   items:
     - item_seed_id: it_tai
@@ -4010,7 +4010,7 @@
         example_translation: 어디 가고 싶어?
 
 - seed_id: sn_0218
-  japanese: 今年はダイエットを頑張る。
+  text: 今年はダイエットを頑張る。
   korean_translation: 올해는 다이어트 열심히 할 거야.
   items:
     - item_seed_id: it_ganbaru
@@ -4027,7 +4027,7 @@
         example_translation: 영어 공부를 열심히 하고 있어요.
 
 - seed_id: sn_0219
-  japanese: 最後までよく頑張ったね。
+  text: 最後までよく頑張ったね。
   korean_translation: 끝까지 잘 해냈네.
   items:
     - item_seed_id: it_ganbaru
@@ -4044,7 +4044,7 @@
         example_translation: 졌지만 다들 잘 싸웠다.
 
 - seed_id: sn_0220
-  japanese: 頑張りすぎて体を壊した。
+  text: 頑張りすぎて体を壊した。
   korean_translation: 너무 무리해서 몸이 상했다.
   items:
     - item_seed_id: it_ganbaru
@@ -4061,7 +4061,7 @@
         example_translation: 너무 무리하지 마.
 
 - seed_id: sn_0221
-  japanese: 久しぶりに映画館で映画を見た。
+  text: 久しぶりに映画館で映画を見た。
   korean_translation: 오랜만에 영화관에서 영화를 봤다.
   items:
     - item_seed_id: it_hisashiburi
@@ -4078,7 +4078,7 @@
         example_translation: 오랜만에 요리를 했다.
 
 - seed_id: sn_0222
-  japanese: 田中さん、お久しぶりです。
+  text: 田中さん、お久しぶりです。
   korean_translation: 다나카 씨, 오랜만입니다.
   items:
     - item_seed_id: it_hisashiburi
@@ -4095,7 +4095,7 @@
         example_translation: 선생님, 오랜만입니다.
 
 - seed_id: sn_0223
-  japanese: 久しぶりの雨で、庭の花が元気になった。
+  text: 久しぶりの雨で、庭の花が元気になった。
   korean_translation: 오랜만에 온 비로 정원의 꽃이 생기를 되찾았다.
   items:
     - item_seed_id: it_hisashiburi
@@ -4112,7 +4112,7 @@
         example_translation: 오랜만의 휴일이라 푹 잤다.
 
 - seed_id: sn_0224
-  japanese: 飲み会の二次会は遠慮します。
+  text: 飲み会の二次会は遠慮します。
   korean_translation: 회식 2차는 사양할게요.
   items:
     - item_seed_id: it_enryo
@@ -4129,7 +4129,7 @@
         example_translation: 오늘은 차를 가져와서 술은 사양할게요.
 
 - seed_id: sn_0225
-  japanese: 店内での撮影はご遠慮ください。
+  text: 店内での撮影はご遠慮ください。
   korean_translation: 매장 안에서의 촬영은 삼가 주세요.
   items:
     - item_seed_id: it_enryo
@@ -4146,7 +4146,7 @@
         example_translation: 여기서는 흡연을 삼가 주세요.
 
 - seed_id: sn_0226
-  japanese: 友達なんだから、遠慮なく言ってよ。
+  text: 友達なんだから、遠慮なく言ってよ。
   korean_translation: 친구니까 사양 말고 말해.
   items:
     - item_seed_id: it_enryo
@@ -4163,7 +4163,7 @@
         example_translation: 그럼 사양 않고 먹겠습니다.
 
 - seed_id: sn_0227
-  japanese: この店のコーヒー、ちょっとまずいね。
+  text: この店のコーヒー、ちょっとまずいね。
   korean_translation: 이 가게 커피 좀 맛없다.
   items:
     - item_seed_id: it_mazui
@@ -4180,7 +4180,7 @@
         example_translation: 이 빵 좀 맛없어.
 
 - seed_id: sn_0228
-  japanese: ここで写真を撮るのは、まずいんじゃない？
+  text: ここで写真を撮るのは、まずいんじゃない？
   korean_translation: 여기서 사진 찍는 건 좀 곤란하지 않아?
   items:
     - item_seed_id: it_mazui
@@ -4197,7 +4197,7 @@
         example_translation: 그 말 하는 건 곤란해.
 
 - seed_id: sn_0229
-  japanese: 会議中にスマホが鳴って、まずい雰囲気になった。
+  text: 会議中にスマホが鳴って、まずい雰囲気になった。
   korean_translation: 회의 중에 휴대폰이 울려서 분위기가 곤란해졌다.
   items:
     - item_seed_id: it_mazui
@@ -4214,7 +4214,7 @@
         example_translation: 곤란한 일이 됐다.
 
 - seed_id: sn_0230
-  japanese: 言ってくれれば手伝ったのに。
+  text: 言ってくれれば手伝ったのに。
   korean_translation: 말해 줬으면 도와줬을 텐데.
   items:
     - item_seed_id: it_noni
@@ -4231,7 +4231,7 @@
         example_translation: 좀 더 일찍 왔으면 좋았을 텐데.
 
 - seed_id: sn_0231
-  japanese: 日曜日なのに、会社に行かなきゃいけない。
+  text: 日曜日なのに、会社に行かなきゃいけない。
   korean_translation: 일요일인데 회사에 가야 한다.
   items:
     - item_seed_id: it_noni
@@ -4248,7 +4248,7 @@
         example_translation: 쉬는 날인데 아침 일찍 깨 버렸다.
 
 - seed_id: sn_0232
-  japanese: 来年、仕事を辞めようと思う。
+  text: 来年、仕事を辞めようと思う。
   korean_translation: 내년에 일을 그만둘까 한다.
   items:
     - item_seed_id: it_omou
@@ -4265,7 +4265,7 @@
         example_translation: 주말에는 집에서 쉬려고 해요.
 
 - seed_id: sn_0233
-  japanese: 新しい先生のこと、どう思う？
+  text: 新しい先生のこと、どう思う？
   korean_translation: 새 선생님 어떻게 생각해?
   items:
     - item_seed_id: it_omou
@@ -4282,7 +4282,7 @@
         example_translation: 이 계획 어떻게 생각하세요?
 
 - seed_id: sn_0234
-  japanese: あいにく、その日は都合が悪くて。
+  text: あいにく、その日は都合が悪くて。
   korean_translation: 공교롭게도 그날은 사정이 안 돼서요.
   items:
     - item_seed_id: it_tsugou
@@ -4299,7 +4299,7 @@
         example_translation: 갑자기 사정이 생겨 버렸어요.
 
 - seed_id: sn_0235
-  japanese: 自分の都合ばかり言わないで。
+  text: 自分の都合ばかり言わないで。
   korean_translation: 자기 사정만 말하지 마.
   items:
     - item_seed_id: it_tsugou
@@ -4316,7 +4316,7 @@
         example_translation: 그건 네 사정이잖아.
 
 - seed_id: sn_0236
-  japanese: 店の都合で、明日は休みます。
+  text: 店の都合で、明日は休みます。
   korean_translation: 가게 사정으로 내일은 쉽니다.
   items:
     - item_seed_id: it_tsugou
@@ -4333,7 +4333,7 @@
         example_translation: 사정에 따라 오늘은 휴업합니다.
 
 - seed_id: sn_0237
-  japanese: 彼は人の目をすごく気にする。
+  text: 彼は人の目をすごく気にする。
   korean_translation: 그는 남의 시선을 무척 신경 쓴다.
   items:
     - item_seed_id: it_kinisuru
@@ -4350,7 +4350,7 @@
         example_translation: 나이를 신경 쓸 필요는 없다.
 
 - seed_id: sn_0238
-  japanese: 甘いものを食べるとき、カロリーを気にする。
+  text: 甘いものを食べるとき、カロリーを気にする。
   korean_translation: 단 걸 먹을 때 칼로리를 신경 쓴다.
   items:
     - item_seed_id: it_kinisuru
@@ -4367,7 +4367,7 @@
         example_translation: 요즘 몸무게를 신경 쓰고 있다.
 
 - seed_id: sn_0239
-  japanese: 気にしないようにしても、やっぱり気になる。
+  text: 気にしないようにしても、やっぱり気になる。
   korean_translation: 신경 안 쓰려고 해도 역시 신경 쓰인다.
   items:
     - item_seed_id: it_kinisuru
@@ -4397,7 +4397,7 @@
         example_translation: 한번 신경 쓰이면 계속 신경 쓰인다.
 
 - seed_id: sn_0240
-  japanese: 隣の部屋の音が気になって、眠れない。
+  text: 隣の部屋の音が気になって、眠れない。
   korean_translation: 옆방 소리가 거슬려서 잠을 못 잔다.
   items:
     - item_seed_id: it_kininaru
@@ -4414,7 +4414,7 @@
         example_translation: 냄새가 거슬린다.
 
 - seed_id: sn_0241
-  japanese: 最近、同じクラスの子が気になる。
+  text: 最近、同じクラスの子が気になる。
   korean_translation: 요즘 같은 반 애한테 자꾸 마음이 간다.
   items:
     - item_seed_id: it_kininaru
@@ -4431,7 +4431,7 @@
         example_translation: 마음에 두고 있는 사람 있어?
 
 - seed_id: sn_0242
-  japanese: さすがに夜中の二時に電話するのは失礼だ。
+  text: さすがに夜中の二時に電話するのは失礼だ。
   korean_translation: 아무리 그래도 새벽 2시에 전화하는 건 실례다.
   items:
     - item_seed_id: it_sasuga
@@ -4448,7 +4448,7 @@
         example_translation: 사흘 연속 밤샘은 아무리 그래도 힘들다.
 
 - seed_id: sn_0243
-  japanese: さすが京都、どこを見てもきれいだ。
+  text: さすが京都、どこを見てもきれいだ。
   korean_translation: 역시 교토, 어딜 봐도 예쁘다.
   items:
     - item_seed_id: it_sasuga
@@ -4465,7 +4465,7 @@
         example_translation: 역시 유명한 가게답게 맛있다.
 
 - seed_id: sn_0244
-  japanese: 部長、さすがですね。すぐに問題が解決しました。
+  text: 部長、さすがですね。すぐに問題が解決しました。
   korean_translation: 부장님, 역시 대단하세요. 금방 문제가 해결됐어요.
   items:
     - item_seed_id: it_sasuga
@@ -4484,7 +4484,7 @@
 # ---- round3 추가분
 
 - seed_id: sn_0245
-  japanese: バスがなかなか来ない。
+  text: バスがなかなか来ない。
   korean_translation: 버스가 좀처럼 안 온다.
   items:
     - item_seed_id: it_nakanaka
@@ -4501,7 +4501,7 @@
         example_translation: 감기가 좀처럼 낫지 않는다.
 
 - seed_id: sn_0246
-  japanese: 雨が降るかもしれないから、一応傘を持っていこう。
+  text: 雨が降るかもしれないから、一応傘を持っていこう。
   korean_translation: 비가 올지도 모르니까 혹시 몰라 우산 가져가자.
   items:
     - item_seed_id: it_kamoshirenai
@@ -4531,7 +4531,7 @@
         example_translation: 혹시 모르니 약도 가져간다.
 
 - seed_id: sn_0247
-  japanese: 適当に座ってください。
+  text: 適当に座ってください。
   korean_translation: 편한 자리에 앉으세요.
   items:
     - item_seed_id: it_tekitou
@@ -4548,7 +4548,7 @@
         example_translation: 음료는 알아서 가져가.
 
 - seed_id: sn_0248
-  japanese: 日本では、家の中で靴を脱ぐのが普通だ。
+  text: 日本では、家の中で靴を脱ぐのが普通だ。
   korean_translation: 일본에서는 집 안에서 신발을 벗는 게 보통이다.
   items:
     - item_seed_id: it_futsuu
@@ -4565,7 +4565,7 @@
         example_translation: 이 근처에서는 차로 출퇴근하는 게 보통이에요.
 
 - seed_id: sn_0249
-  japanese: 階段はゆっくり降りてね。
+  text: 階段はゆっくり降りてね。
   korean_translation: 계단은 천천히 내려가.
   items:
     - item_seed_id: it_yukkuri
@@ -4582,7 +4582,7 @@
         example_translation: 천천히 걷자.
 
 - seed_id: sn_0250
-  japanese: 明日の会議の資料をコピーしておく。
+  text: 明日の会議の資料をコピーしておく。
   korean_translation: 내일 회의 자료를 복사해 둔다.
   items:
     - item_seed_id: it_teoku
@@ -4599,7 +4599,7 @@
         example_translation: 여행 전에 호텔을 예약해 둔다.
 
 - seed_id: sn_0251
-  japanese: 駅に着いたら、電話してください。
+  text: 駅に着いたら、電話してください。
   korean_translation: 역에 도착하면 전화 주세요.
   items:
     - item_seed_id: it_tara
@@ -4616,7 +4616,7 @@
         example_translation: 일 끝나면 한잔하러 가자.
 
 - seed_id: sn_0252
-  japanese: 高いけど、この店のパンはおいしい。
+  text: 高いけど、この店のパンはおいしい。
   korean_translation: 비싸지만 이 가게 빵은 맛있다.
   items:
     - item_seed_id: it_kedo
@@ -4633,7 +4633,7 @@
         example_translation: 졸리지만 조금만 더 힘내자.
 
 - seed_id: sn_0253
-  japanese: 明日は雨が降るって。
+  text: 明日は雨が降るって。
   korean_translation: 내일 비 온대.
   items:
     - item_seed_id: it_tte
@@ -4650,7 +4650,7 @@
         example_translation: 역 앞에 새 카페가 생겼대.
 
 - seed_id: sn_0254
-  japanese: 週末、一緒に映画を見ませんか。
+  text: 週末、一緒に映画を見ませんか。
   korean_translation: 주말에 같이 영화 보지 않을래요?
   items:
     - item_seed_id: it_masenka
@@ -4667,7 +4667,7 @@
         example_translation: 차라도 한잔하지 않을래요?
 
 - seed_id: sn_0255
-  japanese: この店、前にも来たよね。
+  text: この店、前にも来たよね。
   korean_translation: 이 가게 전에도 왔었지?
   items:
     - item_seed_id: it_yone
@@ -4684,7 +4684,7 @@
         example_translation: 이 길 맞지?
 
 - seed_id: sn_0256
-  japanese: 明日、晴れるかな。
+  text: 明日、晴れるかな。
   korean_translation: 내일 맑을까.
   items:
     - item_seed_id: it_kana
@@ -4701,7 +4701,7 @@
         example_translation: 그 사람 올까.
 
 - seed_id: sn_0257
-  japanese: 昨日は食べすぎた。
+  text: 昨日は食べすぎた。
   korean_translation: 어제는 과식했다.
   items:
     - item_seed_id: it_sugiru
@@ -4718,7 +4718,7 @@
         example_translation: 어젯밤에 과음했다.
 
 - seed_id: sn_0258
-  japanese: このケーキ、おいしそう。
+  text: このケーキ、おいしそう。
   korean_translation: 이 케이크 맛있어 보인다.
   items:
     - item_seed_id: it_sou
@@ -4735,7 +4735,7 @@
         example_translation: 이 책 재미있어 보이네.
 
 - seed_id: sn_0259
-  japanese: 外は寒いみたいだよ。
+  text: 外は寒いみたいだよ。
   korean_translation: 밖은 추운 것 같아.
   items:
     - item_seed_id: it_mitai
@@ -4752,7 +4752,7 @@
         example_translation: 아무도 없는 것 같다.
 
 - seed_id: sn_0260
-  japanese: 明日は来なくてもいいよ。
+  text: 明日は来なくてもいいよ。
   korean_translation: 내일은 안 와도 돼.
   items:
     - item_seed_id: it_nakutemoii
@@ -4769,7 +4769,7 @@
         example_translation: 서두르지 않으셔도 돼요.
 
 - seed_id: sn_0261
-  japanese: これ、いいんじゃない？
+  text: これ、いいんじゃない？
   korean_translation: 이거 괜찮지 않아?
   items:
     - item_seed_id: it_janai
@@ -4786,7 +4786,7 @@
         example_translation: 슬슬 나가는 게 좋지 않아?
 
 - seed_id: sn_0262
-  japanese: 熱があるので、今日は休みます。
+  text: 熱があるので、今日は休みます。
   korean_translation: 열이 있어서 오늘은 쉬겠습니다.
   items:
     - item_seed_id: it_node
@@ -4803,7 +4803,7 @@
         example_translation: 길이 막혀서 늦었습니다.
 
 - seed_id: sn_0263
-  japanese: 妹に本を読んであげた。
+  text: 妹に本を読んであげた。
   korean_translation: 여동생에게 책을 읽어 주었다.
   items:
     - item_seed_id: it_teageru
@@ -4820,7 +4820,7 @@
         example_translation: 남동생에게 숙제를 가르쳐 주었다.
 
 - seed_id: sn_0264
-  japanese: この料理、なかなかおいしいね。
+  text: この料理、なかなかおいしいね。
   korean_translation: 이 요리 꽤 맛있네.
   items:
     - item_seed_id: it_nakanaka
@@ -4837,7 +4837,7 @@
         example_translation: 이 영화 꽤 재미있었다.
 
 - seed_id: sn_0265
-  japanese: 忙しくて、なかなか会えないね。
+  text: 忙しくて、なかなか会えないね。
   korean_translation: 바빠서 좀처럼 못 만나네.
   items:
     - item_seed_id: it_nakanaka
@@ -4854,7 +4854,7 @@
         example_translation: 좀처럼 휴가를 못 낸다.
 
 - seed_id: sn_0266
-  japanese: 彼のギターはなかなかのものだ。
+  text: 彼のギターはなかなかのものだ。
   korean_translation: 그의 기타 실력은 제법이다.
   items:
     - item_seed_id: it_nakanaka
@@ -4871,7 +4871,7 @@
         example_translation: 상당한 솜씨네요.
 
 - seed_id: sn_0267
-  japanese: レポートは一応書き終わった。
+  text: レポートは一応書き終わった。
   korean_translation: 리포트는 일단 다 쓰긴 했다.
   items:
     - item_seed_id: it_ichiou
@@ -4888,7 +4888,7 @@
         example_translation: 설명은 일단 들었어요.
 
 - seed_id: sn_0268
-  japanese: 一応、明日の時間を確認させてください。
+  text: 一応、明日の時間を確認させてください。
   korean_translation: 혹시 모르니 내일 시간을 확인하게 해 주세요.
   items:
     - item_seed_id: it_ichiou
@@ -4905,7 +4905,7 @@
         example_translation: 혹시 모르니 주소를 알려 주실 수 있나요?
 
 - seed_id: sn_0269
-  japanese: 一応、料理教室の先生をしています。
+  text: 一応、料理教室の先生をしています。
   korean_translation: 일단 요리 교실 선생님을 하고 있어요.
   items:
     - item_seed_id: it_ichiou
@@ -4922,7 +4922,7 @@
         example_translation: 일단 운전면허는 있어요.
 
 - seed_id: sn_0270
-  japanese: 彼はいつも仕事が適当だ。
+  text: 彼はいつも仕事が適当だ。
   korean_translation: 그는 늘 일을 대충 한다.
   items:
     - item_seed_id: it_tekitou
@@ -4939,7 +4939,7 @@
         example_translation: 설명이 너무 대충이다.
 
 - seed_id: sn_0271
-  japanese: 質問に適当に答えないで。
+  text: 質問に適当に答えないで。
   korean_translation: 질문에 대충 대답하지 마.
   items:
     - item_seed_id: it_tekitou
@@ -4956,7 +4956,7 @@
         example_translation: 아무 말이나 하지 마.
 
 - seed_id: sn_0272
-  japanese: 適当な言葉が見つからない。
+  text: 適当な言葉が見つからない。
   korean_translation: 알맞은 말이 떠오르지 않는다.
   items:
     - item_seed_id: it_tekitou
@@ -4973,7 +4973,7 @@
         example_translation: 알맞은 장소를 찾고 있어요.
 
 - seed_id: sn_0273
-  japanese: 味は普通かな。悪くはないけど。
+  text: 味は普通かな。悪くはないけど。
   korean_translation: 맛은 그냥 그래. 나쁘진 않지만.
   items:
     - item_seed_id: it_futsuu
@@ -5003,7 +5003,7 @@
         example_translation: 오늘은 이 정도면 되려나.
 
 - seed_id: sn_0274
-  japanese: このパン、普通においしい。
+  text: このパン、普通においしい。
   korean_translation: 이 빵 생각보다 맛있어.
   items:
     - item_seed_id: it_futsuu
@@ -5020,7 +5020,7 @@
         example_translation: 이 옷 꽤 귀엽다.
 
 - seed_id: sn_0275
-  japanese: 普通は九時に始まるけど、今日は十時からだ。
+  text: 普通は九時に始まるけど、今日は十時からだ。
   korean_translation: 보통은 9시에 시작하는데 오늘은 10시부터다.
   items:
     - item_seed_id: it_futsuu
@@ -5037,7 +5037,7 @@
         example_translation: 보통은 전철로 가요.
 
 - seed_id: sn_0276
-  japanese: 疲れたでしょう。今夜はゆっくり寝てね。
+  text: 疲れたでしょう。今夜はゆっくり寝てね。
   korean_translation: 피곤하지? 오늘 밤은 푹 자.
   items:
     - item_seed_id: it_yukkuri
@@ -5054,7 +5054,7 @@
         example_translation: 온천에서 느긋하게 쉬고 싶다.
 
 - seed_id: sn_0277
-  japanese: どうぞ、ごゆっくりお過ごしください。
+  text: どうぞ、ごゆっくりお過ごしください。
   korean_translation: 편히 쉬다 가세요.
   items:
     - item_seed_id: it_yukkuri
@@ -5071,7 +5071,7 @@
         example_translation: 천천히 즐기세요.
 
 - seed_id: sn_0278
-  japanese: 返事はゆっくりでいいよ。
+  text: 返事はゆっくりでいいよ。
   korean_translation: 답장은 천천히 해도 돼.
   items:
     - item_seed_id: it_yukkuri
@@ -5088,7 +5088,7 @@
         example_translation: 천천히 하셔도 되니 확인해 주세요.
 
 - seed_id: sn_0279
-  japanese: 窓は開けておいてください。
+  text: 窓は開けておいてください。
   korean_translation: 창문은 열어 두세요.
   items:
     - item_seed_id: it_teoku
@@ -5105,7 +5105,7 @@
         example_translation: 불은 켜 둬.
 
 - seed_id: sn_0280
-  japanese: 冷蔵庫に入れとくね。
+  text: 冷蔵庫に入れとくね。
   korean_translation: 냉장고에 넣어 둘게.
   items:
     - item_seed_id: it_teoku
@@ -5122,7 +5122,7 @@
         example_translation: 나중에 해 둘게.
 
 - seed_id: sn_0281
-  japanese: 今日はお酒はやめておきます。
+  text: 今日はお酒はやめておきます。
   korean_translation: 오늘은 술은 안 마실게요.
   items:
     - item_seed_id: it_teoku
@@ -5139,7 +5139,7 @@
         example_translation: 이번에는 사양할게요.
 
 - seed_id: sn_0282
-  japanese: 家に帰ったら、荷物が届いていた。
+  text: 家に帰ったら、荷物が届いていた。
   korean_translation: 집에 갔더니 짐이 와 있었다.
   items:
     - item_seed_id: it_tara
@@ -5156,7 +5156,7 @@
         example_translation: 창문을 열었더니 눈이 오고 있었다.
 
 - seed_id: sn_0283
-  japanese: 疲れているなら、少し休んだらどう？
+  text: 疲れているなら、少し休んだらどう？
   korean_translation: 피곤하면 좀 쉬는 게 어때?
   items:
     - item_seed_id: it_tara
@@ -5173,7 +5173,7 @@
         example_translation: 선생님께 여쭤보는 게 어때?
 
 - seed_id: sn_0284
-  japanese: もし宝くじが当たったら、何をしたい？
+  text: もし宝くじが当たったら、何をしたい？
   korean_translation: 만약 복권에 당첨되면 뭐 하고 싶어?
   items:
     - item_seed_id: it_tara
@@ -5190,7 +5190,7 @@
         example_translation: 만약 시간 있으면 도와주세요.
 
 - seed_id: sn_0285
-  japanese: 駅に行きたいんですけど、どう行けばいいですか。
+  text: 駅に行きたいんですけど、どう行けばいいですか。
   korean_translation: 역에 가고 싶은데요, 어떻게 가면 되나요?
   items:
     - item_seed_id: it_kedo
@@ -5207,7 +5207,7 @@
         example_translation: 저기요, 잠깐 괜찮으세요? 여쭤볼 게 있는데요.
 
 - seed_id: sn_0286
-  japanese: 明日は用事があるんだけど…。
+  text: 明日は用事があるんだけど…。
   korean_translation: 내일은 볼일이 있는데….
   items:
     - item_seed_id: it_kedo
@@ -5224,7 +5224,7 @@
         example_translation: 그날은 좀 바쁜데….
 
 - seed_id: sn_0287
-  japanese: 私はこっちが好きだけどね。
+  text: 私はこっちが好きだけどね。
   korean_translation: 난 이게 좋은데 말이야.
   items:
     - item_seed_id: it_kedo
@@ -5241,7 +5241,7 @@
         example_translation: 난 괜찮은 것 같은데.
 
 - seed_id: sn_0288
-  japanese: 「わびさび」って何ですか。
+  text: 「わびさび」って何ですか。
   korean_translation: 와비사비가 뭐예요?
   items:
     - item_seed_id: it_tte
@@ -5258,7 +5258,7 @@
         example_translation: 이 한자는 어떻게 읽어?
 
 - seed_id: sn_0289
-  japanese: 山本さんって人から電話があったよ。
+  text: 山本さんって人から電話があったよ。
   korean_translation: 야마모토 씨라는 사람한테서 전화 왔었어.
   items:
     - item_seed_id: it_tte
@@ -5275,7 +5275,7 @@
         example_translation: 역 앞에 "사쿠라"라는 가게 알아?
 
 - seed_id: sn_0290
-  japanese: 道が混んでいるから、少し遅れるかもしれない。
+  text: 道が混んでいるから、少し遅れるかもしれない。
   korean_translation: 길이 막혀서 조금 늦을지도 몰라.
   items:
     - item_seed_id: it_kamoshirenai
@@ -5292,7 +5292,7 @@
         example_translation: 오늘은 귀가가 늦어질지도 몰라.
 
 - seed_id: sn_0291
-  japanese: その日は難しいかもしれません。
+  text: その日は難しいかもしれません。
   korean_translation: 그날은 어려울지도 모르겠습니다.
   items:
     - item_seed_id: it_kamoshirenai
@@ -5309,7 +5309,7 @@
         example_translation: 시간이 좀 걸릴지도 모르겠습니다.
 
 - seed_id: sn_0292
-  japanese: これ、私の傘かも。
+  text: これ、私の傘かも。
   korean_translation: 이거 내 우산일지도.
   items:
     - item_seed_id: it_kamoshirenai
@@ -5326,7 +5326,7 @@
         example_translation: 내일 비 올지도.
 
 - seed_id: sn_0293
-  japanese: 少し休憩しませんか。
+  text: 少し休憩しませんか。
   korean_translation: 잠깐 쉬지 않을래요?
   items:
     - item_seed_id: it_masenka
@@ -5343,7 +5343,7 @@
         example_translation: 슬슬 시작하지 않을래요?
 
 - seed_id: sn_0294
-  japanese: この荷物、運んでくれませんか。
+  text: この荷物、運んでくれませんか。
   korean_translation: 이 짐 좀 옮겨 주지 않을래요?
   items:
     - item_seed_id: it_masenka
@@ -5360,7 +5360,7 @@
         example_translation: 사진 좀 찍어 주실 수 있나요?
 
 - seed_id: sn_0295
-  japanese: よかったら、ここに座りませんか。
+  text: よかったら、ここに座りませんか。
   korean_translation: 괜찮으시면 여기 앉으시겠어요?
   items:
     - item_seed_id: it_masenka
@@ -5377,7 +5377,7 @@
         example_translation: 괜찮으시면 이거 쓰지 않으실래요?
 
 - seed_id: sn_0296
-  japanese: 明日の集合は八時ですよね。
+  text: 明日の集合は八時ですよね。
   korean_translation: 내일 집합은 8시죠?
   items:
     - item_seed_id: it_yone
@@ -5394,7 +5394,7 @@
         example_translation: 마감은 금요일이죠?
 
 - seed_id: sn_0297
-  japanese: 月曜の朝って、つらいよね。
+  text: 月曜の朝って、つらいよね。
   korean_translation: 월요일 아침은 힘들지.
   items:
     - item_seed_id: it_tte
@@ -5424,7 +5424,7 @@
         example_translation: 역시 집이 최고지.
 
 - seed_id: sn_0298
-  japanese: お金、ちゃんと返してくれるよね？
+  text: お金、ちゃんと返してくれるよね？
   korean_translation: 돈 제대로 갚아 줄 거지?
   items:
     - item_seed_id: it_yone
@@ -5441,7 +5441,7 @@
         example_translation: 내일은 안 늦겠지?
 
 - seed_id: sn_0299
-  japanese: 誰か手伝ってくれないかな。
+  text: 誰か手伝ってくれないかな。
   korean_translation: 누가 좀 도와주면 좋겠는데.
   items:
     - item_seed_id: it_kana
@@ -5458,7 +5458,7 @@
         example_translation: 빨리 여름방학이 됐으면 좋겠다.
 
 - seed_id: sn_0300
-  japanese: 今日はもう帰ろうかな。
+  text: 今日はもう帰ろうかな。
   korean_translation: 오늘은 이만 갈까.
   items:
     - item_seed_id: it_kana
@@ -5475,7 +5475,7 @@
         example_translation: 점심 뭐로 할까.
 
 - seed_id: sn_0301
-  japanese: この服は大きすぎる。
+  text: この服は大きすぎる。
   korean_translation: 이 옷은 너무 크다.
   items:
     - item_seed_id: it_sugiru
@@ -5492,7 +5492,7 @@
         example_translation: 이 문제는 너무 어렵다.
 
 - seed_id: sn_0302
-  japanese: この猫、かわいすぎる！
+  text: この猫、かわいすぎる！
   korean_translation: 이 고양이 너무 귀여워!
   items:
     - item_seed_id: it_sugiru
@@ -5509,7 +5509,7 @@
         example_translation: 이 경치 너무 예쁘다.
 
 - seed_id: sn_0303
-  japanese: お酒の飲みすぎには気をつけて。
+  text: お酒の飲みすぎには気をつけて。
   korean_translation: 과음은 조심해.
   items:
     - item_seed_id: it_sugiru
@@ -5526,7 +5526,7 @@
         example_translation: 과로로 몸이 상했다.
 
 - seed_id: sn_0304
-  japanese: あ、電池が切れそう。
+  text: あ、電池が切れそう。
   korean_translation: 아, 배터리가 곧 나갈 것 같아.
   items:
     - item_seed_id: it_sou
@@ -5543,7 +5543,7 @@
         example_translation: 당장이라도 비가 쏟아질 것 같다.
 
 - seed_id: sn_0305
-  japanese: 田中さん、忙しそうだね。
+  text: 田中さん、忙しそうだね。
   korean_translation: 다나카 씨 바빠 보이네.
   items:
     - item_seed_id: it_sou
@@ -5560,7 +5560,7 @@
         example_translation: 그녀는 기뻐 보였다.
 
 - seed_id: sn_0306
-  japanese: 今日中には終わりそうにない。
+  text: 今日中には終わりそうにない。
   korean_translation: 오늘 안에는 안 끝날 것 같다.
   items:
     - item_seed_id: it_sou
@@ -5577,7 +5577,7 @@
         example_translation: 이 비는 그칠 것 같지 않다.
 
 - seed_id: sn_0307
-  japanese: 夢みたいな話だね。
+  text: 夢みたいな話だね。
   korean_translation: 꿈같은 이야기네.
   items:
     - item_seed_id: it_mitai
@@ -5594,7 +5594,7 @@
         example_translation: 아이처럼 웃었다.
 
 - seed_id: sn_0308
-  japanese: 田中さん、会社を辞めたみたい。
+  text: 田中さん、会社を辞めたみたい。
   korean_translation: 다나카 씨 회사 그만둔 것 같아.
   items:
     - item_seed_id: it_mitai
@@ -5611,7 +5611,7 @@
         example_translation: 그 사람 감기에 걸린 것 같다.
 
 - seed_id: sn_0309
-  japanese: コーヒーみたいな苦いものは苦手だ。
+  text: コーヒーみたいな苦いものは苦手だ。
   korean_translation: 커피 같은 쓴 건 잘 못 먹는다.
   items:
     - item_seed_id: it_mitai
@@ -5628,7 +5628,7 @@
         example_translation: 개 같은 큰 동물이 좋아.
 
 - seed_id: sn_0310
-  japanese: 靴は脱がなくてもいいです。
+  text: 靴は脱がなくてもいいです。
   korean_translation: 신발은 안 벗으셔도 됩니다.
   items:
     - item_seed_id: it_nakutemoii
@@ -5645,7 +5645,7 @@
         example_translation: 예약은 안 하셔도 됩니다.
 
 - seed_id: sn_0311
-  japanese: 無理に笑わなくてもいいんだよ。
+  text: 無理に笑わなくてもいいんだよ。
   korean_translation: 억지로 웃지 않아도 괜찮아.
   items:
     - item_seed_id: it_nakutemoii
@@ -5662,7 +5662,7 @@
         example_translation: 전부 혼자 하지 않아도 돼.
 
 - seed_id: sn_0312
-  japanese: 返さなくていいよ、あげる。
+  text: 返さなくていいよ、あげる。
   korean_translation: 안 돌려줘도 돼, 줄게.
   items:
     - item_seed_id: it_nakutemoii
@@ -5679,7 +5679,7 @@
         example_translation: 오늘은 안 와도 돼.
 
 - seed_id: sn_0313
-  japanese: 昨日言ったじゃない。
+  text: 昨日言ったじゃない。
   korean_translation: 어제 말했잖아.
   items:
     - item_seed_id: it_janai
@@ -5696,7 +5696,7 @@
         example_translation: 그러니까 말했잖아.
 
 - seed_id: sn_0314
-  japanese: 田中さんじゃない？久しぶり！
+  text: 田中さんじゃない？久しぶり！
   korean_translation: 다나카 씨 아니야? 오랜만이다!
   items:
     - item_seed_id: it_janai
@@ -5713,7 +5713,7 @@
         example_translation: 어, 사토 씨 아니세요?
 
 - seed_id: sn_0315
-  japanese: 間に合ったじゃん！よかった。
+  text: 間に合ったじゃん！よかった。
   korean_translation: 늦지 않았잖아! 다행이다.
   items:
     - item_seed_id: it_janai
@@ -5730,7 +5730,7 @@
         example_translation: 좋잖아, 그거.
 
 - seed_id: sn_0316
-  japanese: 在庫がないので、取り寄せになります。
+  text: 在庫がないので、取り寄せになります。
   korean_translation: 재고가 없어서 주문해 드려야 합니다.
   items:
     - item_seed_id: it_node
@@ -5747,7 +5747,7 @@
         example_translation: 오늘은 만석이라 예약 부탁드립니다.
 
 - seed_id: sn_0317
-  japanese: もうすぐ始まるので、席に着いてください。
+  text: もうすぐ始まるので、席に着いてください。
   korean_translation: 곧 시작하니까 자리에 앉아 주세요.
   items:
     - item_seed_id: it_node
@@ -5764,7 +5764,7 @@
         example_translation: 위험하니까 물러나 주세요.
 
 - seed_id: sn_0318
-  japanese: 明日は雨です。なので、試合は中止です。
+  text: 明日は雨です。なので、試合は中止です。
   korean_translation: 내일은 비예요. 그래서 시합은 취소입니다.
   items:
     - item_seed_id: it_node
@@ -5781,7 +5781,7 @@
         example_translation: 내일은 쉬는 날이에요. 그래서 푹 잘 거예요.
 
 - seed_id: sn_0319
-  japanese: 荷物、持ってあげようか。
+  text: 荷物、持ってあげようか。
   korean_translation: 짐 들어 줄까?
   items:
     - item_seed_id: it_teageru
@@ -5798,7 +5798,7 @@
         example_translation: 역까지 바래다줄까?
 
 - seed_id: sn_0320
-  japanese: 友達の話を聞いてあげた。
+  text: 友達の話を聞いてあげた。
   korean_translation: 친구 이야기를 들어 주었다.
   items:
     - item_seed_id: it_teageru
@@ -5815,7 +5815,7 @@
         example_translation: 길 잃은 사람에게 길을 알려 주었다.
 
 - seed_id: sn_0321
-  japanese: おばあちゃんに電話してあげて。
+  text: おばあちゃんに電話してあげて。
   korean_translation: 할머니한테 전화 좀 드려.
   items:
     - item_seed_id: it_teageru
@@ -5834,7 +5834,7 @@
 # ---- round4 추가분
 
 - seed_id: sn_0322
-  japanese: 申し訳ありません。すぐに確認します。
+  text: 申し訳ありません。すぐに確認します。
   korean_translation: 죄송합니다. 바로 확인하겠습니다.
   items:
     - item_seed_id: it_moushiwakenai
@@ -5851,7 +5851,7 @@
         example_translation: 폐를 끼쳐 죄송합니다.
 
 - seed_id: sn_0323
-  japanese: 友達を映画に誘った。
+  text: 友達を映画に誘った。
   korean_translation: 친구에게 영화 보러 가자고 했다.
   items:
     - item_seed_id: it_sasou
@@ -5868,7 +5868,7 @@
         example_translation: 동료에게 점심 같이 먹자고 했다.
 
 - seed_id: sn_0324
-  japanese: 忙しかったので、誘いを断った。
+  text: 忙しかったので、誘いを断った。
   korean_translation: 바빠서 권유를 거절했다.
   items:
     - item_seed_id: it_kotowaru
@@ -5885,7 +5885,7 @@
         example_translation: 미안하지만 이번엔 거절할게.
 
 - seed_id: sn_0325
-  japanese: 図書館で本を借りた。
+  text: 図書館で本を借りた。
   korean_translation: 도서관에서 책을 빌렸다.
   items:
     - item_seed_id: it_kariru
@@ -5902,7 +5902,7 @@
         example_translation: 친구한테 우산을 빌렸다.
 
 - seed_id: sn_0326
-  japanese: ちょっとペンを貸して。
+  text: ちょっとペンを貸して。
   korean_translation: 펜 좀 빌려줘.
   items:
     - item_seed_id: it_kasu
@@ -5919,7 +5919,7 @@
         example_translation: 사전 좀 빌려주실 수 있나요?
 
 - seed_id: sn_0327
-  japanese: 眼鏡を探しているけど、見つからない。
+  text: 眼鏡を探しているけど、見つからない。
   korean_translation: 안경을 찾고 있는데 안 보인다.
   items:
     - item_seed_id: it_sagasu
@@ -5936,7 +5936,7 @@
         example_translation: 역에서 친구를 찾았다(찾아다녔다).
 
 - seed_id: sn_0328
-  japanese: 道でかわいい猫を見つけた。
+  text: 道でかわいい猫を見つけた。
   korean_translation: 길에서 귀여운 고양이를 발견했다.
   items:
     - item_seed_id: it_mitsukeru
@@ -5953,7 +5953,7 @@
         example_translation: 공원에서 네잎클로버를 발견했다.
 
 - seed_id: sn_0329
-  japanese: 駅で切符を無くした。
+  text: 駅で切符を無くした。
   korean_translation: 역에서 표를 잃어버렸다.
   items:
     - item_seed_id: it_nakusu
@@ -5970,7 +5970,7 @@
         example_translation: 열쇠를 잃어버렸을지도 모른다.
 
 - seed_id: sn_0330
-  japanese: 着いたら連絡してね。
+  text: 着いたら連絡してね。
   korean_translation: 도착하면 연락해.
   items:
     - item_seed_id: it_renraku
@@ -5987,7 +5987,7 @@
         example_translation: 무슨 일 있으면 연락 주세요.
 
 - seed_id: sn_0331
-  japanese: 友達に引っ越しの手伝いを頼んだ。
+  text: 友達に引っ越しの手伝いを頼んだ。
   korean_translation: 친구에게 이사를 도와 달라고 부탁했다.
   items:
     - item_seed_id: it_tanomu
@@ -6004,7 +6004,7 @@
         example_translation: 선배에게 일을 부탁받았다.
 
 - seed_id: sn_0332
-  japanese: 体のために、たばこをやめた。
+  text: 体のために、たばこをやめた。
   korean_translation: 몸을 위해 담배를 끊었다.
   items:
     - item_seed_id: it_yameru
@@ -6021,7 +6021,7 @@
         example_translation: 술을 끊기로 했다.
 
 - seed_id: sn_0333
-  japanese: 連絡がないので、母が心配している。
+  text: 連絡がないので、母が心配している。
   korean_translation: 연락이 없어서 엄마가 걱정하고 있다.
   items:
     - item_seed_id: it_shinpai
@@ -6038,7 +6038,7 @@
         example_translation: 아이의 장래를 걱정하고 있다.
 
 - seed_id: sn_0334
-  japanese: 進路について先生に相談した。
+  text: 進路について先生に相談した。
   korean_translation: 진로에 대해 선생님과 상의했다.
   items:
     - item_seed_id: it_soudan
@@ -6055,7 +6055,7 @@
         example_translation: 부모님과 상의하고 나서 정할게요.
 
 - seed_id: sn_0335
-  japanese: 最近どう？
+  text: 最近どう？
   korean_translation: 요즘 어때?
   items:
     - item_seed_id: it_saikin
@@ -6072,7 +6072,7 @@
         example_translation: 요즘 일은 어떠세요?
 
 - seed_id: sn_0336
-  japanese: いろいろ迷ったけど、結局いつもの店にした。
+  text: いろいろ迷ったけど、結局いつもの店にした。
   korean_translation: 이것저것 고민했지만 결국 늘 가던 가게로 했다.
   items:
     - item_seed_id: it_kekkyoku
@@ -6089,7 +6089,7 @@
         example_translation: 결국 집에서 영화를 보기로 했다.
 
 - seed_id: sn_0337
-  japanese: 実は、来月結婚するんです。
+  text: 実は、来月結婚するんです。
   korean_translation: 실은 다음 달에 결혼해요.
   items:
     - item_seed_id: it_jitsuwa
@@ -6106,7 +6106,7 @@
         example_translation: 실은 회사를 그만두게 됐어요.
 
 - seed_id: sn_0338
-  japanese: 昨日は一日中ずっと雨だった。
+  text: 昨日は一日中ずっと雨だった。
   korean_translation: 어제는 하루 종일 계속 비가 왔다.
   items:
     - item_seed_id: it_zutto
@@ -6123,7 +6123,7 @@
         example_translation: 아침부터 계속 기다리고 있다.
 
 - seed_id: sn_0339
-  japanese: 彼は多分もう帰ったよ。
+  text: 彼は多分もう帰ったよ。
   korean_translation: 그는 아마 벌써 갔을 거야.
   items:
     - item_seed_id: it_tabun
@@ -6140,7 +6140,7 @@
         example_translation: 아마 늦지 않을 것 같아.
 
 - seed_id: sn_0340
-  japanese: きっと合格できるよ。
+  text: きっと合格できるよ。
   korean_translation: 분명 합격할 수 있을 거야.
   items:
     - item_seed_id: it_kitto
@@ -6157,7 +6157,7 @@
         example_translation: 내일은 분명 맑을 거야.
 
 - seed_id: sn_0341
-  japanese: 絶対にこのことは言わないで。
+  text: 絶対にこのことは言わないで。
   korean_translation: 이 일은 절대 말하지 마.
   items:
     - item_seed_id: it_zettai
@@ -6174,7 +6174,7 @@
         example_translation: 이 약속은 절대 잊지 않을 거야.
 
 - seed_id: sn_0342
-  japanese: お待たせして申し訳ございません。
+  text: お待たせして申し訳ございません。
   korean_translation: 기다리게 해 드려 죄송합니다.
   items:
     - item_seed_id: it_moushiwakenai
@@ -6191,7 +6191,7 @@
         example_translation: 불편을 드려 죄송합니다.
 
 - seed_id: sn_0343
-  japanese: 手伝ってもらってばかりで、申し訳ない。
+  text: 手伝ってもらってばかりで、申し訳ない。
   korean_translation: 도움만 받아서 미안하다.
   items:
     - item_seed_id: it_moushiwakenai
@@ -6208,7 +6208,7 @@
         example_translation: 매번 얻어먹어서 죄송해요.
 
 - seed_id: sn_0344
-  japanese: 申し訳ないんですが、ここは禁煙なんです。
+  text: 申し訳ないんですが、ここは禁煙なんです。
   korean_translation: 죄송하지만 여기는 금연이에요.
   items:
     - item_seed_id: it_moushiwakenai
@@ -6225,7 +6225,7 @@
         example_translation: 죄송하지만 잠시 기다려 주시겠어요?
 
 - seed_id: sn_0345
-  japanese: 飲み会に誘われたけど、断った。
+  text: 飲み会に誘われたけど、断った。
   korean_translation: 회식에 가자는 말을 들었지만 거절했다.
   items:
     - item_seed_id: it_sasou
@@ -6255,7 +6255,7 @@
         example_translation: 파티 초대를 거절했다.
 
 - seed_id: sn_0346
-  japanese: 急な仕事を頼まれたけど、断れなかった。
+  text: 急な仕事を頼まれたけど、断れなかった。
   korean_translation: 급한 일을 부탁받았는데 거절하지 못했다.
   items:
     - item_seed_id: it_tanomu
@@ -6285,7 +6285,7 @@
         example_translation: 부탁받으면 거절을 못 하는 성격이다.
 
 - seed_id: sn_0347
-  japanese: 満席で、予約を断られた。
+  text: 満席で、予約を断られた。
   korean_translation: 만석이라 예약을 거절당했다.
   items:
     - item_seed_id: it_kotowaru
@@ -6302,7 +6302,7 @@
         example_translation: 면접에서 떨어졌다(거절당했다).
 
 - seed_id: sn_0348
-  japanese: この本、貸してくれない？来週まで借りたいんだけど。
+  text: この本、貸してくれない？来週まで借りたいんだけど。
   korean_translation: 이 책 빌려줄래? 다음 주까지 빌리고 싶은데.
   items:
     - item_seed_id: it_kasu
@@ -6332,7 +6332,7 @@
         example_translation: 돈 좀 빌려도 될까?
 
 - seed_id: sn_0349
-  japanese: 駅の近くに部屋を借りた。
+  text: 駅の近くに部屋を借りた。
   korean_translation: 역 근처에 방을 얻었다.
   items:
     - item_seed_id: it_kariru
@@ -6349,7 +6349,7 @@
         example_translation: 차를 빌려서 여행했다.
 
 - seed_id: sn_0350
-  japanese: すみません、トイレをお借りしてもいいですか。
+  text: すみません、トイレをお借りしてもいいですか。
   korean_translation: 저기요, 화장실 좀 써도 될까요?
   items:
     - item_seed_id: it_kariru
@@ -6366,7 +6366,7 @@
         example_translation: 전화 좀 쓸 수 있을까요?
 
 - seed_id: sn_0351
-  japanese: 友達にお金を貸したけど、まだ返してもらっていない。
+  text: 友達にお金を貸したけど、まだ返してもらっていない。
   korean_translation: 친구에게 돈을 빌려줬는데 아직 못 받았다.
   items:
     - item_seed_id: it_kasu
@@ -6383,7 +6383,7 @@
         example_translation: 그 사람한테 돈 빌려주는 건 안 하는 게 좋아.
 
 - seed_id: sn_0352
-  japanese: 引っ越しのとき、力を貸してください。
+  text: 引っ越しのとき、力を貸してください。
   korean_translation: 이사할 때 좀 도와주세요.
   items:
     - item_seed_id: it_kasu
@@ -6400,7 +6400,7 @@
         example_translation: 좀 거들어 줄래?
 
 - seed_id: sn_0353
-  japanese: 一時間探して、やっと鍵を見つけた。
+  text: 一時間探して、やっと鍵を見つけた。
   korean_translation: 한 시간 찾아서 겨우 열쇠를 찾아냈다.
   items:
     - item_seed_id: it_sagasu
@@ -6430,7 +6430,7 @@
         example_translation: 겨우 좋은 방을 찾았다.
 
 - seed_id: sn_0354
-  japanese: 今、新しい仕事を探しています。
+  text: 今、新しい仕事を探しています。
   korean_translation: 지금 새 일자리를 찾고 있어요.
   items:
     - item_seed_id: it_sagasu
@@ -6447,7 +6447,7 @@
         example_translation: 역에서 가까운 방을 찾고 있어요.
 
 - seed_id: sn_0355
-  japanese: 何かお探しですか。
+  text: 何かお探しですか。
   korean_translation: 뭐 찾으시는 거 있으세요?
   items:
     - item_seed_id: it_sagasu
@@ -6464,7 +6464,7 @@
         example_translation: 선물 찾으세요?
 
 - seed_id: sn_0356
-  japanese: 間違いを見つけたら、教えてください。
+  text: 間違いを見つけたら、教えてください。
   korean_translation: 틀린 곳을 발견하면 알려 주세요.
   items:
     - item_seed_id: it_mitsukeru
@@ -6481,7 +6481,7 @@
         example_translation: 자료에서 틀린 곳을 발견했다.
 
 - seed_id: sn_0357
-  japanese: 忙しくても、時間を見つけて運動している。
+  text: 忙しくても、時間を見つけて運動している。
   korean_translation: 바빠도 시간을 내서 운동하고 있다.
   items:
     - item_seed_id: it_mitsukeru
@@ -6498,7 +6498,7 @@
         example_translation: 시간 내서 또 만나자.
 
 - seed_id: sn_0358
-  japanese: 失敗が続いて、自信を無くした。
+  text: 失敗が続いて、自信を無くした。
   korean_translation: 실패가 계속돼서 자신감을 잃었다.
   items:
     - item_seed_id: it_nakusu
@@ -6515,7 +6515,7 @@
         example_translation: 의욕을 잃었다.
 
 - seed_id: sn_0359
-  japanese: 傘をどこかで無くしたみたい。
+  text: 傘をどこかで無くしたみたい。
   korean_translation: 우산을 어딘가에서 잃어버린 것 같다.
   items:
     - item_seed_id: it_nakusu
@@ -6532,7 +6532,7 @@
         example_translation: 어디서 휴대폰을 잃어버렸는지 모르겠다.
 
 - seed_id: sn_0360
-  japanese: 無くさないように、名前を書いておこう。
+  text: 無くさないように、名前を書いておこう。
   korean_translation: 잃어버리지 않게 이름을 적어 두자.
   items:
     - item_seed_id: it_nakusu
@@ -6549,7 +6549,7 @@
         example_translation: 중요한 서류 잃어버리지 마.
 
 - seed_id: sn_0361
-  japanese: 詳細は後ほどメールで連絡します。
+  text: 詳細は後ほどメールで連絡します。
   korean_translation: 자세한 내용은 나중에 메일로 연락드리겠습니다.
   items:
     - item_seed_id: it_renraku
@@ -6566,7 +6566,7 @@
         example_translation: 정해지는 대로 연락드리겠습니다.
 
 - seed_id: sn_0362
-  japanese: 昨日から彼と連絡が取れない。
+  text: 昨日から彼と連絡が取れない。
   korean_translation: 어제부터 그와 연락이 안 된다.
   items:
     - item_seed_id: it_renraku
@@ -6583,7 +6583,7 @@
         example_translation: 겨우 가족과 연락이 닿았다.
 
 - seed_id: sn_0363
-  japanese: 連絡先を交換しませんか。
+  text: 連絡先を交換しませんか。
   korean_translation: 연락처 교환하지 않을래요?
   items:
     - item_seed_id: it_renraku
@@ -6600,7 +6600,7 @@
         example_translation: 연락처를 알려 주실 수 있나요?
 
 - seed_id: sn_0364
-  japanese: 何を頼む？私はパスタにする。
+  text: 何を頼む？私はパスタにする。
   korean_translation: 뭐 시킬래? 난 파스타로 할래.
   items:
     - item_seed_id: it_tanomu
@@ -6617,7 +6617,7 @@
         example_translation: 일단 음료부터 시키자.
 
 - seed_id: sn_0365
-  japanese: 頼むから、静かにして。
+  text: 頼むから、静かにして。
   korean_translation: 제발 좀 조용히 해.
   items:
     - item_seed_id: it_tanomu
@@ -6634,7 +6634,7 @@
         example_translation: 제발 빨리 와.
 
 - seed_id: sn_0366
-  japanese: やめて、くすぐったい！
+  text: やめて、くすぐったい！
   korean_translation: 하지 마, 간지러워!
   items:
     - item_seed_id: it_yameru
@@ -6651,7 +6651,7 @@
         example_translation: 이제 그만해.
 
 - seed_id: sn_0367
-  japanese: 来月でアルバイトをやめることにした。
+  text: 来月でアルバイトをやめることにした。
   korean_translation: 다음 달로 아르바이트를 그만두기로 했다.
   items:
     - item_seed_id: it_yameru
@@ -6668,7 +6668,7 @@
         example_translation: 동아리를 그만뒀다.
 
 - seed_id: sn_0368
-  japanese: 雨だから、ピクニックはやめよう。
+  text: 雨だから、ピクニックはやめよう。
   korean_translation: 비 오니까 소풍은 관두자.
   items:
     - item_seed_id: it_yameru
@@ -6685,7 +6685,7 @@
         example_translation: 오늘은 외출하는 걸 그만뒀다.
 
 - seed_id: sn_0369
-  japanese: 大丈夫だから、心配しないで。
+  text: 大丈夫だから、心配しないで。
   korean_translation: 괜찮으니까 걱정하지 마.
   items:
     - item_seed_id: it_shinpai
@@ -6702,7 +6702,7 @@
         example_translation: 제 걱정은 하지 마세요.
 
 - seed_id: sn_0370
-  japanese: 心配をかけて、ごめんね。
+  text: 心配をかけて、ごめんね。
   korean_translation: 걱정 끼쳐서 미안해.
   items:
     - item_seed_id: it_shinpai
@@ -6719,7 +6719,7 @@
         example_translation: 부모님께 걱정 끼치고 싶지 않다.
 
 - seed_id: sn_0371
-  japanese: 明日の天気が心配だ。
+  text: 明日の天気が心配だ。
   korean_translation: 내일 날씨가 걱정이다.
   items:
     - item_seed_id: it_shinpai
@@ -6736,7 +6736,7 @@
         example_translation: 시험 결과가 걱정이에요.
 
 - seed_id: sn_0372
-  japanese: ちょっと相談があるんだけど、今いい？
+  text: ちょっと相談があるんだけど、今いい？
   korean_translation: 좀 상의할 게 있는데 지금 괜찮아?
   items:
     - item_seed_id: it_soudan
@@ -6753,7 +6753,7 @@
         example_translation: 고민 들어줘서 고마워.
 
 - seed_id: sn_0373
-  japanese: 家族と相談して決めます。
+  text: 家族と相談して決めます。
   korean_translation: 가족과 상의해서 정할게요.
   items:
     - item_seed_id: it_soudan
@@ -6770,7 +6770,7 @@
         example_translation: 상사와 상의하고 나서 답할게요.
 
 - seed_id: sn_0374
-  japanese: 困ったことがあれば、窓口で相談できます。
+  text: 困ったことがあれば、窓口で相談できます。
   korean_translation: 곤란한 일이 있으면 창구에서 상담할 수 있어요.
   items:
     - item_seed_id: it_soudan
@@ -6787,7 +6787,7 @@
         example_translation: 시청에서 상담해 봤다.
 
 - seed_id: sn_0375
-  japanese: 最近、よく眠れない。
+  text: 最近、よく眠れない。
   korean_translation: 요즘 잠을 잘 못 잔다.
   items:
     - item_seed_id: it_saikin
@@ -6804,7 +6804,7 @@
         example_translation: 요즘 요리를 자주 한다.
 
 - seed_id: sn_0376
-  japanese: 最近できたカフェに行ってみた。
+  text: 最近できたカフェに行ってみた。
   korean_translation: 최근에 생긴 카페에 가 봤다.
   items:
     - item_seed_id: it_saikin
@@ -6821,7 +6821,7 @@
         example_translation: 최근에 막 이사했어요.
 
 - seed_id: sn_0377
-  japanese: 最近の若い人は、あまりテレビを見ないらしい。
+  text: 最近の若い人は、あまりテレビを見ないらしい。
   korean_translation: 요즘 젊은 사람들은 TV를 별로 안 본대.
   items:
     - item_seed_id: it_saikin
@@ -6838,7 +6838,7 @@
         example_translation: 요즘 아이들은 바쁘다.
 
 - seed_id: sn_0378
-  japanese: 雨の予報だったけど、結局降らなかった。
+  text: 雨の予報だったけど、結局降らなかった。
   korean_translation: 비 예보였는데 결국 안 왔다.
   items:
     - item_seed_id: it_kekkyoku
@@ -6855,7 +6855,7 @@
         example_translation: 걱정했지만 결국 아무 일도 없었다.
 
 - seed_id: sn_0379
-  japanese: 結局、何が言いたいの？
+  text: 結局、何が言いたいの？
   korean_translation: 그래서 결국 하고 싶은 말이 뭐야?
   items:
     - item_seed_id: it_kekkyoku
@@ -6872,7 +6872,7 @@
         example_translation: 결국 어떻게 하면 되는데?
 
 - seed_id: sn_0380
-  japanese: 結局は自分でやるしかない。
+  text: 結局は自分でやるしかない。
   korean_translation: 결국은 스스로 하는 수밖에 없다.
   items:
     - item_seed_id: it_kekkyoku
@@ -6889,7 +6889,7 @@
         example_translation: 결국은 운인 것 같다.
 
 - seed_id: sn_0381
-  japanese: 実は、借りた本を汚してしまった。
+  text: 実は、借りた本を汚してしまった。
   korean_translation: 실은 빌린 책을 더럽혀 버렸어.
   items:
     - item_seed_id: it_jitsuwa
@@ -6906,7 +6906,7 @@
         example_translation: 실은 약속을 잊고 있었어요.
 
 - seed_id: sn_0382
-  japanese: 実は、お願いがあるんですが…。
+  text: 実は、お願いがあるんですが…。
   korean_translation: 실은 부탁이 있는데요….
   items:
     - item_seed_id: it_jitsuwa
@@ -6923,7 +6923,7 @@
         example_translation: 실은 좀 상의하고 싶은 게 있어서.
 
 - seed_id: sn_0383
-  japanese: 彼は実は料理がとても上手だ。
+  text: 彼は実は料理がとても上手だ。
   korean_translation: 그는 알고 보면 요리를 아주 잘한다.
   items:
     - item_seed_id: it_jitsuwa
@@ -6940,7 +6940,7 @@
         example_translation: 이 가게 사실 유명해요.
 
 - seed_id: sn_0384
-  japanese: 電車のほうがずっと速い。
+  text: 電車のほうがずっと速い。
   korean_translation: 전철이 훨씬 빠르다.
   items:
     - item_seed_id: it_zutto
@@ -6957,7 +6957,7 @@
         example_translation: 작년보다 훨씬 덥다.
 
 - seed_id: sn_0385
-  japanese: ずっと前から、この町に住んでいる。
+  text: ずっと前から、この町に住んでいる。
   korean_translation: 훨씬 전부터 이 동네에 살고 있다.
   items:
     - item_seed_id: it_zutto
@@ -6974,7 +6974,7 @@
         example_translation: 그건 한참 옛날 이야기다.
 
 - seed_id: sn_0386
-  japanese: これからもずっと友達でいてね。
+  text: これからもずっと友達でいてね。
   korean_translation: 앞으로도 쭉 친구로 지내자.
   items:
     - item_seed_id: it_zutto
@@ -6991,7 +6991,7 @@
         example_translation: 쭉 함께 있고 싶다.
 
 - seed_id: sn_0387
-  japanese: 多分、来週には届くでしょう。
+  text: 多分、来週には届くでしょう。
   korean_translation: 아마 다음 주에는 도착할 거예요.
   items:
     - item_seed_id: it_tabun
@@ -7008,7 +7008,7 @@
         example_translation: 아마 비는 오후에 그칠 거예요.
 
 - seed_id: sn_0388
-  japanese: 明日のパーティー、多分行けると思う。
+  text: 明日のパーティー、多分行けると思う。
   korean_translation: 내일 파티 아마 갈 수 있을 것 같아.
   items:
     - item_seed_id: it_tabun
@@ -7025,7 +7025,7 @@
         example_translation: 아마 괜찮을 것 같아.
 
 - seed_id: sn_0389
-  japanese: 多分、私の勘違いです。
+  text: 多分、私の勘違いです。
   korean_translation: 아마 제 착각일 거예요.
   items:
     - item_seed_id: it_tabun
@@ -7042,7 +7042,7 @@
         example_translation: 아마 제가 잘못한 것 같아요.
 
 - seed_id: sn_0390
-  japanese: 彼女はきっと喜ぶと思う。
+  text: 彼女はきっと喜ぶと思う。
   korean_translation: 그녀는 분명 기뻐할 거야.
   items:
     - item_seed_id: it_kitto
@@ -7059,7 +7059,7 @@
         example_translation: 어머니가 분명 걱정하고 계실 거야.
 
 - seed_id: sn_0391
-  japanese: 電気が消えているから、きっと留守だ。
+  text: 電気が消えているから、きっと留守だ。
   korean_translation: 불이 꺼져 있으니 분명 집에 없을 거야.
   items:
     - item_seed_id: it_kitto
@@ -7076,7 +7076,7 @@
         example_translation: 이 시간이면 분명 붐빌 거야.
 
 - seed_id: sn_0392
-  japanese: いつかきっと、また会えるよ。
+  text: いつかきっと、また会えるよ。
   korean_translation: 언젠가 분명 다시 만날 수 있을 거야.
   items:
     - item_seed_id: it_kitto
@@ -7093,7 +7093,7 @@
         example_translation: 분명 좋은 일이 있을 거야.
 
 - seed_id: sn_0393
-  japanese: 明日は絶対に行く。
+  text: 明日は絶対に行く。
   korean_translation: 내일은 꼭 갈 거야.
   items:
     - item_seed_id: it_zettai
@@ -7110,7 +7110,7 @@
         example_translation: 다음엔 꼭 이길 거야.
 
 - seed_id: sn_0394
-  japanese: この店、絶対おいしいよ。
+  text: この店、絶対おいしいよ。
   korean_translation: 이 가게 무조건 맛있어.
   items:
     - item_seed_id: it_zettai
@@ -7127,7 +7127,7 @@
         example_translation: 이거 무조건 어울려.
 
 - seed_id: sn_0395
-  japanese: 試験中、スマホの使用は絶対禁止です。
+  text: 試験中、スマホの使用は絶対禁止です。
   korean_translation: 시험 중 휴대폰 사용은 절대 금지입니다.
   items:
     - item_seed_id: it_zettai
@@ -7144,7 +7144,7 @@
         example_translation: 여기서 음식물 섭취는 절대 하지 마세요.
 
 - seed_id: sn_0396
-  japanese: 好きな人をデートに誘う勇気がない。
+  text: 好きな人をデートに誘う勇気がない。
   korean_translation: 좋아하는 사람에게 데이트 신청할 용기가 없다.
   items:
     - item_seed_id: it_sasou
@@ -7161,7 +7161,7 @@
         example_translation: 용기 내서 그녀에게 식사를 청했다.
 
 - seed_id: sn_0397
-  japanese: 誘ってくれてありがとう。また行こうね。
+  text: 誘ってくれてありがとう。また行こうね。
   korean_translation: 불러 줘서 고마워. 또 가자.
   items:
     - item_seed_id: it_sasou
@@ -7180,7 +7180,7 @@
 # ---- round5 추가분
 
 - seed_id: sn_0398
-  japanese: すごい！全部一人で作ったの？
+  text: すごい！全部一人で作ったの？
   korean_translation: 대단하다! 전부 혼자 만든 거야?
   items:
     - item_seed_id: it_sugoi
@@ -7197,7 +7197,7 @@
         example_translation: 대단하다, 벌써 다 했어?
 
 - seed_id: sn_0399
-  japanese: 本当？信じられない。
+  text: 本当？信じられない。
   korean_translation: 진짜? 믿기지 않아.
   items:
     - item_seed_id: it_hontou
@@ -7214,7 +7214,7 @@
         example_translation: 어, 정말로?
 
 - seed_id: sn_0400
-  japanese: プレゼント、ありがとう。すごく嬉しい。
+  text: プレゼント、ありがとう。すごく嬉しい。
   korean_translation: 선물 고마워. 정말 기뻐.
   items:
     - item_seed_id: it_ureshii
@@ -7231,7 +7231,7 @@
         example_translation: 와 줘서 기뻐.
 
 - seed_id: sn_0401
-  japanese: 昨日のパーティー、楽しかった。
+  text: 昨日のパーティー、楽しかった。
   korean_translation: 어제 파티 즐거웠어.
   items:
     - item_seed_id: it_tanoshii
@@ -7248,7 +7248,7 @@
         example_translation: 여행 즐거웠지.
 
 - seed_id: sn_0402
-  japanese: この漫画、すごく面白い。
+  text: この漫画、すごく面白い。
   korean_translation: 이 만화 정말 재미있어.
   items:
     - item_seed_id: it_omoshiroi
@@ -7265,7 +7265,7 @@
         example_translation: 이 프로그램 재미있어.
 
 - seed_id: sn_0403
-  japanese: 雨で花火大会が中止になって、残念だ。
+  text: 雨で花火大会が中止になって、残念だ。
   korean_translation: 비 때문에 불꽃놀이가 취소돼서 아쉽다.
   items:
     - item_seed_id: it_zannen
@@ -7282,7 +7282,7 @@
         example_translation: 못 만나서 아쉬워요.
 
 - seed_id: sn_0404
-  japanese: みんなの前で転んで、恥ずかしかった。
+  text: みんなの前で転んで、恥ずかしかった。
   korean_translation: 사람들 앞에서 넘어져서 창피했다.
   items:
     - item_seed_id: it_hazukashii
@@ -7299,7 +7299,7 @@
         example_translation: 이름을 틀려서 창피했다.
 
 - seed_id: sn_0405
-  japanese: まだ食べられるのに、捨てるのはもったいない。
+  text: まだ食べられるのに、捨てるのはもったいない。
   korean_translation: 아직 먹을 수 있는데 버리는 건 아깝다.
   items:
     - item_seed_id: it_mottainai
@@ -7316,7 +7316,7 @@
         example_translation: 불을 켜 두기만 하는 건 아깝다.
 
 - seed_id: sn_0406
-  japanese: 私は数学が苦手だ。
+  text: 私は数学が苦手だ。
   korean_translation: 나는 수학을 잘 못한다.
   items:
     - item_seed_id: it_nigate
@@ -7333,7 +7333,7 @@
         example_translation: 영어를 잘 못해요.
 
 - seed_id: sn_0407
-  japanese: 少しくらいの雨なら平気だよ。
+  text: 少しくらいの雨なら平気だよ。
   korean_translation: 조금 오는 비 정도는 괜찮아.
   items:
     - item_seed_id: it_heiki
@@ -7350,7 +7350,7 @@
         example_translation: 혼자서도 괜찮아요.
 
 - seed_id: sn_0408
-  japanese: 電車で行くほうが楽だ。
+  text: 電車で行くほうが楽だ。
   korean_translation: 전철로 가는 게 편하다.
   items:
     - item_seed_id: it_raku
@@ -7367,7 +7367,7 @@
         example_translation: 이 옷은 입기 편하다.
 
 - seed_id: sn_0409
-  japanese: 周りの人に迷惑をかけないでね。
+  text: 周りの人に迷惑をかけないでね。
   korean_translation: 주변 사람들한테 폐 끼치지 마.
   items:
     - item_seed_id: it_meiwaku
@@ -7384,7 +7384,7 @@
         example_translation: 남에게 폐 끼치지 않도록 하자.
 
 - seed_id: sn_0410
-  japanese: このペン、使ってもいい？
+  text: このペン、使ってもいい？
   korean_translation: 이 펜 써도 돼?
   items:
     - item_seed_id: it_tsukau
@@ -7401,7 +7401,7 @@
         example_translation: 이 컴퓨터 쓰는 법을 모르겠다.
 
 - seed_id: sn_0411
-  japanese: 新しい単語を毎日十個覚える。
+  text: 新しい単語を毎日十個覚える。
   korean_translation: 새 단어를 매일 열 개씩 외운다.
   items:
     - item_seed_id: it_oboeru
@@ -7418,7 +7418,7 @@
         example_translation: 가사를 전부 외웠다.
 
 - seed_id: sn_0412
-  japanese: 疲れたら、少し休んでください。
+  text: 疲れたら、少し休んでください。
   korean_translation: 피곤하면 좀 쉬세요.
   items:
     - item_seed_id: it_yasumu
@@ -7435,7 +7435,7 @@
         example_translation: 좀 쉬었다가 가자.
 
 - seed_id: sn_0413
-  japanese: 急に雨が降ってきた。
+  text: 急に雨が降ってきた。
   korean_translation: 갑자기 비가 내리기 시작했다.
   items:
     - item_seed_id: it_kyuuni
@@ -7452,7 +7452,7 @@
         example_translation: 갑자기 추워졌다.
 
 - seed_id: sn_0414
-  japanese: 朝の電車はいつも混んでいる。
+  text: 朝の電車はいつも混んでいる。
   korean_translation: 아침 전철은 늘 붐빈다.
   items:
     - item_seed_id: it_komu
@@ -7469,7 +7469,7 @@
         example_translation: 이 가게는 늘 붐빈다.
 
 - seed_id: sn_0415
-  japanese: お金が足りなくて、買えなかった。
+  text: お金が足りなくて、買えなかった。
   korean_translation: 돈이 모자라서 못 샀다.
   items:
     - item_seed_id: it_tariru
@@ -7486,7 +7486,7 @@
         example_translation: 시간이 모자라다.
 
 - seed_id: sn_0416
-  japanese: どっちにするか迷っている。
+  text: どっちにするか迷っている。
   korean_translation: 어느 쪽으로 할지 망설이고 있다.
   items:
     - item_seed_id: it_mayou
@@ -7503,7 +7503,7 @@
         example_translation: 뭘 입고 갈지 고민된다.
 
 - seed_id: sn_0417
-  japanese: 母は小学校で英語を教えている。
+  text: 母は小学校で英語を教えている。
   korean_translation: 엄마는 초등학교에서 영어를 가르친다.
   items:
     - item_seed_id: it_oshieru
@@ -7520,7 +7520,7 @@
         example_translation: 친구에게 요리를 가르쳐 주었다.
 
 - seed_id: sn_0418
-  japanese: 今日はすごく寒いね。
+  text: 今日はすごく寒いね。
   korean_translation: 오늘 엄청 춥네.
   items:
     - item_seed_id: it_sugoi
@@ -7537,7 +7537,7 @@
         example_translation: 이 책 엄청 재미있었어.
 
 - seed_id: sn_0419
-  japanese: 駅前はすごい人だった。
+  text: 駅前はすごい人だった。
   korean_translation: 역 앞은 사람이 엄청났다.
   items:
     - item_seed_id: it_sugoi
@@ -7554,7 +7554,7 @@
         example_translation: 어제는 비가 엄청 왔다.
 
 - seed_id: sn_0420
-  japanese: 本当にすごい景色だね。
+  text: 本当にすごい景色だね。
   korean_translation: 정말 굉장한 경치다.
   items:
     - item_seed_id: it_hontou
@@ -7584,7 +7584,7 @@
         example_translation: 굉장히 인기 있는 가게다.
 
 - seed_id: sn_0421
-  japanese: 本当にありがとうございました。
+  text: 本当にありがとうございました。
   korean_translation: 정말 감사했습니다.
   items:
     - item_seed_id: it_hontou
@@ -7601,7 +7601,7 @@
         example_translation: 정말 미안해.
 
 - seed_id: sn_0422
-  japanese: 本当は行きたくなかった。
+  text: 本当は行きたくなかった。
   korean_translation: 사실은 가고 싶지 않았다.
   items:
     - item_seed_id: it_hontou
@@ -7618,7 +7618,7 @@
         example_translation: 사실은 나도 몰랐어.
 
 - seed_id: sn_0423
-  japanese: 久しぶりに友達から手紙が来て、嬉しかった。
+  text: 久しぶりに友達から手紙が来て、嬉しかった。
   korean_translation: 오랜만에 친구에게서 편지가 와서 기뻤다.
   items:
     - item_seed_id: it_ureshii
@@ -7635,7 +7635,7 @@
         example_translation: 칭찬받아서 기뻤다.
 
 - seed_id: sn_0424
-  japanese: そう言ってもらえると、嬉しいです。
+  text: そう言ってもらえると、嬉しいです。
   korean_translation: 그렇게 말씀해 주시니 기쁘네요.
   items:
     - item_seed_id: it_ureshii
@@ -7652,7 +7652,7 @@
         example_translation: 기뻐해 주셔서 저도 기뻐요.
 
 - seed_id: sn_0425
-  japanese: 弟は嬉しそうに笑った。
+  text: 弟は嬉しそうに笑った。
   korean_translation: 남동생은 기쁜 듯이 웃었다.
   items:
     - item_seed_id: it_ureshii
@@ -7669,7 +7669,7 @@
         example_translation: 그녀는 아주 기뻐 보였다.
 
 - seed_id: sn_0426
-  japanese: 日本語の勉強は楽しい。
+  text: 日本語の勉強は楽しい。
   korean_translation: 일본어 공부는 즐겁다.
   items:
     - item_seed_id: it_tanoshii
@@ -7686,7 +7686,7 @@
         example_translation: 친구와 이야기하는 건 즐겁다.
 
 - seed_id: sn_0427
-  japanese: 授業は面白いし、友達といるのも楽しい。
+  text: 授業は面白いし、友達といるのも楽しい。
   korean_translation: 수업은 재미있고 친구와 있는 것도 즐겁다.
   items:
     - item_seed_id: it_omoshiroi
@@ -7716,7 +7716,7 @@
         example_translation: 매일이 즐겁다.
 
 - seed_id: sn_0428
-  japanese: 楽しい時間はあっという間だね。
+  text: 楽しい時間はあっという間だね。
   korean_translation: 즐거운 시간은 순식간이네.
   items:
     - item_seed_id: it_tanoshii
@@ -7733,7 +7733,7 @@
         example_translation: 즐거운 추억이 생겼다.
 
 - seed_id: sn_0429
-  japanese: 彼は面白い人で、いつもみんなを笑わせる。
+  text: 彼は面白い人で、いつもみんなを笑わせる。
   korean_translation: 그는 웃긴 사람이라 늘 모두를 웃긴다.
   items:
     - item_seed_id: it_omoshiroi
@@ -7750,7 +7750,7 @@
         example_translation: 그녀의 말투는 웃기다.
 
 - seed_id: sn_0430
-  japanese: それは面白い考えですね。
+  text: それは面白い考えですね。
   korean_translation: 그거 흥미로운 생각이네요.
   items:
     - item_seed_id: it_omoshiroi
@@ -7767,7 +7767,7 @@
         example_translation: 흥미로운 연구네요.
 
 - seed_id: sn_0431
-  japanese: 来られないんですか。それは残念です。
+  text: 来られないんですか。それは残念です。
   korean_translation: 못 오세요? 그거 아쉽네요.
   items:
     - item_seed_id: it_zannen
@@ -7784,7 +7784,7 @@
         example_translation: 그거 아쉬우셨겠네요.
 
 - seed_id: sn_0432
-  japanese: 残念ながら、今回は不合格でした。
+  text: 残念ながら、今回は不合格でした。
   korean_translation: 유감스럽게도 이번에는 불합격이었습니다.
   items:
     - item_seed_id: it_zannen
@@ -7801,7 +7801,7 @@
         example_translation: 아쉽게도 매진입니다.
 
 - seed_id: sn_0433
-  japanese: 最後の一問を間違えて、残念だった。
+  text: 最後の一問を間違えて、残念だった。
   korean_translation: 마지막 한 문제를 틀려서 아쉬웠다.
   items:
     - item_seed_id: it_zannen
@@ -7818,7 +7818,7 @@
         example_translation: 조금만 더 하면 됐는데, 아쉽다.
 
 - seed_id: sn_0434
-  japanese: 人前で話すのは恥ずかしい。
+  text: 人前で話すのは恥ずかしい。
   korean_translation: 사람들 앞에서 말하는 건 부끄럽다.
   items:
     - item_seed_id: it_hazukashii
@@ -7835,7 +7835,7 @@
         example_translation: 사진 찍히는 건 쑥스럽다.
 
 - seed_id: sn_0435
-  japanese: そんなことをして、恥ずかしくないの？
+  text: そんなことをして、恥ずかしくないの？
   korean_translation: 그런 짓 하고 부끄럽지도 않아?
   items:
     - item_seed_id: it_hazukashii
@@ -7852,7 +7852,7 @@
         example_translation: 이런 실수를 하다니 부끄럽다.
 
 - seed_id: sn_0436
-  japanese: 褒められると、ちょっと恥ずかしい。
+  text: 褒められると、ちょっと恥ずかしい。
   korean_translation: 칭찬받으면 좀 쑥스럽다.
   items:
     - item_seed_id: it_hazukashii
@@ -7869,7 +7869,7 @@
         example_translation: 그렇게 쳐다보면 쑥스러워.
 
 - seed_id: sn_0437
-  japanese: 待ち時間がもったいないから、本を読もう。
+  text: 待ち時間がもったいないから、本を読もう。
   korean_translation: 기다리는 시간이 아까우니까 책을 읽자.
   items:
     - item_seed_id: it_mottainai
@@ -7886,7 +7886,7 @@
         example_translation: 잠만 자는 건 시간이 아깝다.
 
 - seed_id: sn_0438
-  japanese: 私にはもったいないお言葉です。
+  text: 私にはもったいないお言葉です。
   korean_translation: 저에게는 과분한 말씀입니다.
   items:
     - item_seed_id: it_mottainai
@@ -7903,7 +7903,7 @@
         example_translation: 저에게는 과분할 정도의 상입니다.
 
 - seed_id: sn_0439
-  japanese: 迷っている時間がもったいない。
+  text: 迷っている時間がもったいない。
   korean_translation: 망설이는 시간이 아깝다.
   items:
     - item_seed_id: it_mayou
@@ -7933,7 +7933,7 @@
         example_translation: 고민하는 시간이 아깝다.
 
 - seed_id: sn_0440
-  japanese: 辛い物はちょっと苦手です。
+  text: 辛い物はちょっと苦手です。
   korean_translation: 매운 건 좀 못 먹어요.
   items:
     - item_seed_id: it_nigate
@@ -7950,7 +7950,7 @@
         example_translation: 낫토를 잘 못 먹어요.
 
 - seed_id: sn_0441
-  japanese: 正直、あの人は苦手なんだ。
+  text: 正直、あの人は苦手なんだ。
   korean_translation: 솔직히 저 사람은 좀 불편해.
   items:
     - item_seed_id: it_nigate
@@ -7967,7 +7967,7 @@
         example_translation: 저런 타입의 사람은 불편하다.
 
 - seed_id: sn_0442
-  japanese: 寒いのは平気だけど、暑いのは苦手だ。
+  text: 寒いのは平気だけど、暑いのは苦手だ。
   korean_translation: 추위는 괜찮은데 더위는 힘들다.
   items:
     - item_seed_id: it_heiki
@@ -7997,7 +7997,7 @@
         example_translation: 추위를 잘 못 견뎌요.
 
 - seed_id: sn_0443
-  japanese: 彼は平気で嘘をつく。
+  text: 彼は平気で嘘をつく。
   korean_translation: 그는 태연하게 거짓말을 한다.
   items:
     - item_seed_id: it_heiki
@@ -8014,7 +8014,7 @@
         example_translation: 태연하게 약속을 어기는 사람이 있다.
 
 - seed_id: sn_0444
-  japanese: 一人で帰るの、平気？
+  text: 一人で帰るの、平気？
   korean_translation: 혼자 가는 거 괜찮아?
   items:
     - item_seed_id: it_heiki
@@ -8031,7 +8031,7 @@
         example_translation: 안 아파? 괜찮아?
 
 - seed_id: sn_0445
-  japanese: どうぞ、楽にしてください。
+  text: どうぞ、楽にしてください。
   korean_translation: 편하게 계세요.
   items:
     - item_seed_id: it_raku
@@ -8048,7 +8048,7 @@
         example_translation: 다리 편하게 하세요.
 
 - seed_id: sn_0446
-  japanese: 楽な仕事なんてない。
+  text: 楽な仕事なんてない。
   korean_translation: 편한 일 같은 건 없다.
   items:
     - item_seed_id: it_raku
@@ -8065,7 +8065,7 @@
         example_translation: 편한 방법을 찾는다.
 
 - seed_id: sn_0447
-  japanese: 試験が終わって、気が楽になった。
+  text: 試験が終わって、気が楽になった。
   korean_translation: 시험이 끝나서 마음이 편해졌다.
   items:
     - item_seed_id: it_raku
@@ -8082,7 +8082,7 @@
         example_translation: 이야기했더니 좀 편해졌다.
 
 - seed_id: sn_0448
-  japanese: 夜中の大きな音は、近所の迷惑になる。
+  text: 夜中の大きな音は、近所の迷惑になる。
   korean_translation: 한밤중의 큰 소리는 이웃에게 폐가 된다.
   items:
     - item_seed_id: it_meiwaku
@@ -8099,7 +8099,7 @@
         example_translation: 여기에 자전거를 세우면 폐가 됩니다.
 
 - seed_id: sn_0449
-  japanese: ご迷惑をおかけして、すみませんでした。
+  text: ご迷惑をおかけして、すみませんでした。
   korean_translation: 폐를 끼쳐 죄송했습니다.
   items:
     - item_seed_id: it_meiwaku
@@ -8116,7 +8116,7 @@
         example_translation: 폐를 끼치겠지만 잘 부탁드립니다.
 
 - seed_id: sn_0450
-  japanese: 最近、迷惑メールが多い。
+  text: 最近、迷惑メールが多い。
   korean_translation: 요즘 스팸 메일이 많다.
   items:
     - item_seed_id: it_meiwaku
@@ -8133,7 +8133,7 @@
         example_translation: 이상한 전화가 걸려 왔다.
 
 - seed_id: sn_0451
-  japanese: 今月はお金を使いすぎた。
+  text: 今月はお金を使いすぎた。
   korean_translation: 이번 달엔 돈을 너무 많이 썼다.
   items:
     - item_seed_id: it_tsukau
@@ -8150,7 +8150,7 @@
         example_translation: 여행에서 돈을 다 썼다.
 
 - seed_id: sn_0452
-  japanese: この仕事は頭を使う。
+  text: この仕事は頭を使う。
   korean_translation: 이 일은 머리를 쓴다.
   items:
     - item_seed_id: it_tsukau
@@ -8167,7 +8167,7 @@
         example_translation: 몸을 쓰는 일을 하고 싶다.
 
 - seed_id: sn_0453
-  japanese: 敬語を正しく使うのは難しい。
+  text: 敬語を正しく使うのは難しい。
   korean_translation: 존댓말을 바르게 쓰는 건 어렵다.
   items:
     - item_seed_id: it_tsukau
@@ -8184,7 +8184,7 @@
         example_translation: 이 말은 자주 쓴다.
 
 - seed_id: sn_0454
-  japanese: 私のこと、覚えてる？
+  text: 私のこと、覚えてる？
   korean_translation: 나 기억나?
   items:
     - item_seed_id: it_oboeru
@@ -8201,7 +8201,7 @@
         example_translation: 그날 일 기억나?
 
 - seed_id: sn_0455
-  japanese: 早く仕事を覚えたい。
+  text: 早く仕事を覚えたい。
   korean_translation: 빨리 일을 익히고 싶다.
   items:
     - item_seed_id: it_oboeru
@@ -8218,7 +8218,7 @@
         example_translation: 겨우 일의 흐름을 익혔다.
 
 - seed_id: sn_0456
-  japanese: 子どものころのことは、あまり覚えていない。
+  text: 子どものころのことは、あまり覚えていない。
   korean_translation: 어릴 때 일은 잘 기억나지 않는다.
   items:
     - item_seed_id: it_oboeru
@@ -8235,7 +8235,7 @@
         example_translation: 어젯밤 일을 전혀 기억 못 한다.
 
 - seed_id: sn_0457
-  japanese: 風邪で会社を休んだ。
+  text: 風邪で会社を休んだ。
   korean_translation: 감기로 회사를 쉬었다.
   items:
     - item_seed_id: it_yasumu
@@ -8252,7 +8252,7 @@
         example_translation: 내일은 학교를 쉬어요.
 
 - seed_id: sn_0458
-  japanese: 明日は店が休みです。
+  text: 明日は店が休みです。
   korean_translation: 내일은 가게가 쉬는 날이에요.
   items:
     - item_seed_id: it_yasumu
@@ -8269,7 +8269,7 @@
         example_translation: 여름방학에는 어디 가?
 
 - seed_id: sn_0459
-  japanese: 今日はもう休みます。おやすみなさい。
+  text: 今日はもう休みます。おやすみなさい。
   korean_translation: 오늘은 이만 자겠습니다. 안녕히 주무세요.
   items:
     - item_seed_id: it_yasumu
@@ -8286,7 +8286,7 @@
         example_translation: 일찍 주무세요.
 
 - seed_id: sn_0460
-  japanese: 急に呼ばれて、会議に出ることになった。
+  text: 急に呼ばれて、会議に出ることになった。
   korean_translation: 갑자기 불려서 회의에 들어가게 됐다.
   items:
     - item_seed_id: it_kyuuni
@@ -8303,7 +8303,7 @@
         example_translation: 갑자기 출장이 정해졌다.
 
 - seed_id: sn_0461
-  japanese: 急に頭が痛くなった。
+  text: 急に頭が痛くなった。
   korean_translation: 갑자기 머리가 아파졌다.
   items:
     - item_seed_id: it_kyuuni
@@ -8320,7 +8320,7 @@
         example_translation: 갑자기 속이 안 좋아졌다.
 
 - seed_id: sn_0462
-  japanese: 急に黙って、どうしたの？
+  text: 急に黙って、どうしたの？
   korean_translation: 갑자기 말이 없어졌네, 무슨 일이야?
   items:
     - item_seed_id: it_kyuuni
@@ -8337,7 +8337,7 @@
         example_translation: 갑자기 다정해졌네.
 
 - seed_id: sn_0463
-  japanese: 連休は高速道路が混む。
+  text: 連休は高速道路が混む。
   korean_translation: 연휴에는 고속도로가 막힌다.
   items:
     - item_seed_id: it_komu
@@ -8354,7 +8354,7 @@
         example_translation: 주말에는 길이 막힌다.
 
 - seed_id: sn_0464
-  japanese: 昼の時間は混むので、早めに行こう。
+  text: 昼の時間は混むので、早めに行こう。
   korean_translation: 점심시간은 붐비니까 일찍 가자.
   items:
     - item_seed_id: it_komu
@@ -8371,7 +8371,7 @@
         example_translation: 저녁에는 역이 붐빈다.
 
 - seed_id: sn_0465
-  japanese: 平日の午前中は、あまり混んでいない。
+  text: 平日の午前中は、あまり混んでいない。
   korean_translation: 평일 오전에는 별로 붐비지 않는다.
   items:
     - item_seed_id: it_komu
@@ -8388,7 +8388,7 @@
         example_translation: 오늘은 전철이 한산하다.
 
 - seed_id: sn_0466
-  japanese: 二人なら、このケーキで足りるね。
+  text: 二人なら、このケーキで足りるね。
   korean_translation: 두 명이면 이 케이크로 충분하겠다.
   items:
     - item_seed_id: it_tariru
@@ -8405,7 +8405,7 @@
         example_translation: 천 엔 있으면 충분하다.
 
 - seed_id: sn_0467
-  japanese: 最近、睡眠が足りていない。
+  text: 最近、睡眠が足りていない。
   korean_translation: 요즘 잠이 부족하다.
   items:
     - item_seed_id: it_tariru
@@ -8422,7 +8422,7 @@
         example_translation: 채소가 부족하다.
 
 - seed_id: sn_0468
-  japanese: 人手が足りないので、手伝ってもらえますか。
+  text: 人手が足りないので、手伝ってもらえますか。
   korean_translation: 일손이 부족해서요, 도와주실 수 있나요?
   items:
     - item_seed_id: it_tariru
@@ -8439,7 +8439,7 @@
         example_translation: 점원이 부족해서 힘들다.
 
 - seed_id: sn_0469
-  japanese: 初めての町で、道に迷った。
+  text: 初めての町で、道に迷った。
   korean_translation: 처음 가는 동네에서 길을 잃었다.
   items:
     - item_seed_id: it_mayou
@@ -8456,7 +8456,7 @@
         example_translation: 역 안에서 길을 잃어버렸다.
 
 - seed_id: sn_0470
-  japanese: 困ったときは、迷わず相談してください。
+  text: 困ったときは、迷わず相談してください。
   korean_translation: 곤란할 때는 망설이지 말고 상의하세요.
   items:
     - item_seed_id: it_mayou
@@ -8473,7 +8473,7 @@
         example_translation: 망설임 없이 이걸 골랐다.
 
 - seed_id: sn_0471
-  japanese: 駅までの道を教えてください。
+  text: 駅までの道を教えてください。
   korean_translation: 역까지 가는 길을 알려 주세요.
   items:
     - item_seed_id: it_oshieru
@@ -8490,7 +8490,7 @@
         example_translation: 사용법을 알려 주실 수 있나요?
 
 - seed_id: sn_0472
-  japanese: 電話番号、教えてもらえる？
+  text: 電話番号、教えてもらえる？
   korean_translation: 전화번호 알려 줄 수 있어?
   items:
     - item_seed_id: it_oshieru
@@ -8507,7 +8507,7 @@
         example_translation: 메일 주소를 알려 주세요.
 
 - seed_id: sn_0473
-  japanese: この経験が、大切なことを教えてくれた。
+  text: この経験が、大切なことを教えてくれた。
   korean_translation: 이 경험이 소중한 것을 가르쳐 주었다.
   items:
     - item_seed_id: it_oshieru
@@ -8526,7 +8526,7 @@
 # ---- round6 추가분
 
 - seed_id: sn_0474
-  japanese: 初めてケーキを作ったけど、失敗した。
+  text: 初めてケーキを作ったけど、失敗した。
   korean_translation: 처음 케이크를 만들었는데 실패했다.
   items:
     - item_seed_id: it_shippai
@@ -8543,7 +8543,7 @@
         example_translation: 요리를 망쳤다.
 
 - seed_id: sn_0475
-  japanese: 痛いけど、もう少し我慢して。
+  text: 痛いけど、もう少し我慢して。
   korean_translation: 아프겠지만 조금만 참아.
   items:
     - item_seed_id: it_gaman
@@ -8560,7 +8560,7 @@
         example_translation: 화장실까지 참을 수 있어?
 
 - seed_id: sn_0476
-  japanese: コンビニに行くなら、ついでに牛乳を買ってきて。
+  text: コンビニに行くなら、ついでに牛乳を買ってきて。
   korean_translation: 편의점 가는 김에 우유 좀 사 와.
   items:
     - item_seed_id: it_tsuideni
@@ -8577,7 +8577,7 @@
         example_translation: 하는 김에 쓰레기도 내놔 줘.
 
 - seed_id: sn_0477
-  japanese: わざわざ来てくれて、ありがとう。
+  text: わざわざ来てくれて、ありがとう。
   korean_translation: 일부러 와 줘서 고마워.
   items:
     - item_seed_id: it_wazawaza
@@ -8594,7 +8594,7 @@
         example_translation: 일부러 보내 줘서 고마워.
 
 - seed_id: sn_0478
-  japanese: これは母からもらった大事な指輪だ。
+  text: これは母からもらった大事な指輪だ。
   korean_translation: 이건 엄마한테 받은 소중한 반지다.
   items:
     - item_seed_id: it_daiji
@@ -8611,7 +8611,7 @@
         example_translation: 중요한 서류를 잃어버렸다.
 
 - seed_id: sn_0479
-  japanese: うちの父はとても厳しい。
+  text: うちの父はとても厳しい。
   korean_translation: 우리 아버지는 매우 엄하다.
   items:
     - item_seed_id: it_kibishii
@@ -8628,7 +8628,7 @@
         example_translation: 그 선생님은 숙제에 엄격하다.
 
 - seed_id: sn_0480
-  japanese: 一人暮らしを始めて、少し寂しい。
+  text: 一人暮らしを始めて、少し寂しい。
   korean_translation: 혼자 살기 시작해서 좀 외롭다.
   items:
     - item_seed_id: it_sabishii
@@ -8645,7 +8645,7 @@
         example_translation: 친구가 없어서 외롭다.
 
 - seed_id: sn_0481
-  japanese: 決勝で負けて、本当に悔しい。
+  text: 決勝で負けて、本当に悔しい。
   korean_translation: 결승에서 져서 정말 분하다.
   items:
     - item_seed_id: it_kuyashii
@@ -8662,7 +8662,7 @@
         example_translation: 1점 차로 져서 분하다.
 
 - seed_id: sn_0482
-  japanese: 危ない！車が来てるよ。
+  text: 危ない！車が来てるよ。
   korean_translation: 위험해! 차 와.
   items:
     - item_seed_id: it_abunai
@@ -8679,7 +8679,7 @@
         example_translation: 위험해, 발밑 조심해.
 
 - seed_id: sn_0483
-  japanese: 詳しい説明は、後でメールで送ります。
+  text: 詳しい説明は、後でメールで送ります。
   korean_translation: 자세한 설명은 나중에 메일로 보낼게요.
   items:
     - item_seed_id: it_kuwashii
@@ -8696,7 +8696,7 @@
         example_translation: 자세한 지도가 필요하다.
 
 - seed_id: sn_0484
-  japanese: 珍しいね、君が遅刻するなんて。
+  text: 珍しいね、君が遅刻するなんて。
   korean_translation: 웬일이야, 네가 지각을 다 하고.
   items:
     - item_seed_id: it_mezurashii
@@ -8713,7 +8713,7 @@
         example_translation: 웬일이야, 이 시간에 전화를 다 하고.
 
 - seed_id: sn_0485
-  japanese: 天気がいいと、気分もいい。
+  text: 天気がいいと、気分もいい。
   korean_translation: 날씨가 좋으면 기분도 좋다.
   items:
     - item_seed_id: it_kibun
@@ -8730,7 +8730,7 @@
         example_translation: 오늘은 기분이 좋다.
 
 - seed_id: sn_0486
-  japanese: 最近、体の調子がいい。
+  text: 最近、体の調子がいい。
   korean_translation: 요즘 몸 상태가 좋다.
   items:
     - item_seed_id: it_choushi
@@ -8747,7 +8747,7 @@
         example_translation: 아침부터 컨디션이 안 좋다.
 
 - seed_id: sn_0487
-  japanese: お久しぶりです。お元気ですか。
+  text: お久しぶりです。お元気ですか。
   korean_translation: 오랜만이에요. 잘 지내셨어요?
   items:
     - item_seed_id: it_genki
@@ -8764,7 +8764,7 @@
         example_translation: 잘 지냈어? 오랜만이다.
 
 - seed_id: sn_0488
-  japanese: この店、いい感じだね。
+  text: この店、いい感じだね。
   korean_translation: 이 가게 느낌 좋다.
   items:
     - item_seed_id: it_kanji
@@ -8781,7 +8781,7 @@
         example_translation: 새 방 느낌 좋네.
 
 - seed_id: sn_0489
-  japanese: ここで写真を撮っちゃ駄目だよ。
+  text: ここで写真を撮っちゃ駄目だよ。
   korean_translation: 여기서 사진 찍으면 안 돼.
   items:
     - item_seed_id: it_dame
@@ -8798,7 +8798,7 @@
         example_translation: 아직 먹으면 안 돼.
 
 - seed_id: sn_0490
-  japanese: 嘘をつかないで。
+  text: 嘘をつかないで。
   korean_translation: 거짓말하지 마.
   items:
     - item_seed_id: it_uso
@@ -8815,7 +8815,7 @@
         example_translation: 그는 거짓말을 했다.
 
 - seed_id: sn_0491
-  japanese: お腹が空いた。何か食べよう。
+  text: お腹が空いた。何か食べよう。
   korean_translation: 배고파. 뭐 좀 먹자.
   items:
     - item_seed_id: it_onakagasuku
@@ -8832,7 +8832,7 @@
         example_translation: 벌써 배가 고파지기 시작했다.
 
 - seed_id: sn_0492
-  japanese: 風邪を引いて、学校を休んだ。
+  text: 風邪を引いて、学校を休んだ。
   korean_translation: 감기에 걸려서 학교를 쉬었다.
   items:
     - item_seed_id: it_kazewohiku
@@ -8849,7 +8849,7 @@
         example_translation: 겨울이 되면 감기에 자주 걸린다.
 
 - seed_id: sn_0493
-  japanese: 駅まで歩いて十分かかる。
+  text: 駅まで歩いて十分かかる。
   korean_translation: 역까지 걸어서 10분 걸린다.
   items:
     - item_seed_id: it_kakaru
@@ -8866,7 +8866,7 @@
         example_translation: 집에서 회사까지 한 시간 걸린다.
 
 - seed_id: sn_0494
-  japanese: 失敗しても大丈夫。次に気をつければいい。
+  text: 失敗しても大丈夫。次に気をつければいい。
   korean_translation: 실수해도 괜찮아. 다음에 조심하면 돼.
   items:
     - item_seed_id: it_shippai
@@ -8883,7 +8883,7 @@
         example_translation: 누구나 실수할 때가 있다.
 
 - seed_id: sn_0495
-  japanese: 失敗から学ぶことは多い。
+  text: 失敗から学ぶことは多い。
   korean_translation: 실패에서 배우는 것은 많다.
   items:
     - item_seed_id: it_shippai
@@ -8900,7 +8900,7 @@
         example_translation: 이 실패를 다음에 살리고 싶다.
 
 - seed_id: sn_0496
-  japanese: 新しい店は、一年で失敗に終わった。
+  text: 新しい店は、一年で失敗に終わった。
   korean_translation: 새 가게는 1년 만에 실패로 끝났다.
   items:
     - item_seed_id: it_shippai
@@ -8917,7 +8917,7 @@
         example_translation: 계획은 실패로 끝났다.
 
 - seed_id: sn_0497
-  japanese: ダイエット中なので、甘いものを我慢している。
+  text: ダイエット中なので、甘いものを我慢している。
   korean_translation: 다이어트 중이라 단 걸 참고 있다.
   items:
     - item_seed_id: it_gaman
@@ -8934,7 +8934,7 @@
         example_translation: 술을 참고 있다.
 
 - seed_id: sn_0498
-  japanese: 隣の人がうるさくて、もう我慢できない。
+  text: 隣の人がうるさくて、もう我慢できない。
   korean_translation: 옆 사람이 시끄러워서 더는 못 참겠다.
   items:
     - item_seed_id: it_gaman
@@ -8951,7 +8951,7 @@
         example_translation: 이 더위는 못 참겠다.
 
 - seed_id: sn_0499
-  japanese: つらいときは、我慢しないで言ってね。
+  text: つらいときは、我慢しないで言ってね。
   korean_translation: 힘들 때는 참지 말고 말해.
   items:
     - item_seed_id: it_gaman
@@ -8968,7 +8968,7 @@
         example_translation: 아프면 참지 마세요.
 
 - seed_id: sn_0500
-  japanese: 駅に行ったついでに、本屋に寄った。
+  text: 駅に行ったついでに、本屋に寄った。
   korean_translation: 역에 간 김에 서점에 들렀다.
   items:
     - item_seed_id: it_tsuideni
@@ -8985,7 +8985,7 @@
         example_translation: 장 보는 김에 우체국에 갔다.
 
 - seed_id: sn_0501
-  japanese: ついでに言っておくと、明日は休みです。
+  text: ついでに言っておくと、明日は休みです。
   korean_translation: 덧붙이자면 내일은 쉬는 날입니다.
   items:
     - item_seed_id: it_tsuideni
@@ -9002,7 +9002,7 @@
         example_translation: 참고로 주차장도 있습니다.
 
 - seed_id: sn_0502
-  japanese: 出張のついでに、京都を観光した。
+  text: 出張のついでに、京都を観光した。
   korean_translation: 출장 간 김에 교토를 관광했다.
   items:
     - item_seed_id: it_tsuideni
@@ -9019,7 +9019,7 @@
         example_translation: 산책하는 김에 빵을 샀다.
 
 - seed_id: sn_0503
-  japanese: わざわざタクシーで行かなくても、歩いて五分だよ。
+  text: わざわざタクシーで行かなくても、歩いて五分だよ。
   korean_translation: 굳이 택시 안 타도 걸어서 5분이야.
   items:
     - item_seed_id: it_wazawaza
@@ -9036,7 +9036,7 @@
         example_translation: 굳이 안 사도 빌려줄게.
 
 - seed_id: sn_0504
-  japanese: 遠いところ、わざわざお越しいただきありがとうございます。
+  text: 遠いところ、わざわざお越しいただきありがとうございます。
   korean_translation: 먼 곳까지 일부러 와 주셔서 감사합니다.
   items:
     - item_seed_id: it_wazawaza
@@ -9053,7 +9053,7 @@
         example_translation: 일부러 연락 주셔서 감사합니다.
 
 - seed_id: sn_0505
-  japanese: わざわざ私の前でその話をしなくてもいいのに。
+  text: わざわざ私の前でその話をしなくてもいいのに。
   korean_translation: 굳이 내 앞에서 그 얘기를 안 해도 될 텐데.
   items:
     - item_seed_id: it_wazawaza
@@ -9070,7 +9070,7 @@
         example_translation: 굳이 말 안 해도 알아.
 
 - seed_id: sn_0506
-  japanese: 大事なのは、毎日続けることだ。
+  text: 大事なのは、毎日続けることだ。
   korean_translation: 중요한 건 매일 계속하는 것이다.
   items:
     - item_seed_id: it_daiji
@@ -9087,7 +9087,7 @@
         example_translation: 건강이 제일 중요하다.
 
 - seed_id: sn_0507
-  japanese: 風邪ですか。お大事に。
+  text: 風邪ですか。お大事に。
   korean_translation: 감기세요? 몸조리 잘하세요.
   items:
     - item_seed_id: it_daiji
@@ -9104,7 +9104,7 @@
         example_translation: 부디 몸조리 잘하세요.
 
 - seed_id: sn_0508
-  japanese: 家族を大事にしてね。
+  text: 家族を大事にしてね。
   korean_translation: 가족을 소중히 해.
   items:
     - item_seed_id: it_daiji
@@ -9121,7 +9121,7 @@
         example_translation: 물건을 아껴 쓰자.
 
 - seed_id: sn_0509
-  japanese: 今月は予算が厳しい。
+  text: 今月は予算が厳しい。
   korean_translation: 이번 달은 예산이 빠듯하다.
   items:
     - item_seed_id: it_kibishii
@@ -9138,7 +9138,7 @@
         example_translation: 일정이 빠듯하다.
 
 - seed_id: sn_0510
-  japanese: 今年の冬は寒さが厳しい。
+  text: 今年の冬は寒さが厳しい。
   korean_translation: 올해 겨울은 추위가 혹독하다.
   items:
     - item_seed_id: it_kibishii
@@ -9155,7 +9155,7 @@
         example_translation: 더위가 혹독한 날이 이어진다.
 
 - seed_id: sn_0511
-  japanese: 明日までに終わらせるのは、ちょっと厳しいです。
+  text: 明日までに終わらせるのは、ちょっと厳しいです。
   korean_translation: 내일까지 끝내는 건 좀 어려울 것 같아요.
   items:
     - item_seed_id: it_kibishii
@@ -9172,7 +9172,7 @@
         example_translation: 이 가격으로는 어렵습니다.
 
 - seed_id: sn_0512
-  japanese: 田中さんが転勤するなんて、寂しくなるね。
+  text: 田中さんが転勤するなんて、寂しくなるね。
   korean_translation: 다나카 씨가 전근 가다니 허전해지겠다.
   items:
     - item_seed_id: it_sabishii
@@ -9189,7 +9189,7 @@
         example_translation: 다들 돌아가서 허전해졌다.
 
 - seed_id: sn_0513
-  japanese: 夜の公園は人がいなくて寂しい。
+  text: 夜の公園は人がいなくて寂しい。
   korean_translation: 밤 공원은 사람이 없어서 쓸쓸하다.
   items:
     - item_seed_id: it_sabishii
@@ -9206,7 +9206,7 @@
         example_translation: 겨울 바다는 쓸쓸한 느낌이 든다.
 
 - seed_id: sn_0514
-  japanese: 子どもが家を出て、家の中が寂しくなった。
+  text: 子どもが家を出て、家の中が寂しくなった。
   korean_translation: 아이가 독립해서 집 안이 허전해졌다.
   items:
     - item_seed_id: it_sabishii
@@ -9223,7 +9223,7 @@
         example_translation: 고양이가 없어져서 허전해졌다.
 
 - seed_id: sn_0515
-  japanese: あと一点で不合格なんて、悔しい。
+  text: あと一点で不合格なんて、悔しい。
   korean_translation: 1점 차이로 불합격이라니 분하다.
   items:
     - item_seed_id: it_kuyashii
@@ -9240,7 +9240,7 @@
         example_translation: 조금만 더 하면 됐는데 분하다.
 
 - seed_id: sn_0516
-  japanese: 悔しかったから、もっと練習することにした。
+  text: 悔しかったから、もっと練習することにした。
   korean_translation: 분해서 더 연습하기로 했다.
   items:
     - item_seed_id: it_kuyashii
@@ -9257,7 +9257,7 @@
         example_translation: 분한 경험을 했다.
 
 - seed_id: sn_0517
-  japanese: 言い返せなかったのが悔しい。
+  text: 言い返せなかったのが悔しい。
   korean_translation: 말대꾸를 못 한 게 분하다.
   items:
     - item_seed_id: it_kuyashii
@@ -9274,7 +9274,7 @@
         example_translation: 무시당해서 분했다.
 
 - seed_id: sn_0518
-  japanese: この川は深くて危ないから、入らないで。
+  text: この川は深くて危ないから、入らないで。
   korean_translation: 이 강은 깊어서 위험하니까 들어가지 마.
   items:
     - item_seed_id: it_abunai
@@ -9291,7 +9291,7 @@
         example_translation: 밤길은 위험하니까 바래다줄게.
 
 - seed_id: sn_0519
-  japanese: 危なかった。もう少しで電車に乗り遅れるところだった。
+  text: 危なかった。もう少しで電車に乗り遅れるところだった。
   korean_translation: 아슬아슬했다. 하마터면 전철을 놓칠 뻔했다.
   items:
     - item_seed_id: it_abunai
@@ -9308,7 +9308,7 @@
         example_translation: 큰일 날 뻔했네, 안 다쳤어?
 
 - seed_id: sn_0520
-  japanese: この成績だと、進級が危ない。
+  text: この成績だと、進級が危ない。
   korean_translation: 이 성적이면 진급이 위태롭다.
   items:
     - item_seed_id: it_abunai
@@ -9325,7 +9325,7 @@
         example_translation: 이대로면 마감이 위태롭다.
 
 - seed_id: sn_0521
-  japanese: 彼はカメラにとても詳しい。
+  text: 彼はカメラにとても詳しい。
   korean_translation: 그는 카메라에 대해 아주 잘 안다.
   items:
     - item_seed_id: it_kuwashii
@@ -9342,7 +9342,7 @@
         example_translation: 그녀는 역사를 잘 안다.
 
 - seed_id: sn_0522
-  japanese: もう少し詳しく教えてください。
+  text: もう少し詳しく教えてください。
   korean_translation: 조금 더 자세히 알려 주세요.
   items:
     - item_seed_id: it_kuwashii
@@ -9359,7 +9359,7 @@
         example_translation: 자세히 이야기해 줘.
 
 - seed_id: sn_0523
-  japanese: この辺りに詳しい人に聞いてみよう。
+  text: この辺りに詳しい人に聞いてみよう。
   korean_translation: 이 근처를 잘 아는 사람에게 물어보자.
   items:
     - item_seed_id: it_kuwashii
@@ -9376,7 +9376,7 @@
         example_translation: 역 주변을 잘 아세요?
 
 - seed_id: sn_0524
-  japanese: この地域では、雪は珍しい。
+  text: この地域では、雪は珍しい。
   korean_translation: 이 지역에서는 눈이 드물다.
   items:
     - item_seed_id: it_mezurashii
@@ -9393,7 +9393,7 @@
         example_translation: 이 시기에 태풍이 오는 건 드물다.
 
 - seed_id: sn_0525
-  japanese: 珍しい鳥を見つけた。
+  text: 珍しい鳥を見つけた。
   korean_translation: 희귀한 새를 발견했다.
   items:
     - item_seed_id: it_mezurashii
@@ -9410,7 +9410,7 @@
         example_translation: 보기 드문 요리를 먹었다.
 
 - seed_id: sn_0526
-  japanese: 今日は珍しく早起きした。
+  text: 今日は珍しく早起きした。
   korean_translation: 오늘은 웬일로 일찍 일어났다.
   items:
     - item_seed_id: it_mezurashii
@@ -9427,7 +9427,7 @@
         example_translation: 웬일로 아빠가 요리를 했다.
 
 - seed_id: sn_0527
-  japanese: バスに酔って、気分が悪くなった。
+  text: バスに酔って、気分が悪くなった。
   korean_translation: 버스 멀미로 속이 안 좋아졌다.
   items:
     - item_seed_id: it_kibun
@@ -9444,7 +9444,7 @@
         example_translation: 사람이 많아서 속이 안 좋아졌다.
 
 - seed_id: sn_0528
-  japanese: 今日はカラオケの気分じゃない。
+  text: 今日はカラオケの気分じゃない。
   korean_translation: 오늘은 노래방 갈 기분이 아니다.
   items:
     - item_seed_id: it_kibun
@@ -9461,7 +9461,7 @@
         example_translation: 지금은 이야기할 기분이 아니다.
 
 - seed_id: sn_0529
-  japanese: 気分転換に散歩しよう。
+  text: 気分転換に散歩しよう。
   korean_translation: 기분 전환으로 산책하자.
   items:
     - item_seed_id: it_kibun
@@ -9478,7 +9478,7 @@
         example_translation: 기분 전환으로 머리를 잘랐다.
 
 - seed_id: sn_0530
-  japanese: パソコンの調子が悪い。
+  text: パソコンの調子が悪い。
   korean_translation: 컴퓨터 상태가 안 좋다.
   items:
     - item_seed_id: it_choushi
@@ -9495,7 +9495,7 @@
         example_translation: 차 상태가 이상하다.
 
 - seed_id: sn_0531
-  japanese: その調子で頑張って。
+  text: その調子で頑張って。
   korean_translation: 그 기세로 힘내.
   items:
     - item_seed_id: it_choushi
@@ -9512,7 +9512,7 @@
         example_translation: 잘 되고 있네.
 
 - seed_id: sn_0532
-  japanese: 褒められて、調子に乗ってしまった。
+  text: 褒められて、調子に乗ってしまった。
   korean_translation: 칭찬받아서 우쭐해져 버렸다.
   items:
     - item_seed_id: it_choushi
@@ -9529,7 +9529,7 @@
         example_translation: 우쭐대지 마.
 
 - seed_id: sn_0533
-  japanese: 子どもたちは朝から元気だ。
+  text: 子どもたちは朝から元気だ。
   korean_translation: 아이들은 아침부터 활기차다.
   items:
     - item_seed_id: it_genki
@@ -9546,7 +9546,7 @@
         example_translation: 할머니는 늘 정정하시다.
 
 - seed_id: sn_0534
-  japanese: 元気を出して。次があるよ。
+  text: 元気を出して。次があるよ。
   korean_translation: 힘내. 다음이 있잖아.
   items:
     - item_seed_id: it_genki
@@ -9563,7 +9563,7 @@
         example_translation: 맛있는 걸 먹고 힘이 났다.
 
 - seed_id: sn_0535
-  japanese: 今日は元気がないね。何かあった？
+  text: 今日は元気がないね。何かあった？
   korean_translation: 오늘 기운이 없네. 무슨 일 있어?
   items:
     - item_seed_id: it_genki
@@ -9580,7 +9580,7 @@
         example_translation: 꽃이 시들시들하다.
 
 - seed_id: sn_0536
-  japanese: 髪は、こんな感じにしてください。
+  text: 髪は、こんな感じにしてください。
   korean_translation: 머리는 이런 느낌으로 해 주세요.
   items:
     - item_seed_id: it_kanji
@@ -9597,7 +9597,7 @@
         example_translation: 대충 이런 느낌이에요.
 
 - seed_id: sn_0537
-  japanese: あの店員さん、感じが悪かった。
+  text: あの店員さん、感じが悪かった。
   korean_translation: 그 점원 태도가 별로였다.
   items:
     - item_seed_id: it_kanji
@@ -9614,7 +9614,7 @@
         example_translation: 인상이 좋은 사람이네.
 
 - seed_id: sn_0538
-  japanese: 何か忘れているような感じがする。
+  text: 何か忘れているような感じがする。
   korean_translation: 뭔가 잊고 있는 느낌이 든다.
   items:
     - item_seed_id: it_kanji
@@ -9631,7 +9631,7 @@
         example_translation: 누가 보고 있는 느낌이 든다.
 
 - seed_id: sn_0539
-  japanese: 何度やっても駄目だった。
+  text: 何度やっても駄目だった。
   korean_translation: 몇 번을 해도 안 됐다.
   items:
     - item_seed_id: it_dame
@@ -9648,7 +9648,7 @@
         example_translation: 이제 글렀을지도 모른다.
 
 - seed_id: sn_0540
-  japanese: この服、駄目になっちゃった。
+  text: この服、駄目になっちゃった。
   korean_translation: 이 옷 못 쓰게 됐어.
   items:
     - item_seed_id: it_dame
@@ -9665,7 +9665,7 @@
         example_translation: 비 때문에 채소가 못 쓰게 됐다.
 
 - seed_id: sn_0541
-  japanese: 私って本当に駄目だな。
+  text: 私って本当に駄目だな。
   korean_translation: 나 정말 한심하다.
   items:
     - item_seed_id: it_dame
@@ -9682,7 +9682,7 @@
         example_translation: 한심한 내가 싫어진다.
 
 - seed_id: sn_0542
-  japanese: 嘘！本当に合格したの？
+  text: 嘘！本当に合格したの？
   korean_translation: 설마! 정말 합격했어?
   items:
     - item_seed_id: it_uso
@@ -9699,7 +9699,7 @@
         example_translation: 말도 안 돼.
 
 - seed_id: sn_0543
-  japanese: 優しい嘘をついた。
+  text: 優しい嘘をついた。
   korean_translation: 선의의 거짓말을 했다.
   items:
     - item_seed_id: it_uso
@@ -9716,7 +9716,7 @@
         example_translation: 작은 거짓말이 들통났다.
 
 - seed_id: sn_0544
-  japanese: 嘘みたいに晴れた。
+  text: 嘘みたいに晴れた。
   korean_translation: 거짓말처럼 개었다.
   items:
     - item_seed_id: it_uso
@@ -9733,7 +9733,7 @@
         example_translation: 거짓말 같은 실화.
 
 - seed_id: sn_0545
-  japanese: 運動したら、すごくお腹が空いた。
+  text: 運動したら、すごくお腹が空いた。
   korean_translation: 운동했더니 엄청 배고프다.
   items:
     - item_seed_id: it_onakagasuku
@@ -9750,7 +9750,7 @@
         example_translation: 수영하고 나면 배가 고프다.
 
 - seed_id: sn_0546
-  japanese: 夜中にお腹が空いて、目が覚めた。
+  text: 夜中にお腹が空いて、目が覚めた。
   korean_translation: 한밤중에 배가 고파서 잠이 깼다.
   items:
     - item_seed_id: it_onakagasuku
@@ -9767,7 +9767,7 @@
         example_translation: 배고파서 잠이 안 온다.
 
 - seed_id: sn_0547
-  japanese: 赤ちゃんはお腹が空くと泣く。
+  text: 赤ちゃんはお腹が空くと泣く。
   korean_translation: 아기는 배가 고프면 운다.
   items:
     - item_seed_id: it_onakagasuku
@@ -9784,7 +9784,7 @@
         example_translation: 아침을 안 먹으면 금방 배가 고프다.
 
 - seed_id: sn_0548
-  japanese: 薄着だと風邪を引くよ。
+  text: 薄着だと風邪を引くよ。
   korean_translation: 얇게 입으면 감기 걸려.
   items:
     - item_seed_id: it_kazewohiku
@@ -9801,7 +9801,7 @@
         example_translation: 머리 안 말리면 감기 걸려.
 
 - seed_id: sn_0549
-  japanese: すみません、風邪を引いたので、今日は休ませてください。
+  text: すみません、風邪を引いたので、今日は休ませてください。
   korean_translation: 죄송해요, 감기에 걸려서 오늘은 쉬겠습니다.
   items:
     - item_seed_id: it_kazewohiku
@@ -9818,7 +9818,7 @@
         example_translation: 감기에 걸린 것 같아요.
 
 - seed_id: sn_0550
-  japanese: 風邪を引かないように、気をつけてね。
+  text: 風邪を引かないように、気をつけてね。
   korean_translation: 감기 걸리지 않게 조심해.
   items:
     - item_seed_id: it_kazewohiku
@@ -9835,7 +9835,7 @@
         example_translation: 감기 걸리지 않도록 하세요.
 
 - seed_id: sn_0551
-  japanese: 修理にけっこうお金がかかった。
+  text: 修理にけっこうお金がかかった。
   korean_translation: 수리에 돈이 꽤 들었다.
   items:
     - item_seed_id: it_kakaru
@@ -9852,7 +9852,7 @@
         example_translation: 이사에 돈이 든다.
 
 - seed_id: sn_0552
-  japanese: 知らない番号から電話がかかってきた。
+  text: 知らない番号から電話がかかってきた。
   korean_translation: 모르는 번호로 전화가 걸려 왔다.
   items:
     - item_seed_id: it_kakaru
@@ -9869,7 +9869,7 @@
         example_translation: 밤늦게 전화가 걸려 왔다.
 
 - seed_id: sn_0553
-  japanese: ドアに鍵がかかっている。
+  text: ドアに鍵がかかっている。
   korean_translation: 문이 잠겨 있다.
   items:
     - item_seed_id: it_kakaru
@@ -9888,7 +9888,7 @@
 # ---- round7 추가분
 
 - seed_id: sn_0554
-  japanese: どうしよう、道が分からなくなった。
+  text: どうしよう、道が分からなくなった。
   korean_translation: 어떡하지, 길을 모르겠어.
   items:
     - item_seed_id: it_doushiyou
@@ -9905,7 +9905,7 @@
         example_translation: 어떡하지, 열쇠가 없어.
 
 - seed_id: sn_0555
-  japanese: 確かに、君の言う通りだ。
+  text: 確かに、君の言う通りだ。
   korean_translation: 확실히 네 말이 맞다.
   items:
     - item_seed_id: it_tashikani
@@ -9922,7 +9922,7 @@
         example_translation: 확실히 그건 좋은 생각이다.
 
 - seed_id: sn_0556
-  japanese: テストはまあまあだった。
+  text: テストはまあまあだった。
   korean_translation: 시험은 그럭저럭이었다.
   items:
     - item_seed_id: it_maamaa
@@ -9939,7 +9939,7 @@
         example_translation: 맛은 그럭저럭이었다.
 
 - seed_id: sn_0557
-  japanese: どうぞ、召し上がってください。
+  text: どうぞ、召し上がってください。
   korean_translation: 어서 드세요.
   items:
     - item_seed_id: it_douzo
@@ -9956,7 +9956,7 @@
         example_translation: 식기 전에 드세요.
 
 - seed_id: sn_0558
-  japanese: どうも、ありがとうございます。
+  text: どうも、ありがとうございます。
   korean_translation: 정말 감사합니다.
   items:
     - item_seed_id: it_doumo
@@ -9973,7 +9973,7 @@
         example_translation: 정말 죄송합니다.
 
 - seed_id: sn_0559
-  japanese: 傘を壊しちゃった。ごめん。
+  text: 傘を壊しちゃった。ごめん。
   korean_translation: 우산 망가뜨렸어. 미안.
   items:
     - item_seed_id: it_gomen
@@ -9990,7 +9990,7 @@
         example_translation: 기다리게 해서 미안.
 
 - seed_id: sn_0560
-  japanese: 失礼します。入ってもよろしいですか。
+  text: 失礼します。入ってもよろしいですか。
   korean_translation: 실례합니다. 들어가도 될까요?
   items:
     - item_seed_id: it_shitsurei
@@ -10007,7 +10007,7 @@
         example_translation: 실례합니다. 차 가져왔습니다.
 
 - seed_id: sn_0561
-  japanese: 日本に行ったことがある。
+  text: 日本に行ったことがある。
   korean_translation: 일본에 가 본 적이 있다.
   items:
     - item_seed_id: it_kotogaaru
@@ -10024,7 +10024,7 @@
         example_translation: 이 영화는 전에 본 적이 있다.
 
 - seed_id: sn_0562
-  japanese: 来年から一人暮らしをすることにした。
+  text: 来年から一人暮らしをすることにした。
   korean_translation: 내년부터 혼자 살기로 했다.
   items:
     - item_seed_id: it_kotonisuru
@@ -10041,7 +10041,7 @@
         example_translation: 올해는 매일 일기를 쓰기로 했다.
 
 - seed_id: sn_0563
-  japanese: このペンは書きやすい。
+  text: このペンは書きやすい。
   korean_translation: 이 펜은 쓰기 편하다.
   items:
     - item_seed_id: it_yasui
@@ -10058,7 +10058,7 @@
         example_translation: 이 신발은 걷기 편하다.
 
 - seed_id: sn_0564
-  japanese: もっと早く出ればよかった。
+  text: もっと早く出ればよかった。
   korean_translation: 좀 더 일찍 나올 걸 그랬다.
   items:
     - item_seed_id: it_bayokatta
@@ -10075,7 +10075,7 @@
         example_translation: 공부를 더 할 걸 그랬다.
 
 - seed_id: sn_0565
-  japanese: ここでたばこを吸ってはいけません。
+  text: ここでたばこを吸ってはいけません。
   korean_translation: 여기서 담배를 피우면 안 됩니다.
   items:
     - item_seed_id: it_tewaikenai
@@ -10092,7 +10092,7 @@
         example_translation: 여기에 차를 세우면 안 됩니다.
 
 - seed_id: sn_0566
-  japanese: この部屋は駅から近いし、家賃も安い。
+  text: この部屋は駅から近いし、家賃も安い。
   korean_translation: 이 방은 역에서 가깝고 월세도 싸다.
   items:
     - item_seed_id: it_shi
@@ -10109,7 +10109,7 @@
         example_translation: 이 가게는 싸고 맛있다.
 
 - seed_id: sn_0567
-  japanese: 明日は晴れるでしょう。
+  text: 明日は晴れるでしょう。
   korean_translation: 내일은 맑겠습니다.
   items:
     - item_seed_id: it_deshou
@@ -10126,7 +10126,7 @@
         example_translation: 오후부터 비가 오겠습니다.
 
 - seed_id: sn_0568
-  japanese: 約束は守らなければならない。
+  text: 約束は守らなければならない。
   korean_translation: 약속은 지켜야 한다.
   items:
     - item_seed_id: it_yakusoku
@@ -10143,7 +10143,7 @@
         example_translation: 약속을 지키는 사람은 신뢰받는다.
 
 - seed_id: sn_0569
-  japanese: ちょっと用事があるので、先に帰ります。
+  text: ちょっと用事があるので、先に帰ります。
   korean_translation: 볼일이 좀 있어서 먼저 갈게요.
   items:
     - item_seed_id: it_youji
@@ -10160,7 +10160,7 @@
         example_translation: 오후에 볼일이 있어요.
 
 - seed_id: sn_0570
-  japanese: 邪魔だから、そこをどいて。
+  text: 邪魔だから、そこをどいて。
   korean_translation: 방해되니까 거기서 비켜.
   items:
     - item_seed_id: it_jama
@@ -10177,7 +10177,7 @@
         example_translation: 이 상자 거치적거리네.
 
 - seed_id: sn_0571
-  japanese: 昨日、彼氏と喧嘩した。
+  text: 昨日、彼氏と喧嘩した。
   korean_translation: 어제 남자친구랑 싸웠다.
   items:
     - item_seed_id: it_kenka
@@ -10194,7 +10194,7 @@
         example_translation: 형이랑 자주 싸운다.
 
 - seed_id: sn_0572
-  japanese: 金曜日に会社の飲み会がある。
+  text: 金曜日に会社の飲み会がある。
   korean_translation: 금요일에 회사 회식이 있다.
   items:
     - item_seed_id: it_nomikai
@@ -10211,7 +10211,7 @@
         example_translation: 다음 주에 부서 회식이 있어요.
 
 - seed_id: sn_0573
-  japanese: 今日は残業で帰りが遅くなる。
+  text: 今日は残業で帰りが遅くなる。
   korean_translation: 오늘은 야근이라 늦게 들어간다.
   items:
     - item_seed_id: it_zangyou
@@ -10228,7 +10228,7 @@
         example_translation: 오늘은 한 시간 잔업했다.
 
 - seed_id: sn_0574
-  japanese: 旅行に行くか、どうしようか考えている。
+  text: 旅行に行くか、どうしようか考えている。
   korean_translation: 여행을 갈지 말지 고민하고 있다.
   items:
     - item_seed_id: it_doushiyou
@@ -10245,7 +10245,7 @@
         example_translation: 저녁 뭐로 하지.
 
 - seed_id: sn_0575
-  japanese: 会議の時間、どうしましょうか。
+  text: 会議の時間、どうしましょうか。
   korean_translation: 회의 시간 어떻게 할까요?
   items:
     - item_seed_id: it_doushiyou
@@ -10262,7 +10262,7 @@
         example_translation: 다음 미팅 어떻게 할까요?
 
 - seed_id: sn_0576
-  japanese: 明日が発表だ。どうしよう、緊張してきた。
+  text: 明日が発表だ。どうしよう、緊張してきた。
   korean_translation: 내일이 발표다. 어떡하지, 긴장된다.
   items:
     - item_seed_id: it_doushiyou
@@ -10279,7 +10279,7 @@
         example_translation: 어떡하지, 잘 말할 수 있을까.
 
 - seed_id: sn_0577
-  japanese: 確かに高いけど、品質はいい。
+  text: 確かに高いけど、品質はいい。
   korean_translation: 비싸긴 하지만 품질은 좋다.
   items:
     - item_seed_id: it_tashikani
@@ -10296,7 +10296,7 @@
         example_translation: 어렵긴 하지만 해 볼 가치는 있다.
 
 - seed_id: sn_0578
-  japanese: 書類は確かに受け取りました。
+  text: 書類は確かに受け取りました。
   korean_translation: 서류는 틀림없이 받았습니다.
   items:
     - item_seed_id: it_tashikani
@@ -10313,7 +10313,7 @@
         example_translation: 돈은 틀림없이 받았습니다.
 
 - seed_id: sn_0579
-  japanese: 確かに鍵を閉めたはずなのに、開いていた。
+  text: 確かに鍵を閉めたはずなのに、開いていた。
   korean_translation: 분명 문을 잠갔을 텐데 열려 있었다.
   items:
     - item_seed_id: it_tashikani
@@ -10330,7 +10330,7 @@
         example_translation: 아마 회의는 3시부터였던 것 같아.
 
 - seed_id: sn_0580
-  japanese: まあまあ、そんなに怒らないで。
+  text: まあまあ、そんなに怒らないで。
   korean_translation: 자자, 그렇게 화내지 마.
   items:
     - item_seed_id: it_maamaa
@@ -10347,7 +10347,7 @@
         example_translation: 자자, 진정해.
 
 - seed_id: sn_0581
-  japanese: この店、まあまあおいしいよ。
+  text: この店、まあまあおいしいよ。
   korean_translation: 이 가게 그런대로 맛있어.
   items:
     - item_seed_id: it_maamaa
@@ -10364,7 +10364,7 @@
         example_translation: 일본어는 그런대로 할 수 있어요.
 
 - seed_id: sn_0582
-  japanese: 体調はまあまあです。
+  text: 体調はまあまあです。
   korean_translation: 몸 상태는 그럭저럭이에요.
   items:
     - item_seed_id: it_maamaa
@@ -10381,7 +10381,7 @@
         example_translation: 일은 그럭저럭 순조로워요.
 
 - seed_id: sn_0583
-  japanese: こちら、資料です。どうぞ。
+  text: こちら、資料です。どうぞ。
   korean_translation: 여기 자료입니다. 받으세요.
   items:
     - item_seed_id: it_douzo
@@ -10398,7 +10398,7 @@
         example_translation: 자, 여기요.
 
 - seed_id: sn_0584
-  japanese: お先にどうぞ。
+  text: お先にどうぞ。
   korean_translation: 먼저 하세요.
   items:
     - item_seed_id: it_douzo
@@ -10415,7 +10415,7 @@
         example_translation: 어서 앉으세요.
 
 - seed_id: sn_0585
-  japanese: どうぞ、中に入ってください。
+  text: どうぞ、中に入ってください。
   korean_translation: 어서 안으로 들어오세요.
   items:
     - item_seed_id: it_douzo
@@ -10432,7 +10432,7 @@
         example_translation: 이쪽으로 오세요.
 
 - seed_id: sn_0586
-  japanese: あ、どうも。お久しぶりです。
+  text: あ、どうも。お久しぶりです。
   korean_translation: 아, 안녕하세요. 오랜만이에요.
   items:
     - item_seed_id: it_doumo
@@ -10449,7 +10449,7 @@
         example_translation: 안녕하세요, 다나카입니다.
 
 - seed_id: sn_0587
-  japanese: どうも風邪を引いたみたいだ。
+  text: どうも風邪を引いたみたいだ。
   korean_translation: 아무래도 감기에 걸린 것 같다.
   items:
     - item_seed_id: it_doumo
@@ -10466,7 +10466,7 @@
         example_translation: 아무래도 컨디션이 안 좋다.
 
 - seed_id: sn_0588
-  japanese: 遅くなって、どうもすみません。
+  text: 遅くなって、どうもすみません。
   korean_translation: 늦어서 정말 죄송합니다.
   items:
     - item_seed_id: it_doumo
@@ -10483,7 +10483,7 @@
         example_translation: 폐를 끼쳐서 정말 죄송합니다.
 
 - seed_id: sn_0589
-  japanese: ごめん、今日は行けない。
+  text: ごめん、今日は行けない。
   korean_translation: 미안, 오늘은 못 가.
   items:
     - item_seed_id: it_gomen
@@ -10500,7 +10500,7 @@
         example_translation: 미안, 그건 안 돼.
 
 - seed_id: sn_0590
-  japanese: ごめん、ちょっと通して。
+  text: ごめん、ちょっと通して。
   korean_translation: 미안, 좀 지나갈게.
   items:
     - item_seed_id: it_gomen
@@ -10517,7 +10517,7 @@
         example_translation: 미안, 잠깐 전화 좀 받을게.
 
 - seed_id: sn_0591
-  japanese: ごめんなさい、もうしません。
+  text: ごめんなさい、もうしません。
   korean_translation: 잘못했어요, 다시는 안 할게요.
   items:
     - item_seed_id: it_gomen
@@ -10534,7 +10534,7 @@
         example_translation: 거짓말해서 죄송해요.
 
 - seed_id: sn_0592
-  japanese: お先に失礼します。
+  text: お先に失礼します。
   korean_translation: 먼저 들어가 보겠습니다.
   items:
     - item_seed_id: it_shitsurei
@@ -10551,7 +10551,7 @@
         example_translation: 오늘은 이만 가 보겠습니다.
 
 - seed_id: sn_0593
-  japanese: それでは、失礼します。
+  text: それでは、失礼します。
   korean_translation: 그럼 이만 끊겠습니다.
   items:
     - item_seed_id: it_shitsurei
@@ -10568,7 +10568,7 @@
         example_translation: 그럼 또 연락드리겠습니다. 이만 끊을게요.
 
 - seed_id: sn_0594
-  japanese: 失礼しました。番号を間違えました。
+  text: 失礼しました。番号を間違えました。
   korean_translation: 실례했습니다. 번호를 잘못 눌렀습니다.
   items:
     - item_seed_id: it_shitsurei
@@ -10585,7 +10585,7 @@
         example_translation: 대단히 실례했습니다.
 
 - seed_id: sn_0595
-  japanese: 富士山に登ったことがありますか。
+  text: 富士山に登ったことがありますか。
   korean_translation: 후지산에 올라가 본 적 있어요?
   items:
     - item_seed_id: it_kotogaaru
@@ -10602,7 +10602,7 @@
         example_translation: 낫토 먹어 본 적 있어요?
 
 - seed_id: sn_0596
-  japanese: 忙しいときは、昼ご飯を食べないことがある。
+  text: 忙しいときは、昼ご飯を食べないことがある。
   korean_translation: 바쁠 때는 점심을 안 먹을 때가 있다.
   items:
     - item_seed_id: it_kotogaaru
@@ -10619,7 +10619,7 @@
         example_translation: 아침에 전철이 늦을 때가 있다.
 
 - seed_id: sn_0597
-  japanese: そんな話は聞いたことがない。
+  text: そんな話は聞いたことがない。
   korean_translation: 그런 이야기는 들어 본 적이 없다.
   items:
     - item_seed_id: it_kotogaaru
@@ -10636,7 +10636,7 @@
         example_translation: 해외에 가 본 적이 없다.
 
 - seed_id: sn_0598
-  japanese: 毎朝三十分歩くことにしている。
+  text: 毎朝三十分歩くことにしている。
   korean_translation: 매일 아침 30분 걷기로 하고 있다.
   items:
     - item_seed_id: it_kotonisuru
@@ -10653,7 +10653,7 @@
         example_translation: 밤에는 휴대폰을 안 보기로 하고 있다.
 
 - seed_id: sn_0599
-  japanese: 今の話は、聞かなかったことにするよ。
+  text: 今の話は、聞かなかったことにするよ。
   korean_translation: 방금 이야기는 못 들은 걸로 할게.
   items:
     - item_seed_id: it_kotonisuru
@@ -10670,7 +10670,7 @@
         example_translation: 이 건은 없던 일로 합시다.
 
 - seed_id: sn_0600
-  japanese: 今日はここで解散することにしましょう。
+  text: 今日はここで解散することにしましょう。
   korean_translation: 오늘은 여기서 해산하기로 합시다.
   items:
     - item_seed_id: it_kotonisuru
@@ -10687,7 +10687,7 @@
         example_translation: 다음 회의는 다음 주에 하기로 합시다.
 
 - seed_id: sn_0601
-  japanese: 冬は風邪を引きやすい。
+  text: 冬は風邪を引きやすい。
   korean_translation: 겨울에는 감기에 걸리기 쉽다.
   items:
     - item_seed_id: it_yasui
@@ -10704,7 +10704,7 @@
         example_translation: 이 길은 미끄러지기 쉽다.
 
 - seed_id: sn_0602
-  japanese: 先生の説明は分かりやすい。
+  text: 先生の説明は分かりやすい。
   korean_translation: 선생님 설명은 알기 쉽다.
   items:
     - item_seed_id: it_yasui
@@ -10721,7 +10721,7 @@
         example_translation: 이 지도는 보기 쉽다.
 
 - seed_id: sn_0603
-  japanese: 彼女は話しやすい人だ。
+  text: 彼女は話しやすい人だ。
   korean_translation: 그녀는 이야기하기 편한 사람이다.
   items:
     - item_seed_id: it_yasui
@@ -10738,7 +10738,7 @@
         example_translation: 그 선배는 상의하기 편하다.
 
 - seed_id: sn_0604
-  japanese: あのとき買っておけばよかった。
+  text: あのとき買っておけばよかった。
   korean_translation: 그때 사 둘 걸 그랬다.
   items:
     - item_seed_id: it_bayokatta
@@ -10755,7 +10755,7 @@
         example_translation: 사진을 찍어 둘 걸 그랬다.
 
 - seed_id: sn_0605
-  japanese: 傘を持ってくればよかった。
+  text: 傘を持ってくればよかった。
   korean_translation: 우산을 가져올 걸 그랬다.
   items:
     - item_seed_id: it_bayokatta
@@ -10772,7 +10772,7 @@
         example_translation: 겉옷을 입고 올 걸 그랬다.
 
 - seed_id: sn_0606
-  japanese: あんなこと、言わなければよかった。
+  text: あんなこと、言わなければよかった。
   korean_translation: 그런 말 하지 말 걸 그랬다.
   items:
     - item_seed_id: it_bayokatta
@@ -10789,7 +10789,7 @@
         example_translation: 과식하지 말 걸 그랬다.
 
 - seed_id: sn_0607
-  japanese: 夜遅くに一人で出かけちゃだめだよ。
+  text: 夜遅くに一人で出かけちゃだめだよ。
   korean_translation: 밤늦게 혼자 나가면 안 돼.
   items:
     - item_seed_id: it_tewaikenai
@@ -10806,7 +10806,7 @@
         example_translation: 아직 열면 안 돼.
 
 - seed_id: sn_0608
-  japanese: この日のことを忘れてはいけない。
+  text: この日のことを忘れてはいけない。
   korean_translation: 이날을 잊어서는 안 된다.
   items:
     - item_seed_id: it_tewaikenai
@@ -10823,7 +10823,7 @@
         example_translation: 남의 험담을 해서는 안 된다.
 
 - seed_id: sn_0609
-  japanese: 甘いものばかり食べてはいけないと分かっている。
+  text: 甘いものばかり食べてはいけないと分かっている。
   korean_translation: 단 것만 먹으면 안 된다는 건 알고 있다.
   items:
     - item_seed_id: it_tewaikenai
@@ -10840,7 +10840,7 @@
         example_translation: 밤새면 안 된다고 생각하고 있다.
 
 - seed_id: sn_0610
-  japanese: 雨だし、今日は家にいよう。
+  text: 雨だし、今日は家にいよう。
   korean_translation: 비도 오고 하니 오늘은 집에 있자.
   items:
     - item_seed_id: it_shi
@@ -10857,7 +10857,7 @@
         example_translation: 졸리기도 하니 이만 자자.
 
 - seed_id: sn_0611
-  japanese: お金もないし、旅行はやめておく。
+  text: お金もないし、旅行はやめておく。
   korean_translation: 돈도 없고 해서 여행은 관둘래.
   items:
     - item_seed_id: it_shi
@@ -10874,7 +10874,7 @@
         example_translation: 시간도 없으니 택시로 가자.
 
 - seed_id: sn_0612
-  japanese: 彼女は料理も上手だし、明るい。
+  text: 彼女は料理も上手だし、明るい。
   korean_translation: 그녀는 요리도 잘하고 밝다.
   items:
     - item_seed_id: it_shi
@@ -10891,7 +10891,7 @@
         example_translation: 그는 머리도 좋고 운동도 잘한다.
 
 - seed_id: sn_0613
-  japanese: これ、あなたのでしょ？
+  text: これ、あなたのでしょ？
   korean_translation: 이거 네 거지?
   items:
     - item_seed_id: it_deshou
@@ -10908,7 +10908,7 @@
         example_translation: 내일 올 거지?
 
 - seed_id: sn_0614
-  japanese: 長旅でお疲れでしょう。
+  text: 長旅でお疲れでしょう。
   korean_translation: 긴 여행으로 피곤하시죠.
   items:
     - item_seed_id: it_deshou
@@ -10925,7 +10925,7 @@
         example_translation: 추우셨죠. 어서 안으로 들어오세요.
 
 - seed_id: sn_0615
-  japanese: この近くに郵便局はあるでしょうか。
+  text: この近くに郵便局はあるでしょうか。
   korean_translation: 이 근처에 우체국이 있을까요?
   items:
     - item_seed_id: it_deshou
@@ -10942,7 +10942,7 @@
         example_translation: 역까지 얼마나 걸릴까요?
 
 - seed_id: sn_0616
-  japanese: もう遅刻しないって約束する。
+  text: もう遅刻しないって約束する。
   korean_translation: 다시는 지각 안 한다고 약속할게.
   items:
     - item_seed_id: it_yakusoku
@@ -10959,7 +10959,7 @@
         example_translation: 꼭 돌려주겠다고 약속할게요.
 
 - seed_id: sn_0617
-  japanese: 今日は友達と会う約束がある。
+  text: 今日は友達と会う約束がある。
   korean_translation: 오늘은 친구랑 만날 약속이 있다.
   items:
     - item_seed_id: it_yakusoku
@@ -10976,7 +10976,7 @@
         example_translation: 3시에 역에서 만나기로 약속했다.
 
 - seed_id: sn_0618
-  japanese: 彼はまた約束を破った。
+  text: 彼はまた約束を破った。
   korean_translation: 그는 또 약속을 어겼다.
   items:
     - item_seed_id: it_yakusoku
@@ -10993,7 +10993,7 @@
         example_translation: 약속을 어겨서 미안해.
 
 - seed_id: sn_0619
-  japanese: 私に何か用事？
+  text: 私に何か用事？
   korean_translation: 나한테 무슨 볼일 있어?
   items:
     - item_seed_id: it_youji
@@ -11010,7 +11010,7 @@
         example_translation: 볼일 있으면 불러.
 
 - seed_id: sn_0620
-  japanese: 午前中は銀行に用事がある。
+  text: 午前中は銀行に用事がある。
   korean_translation: 오전에는 은행에 볼일이 있다.
   items:
     - item_seed_id: it_youji
@@ -11027,7 +11027,7 @@
         example_translation: 시청에 볼일이 있다.
 
 - seed_id: sn_0621
-  japanese: 今日は特に用事がない。
+  text: 今日は特に用事がない。
   korean_translation: 오늘은 딱히 볼일이 없다.
   items:
     - item_seed_id: it_youji
@@ -11044,7 +11044,7 @@
         example_translation: 볼일 없으면 같이 가자.
 
 - seed_id: sn_0622
-  japanese: こんにちは、お邪魔します。
+  text: こんにちは、お邪魔します。
   korean_translation: 안녕하세요, 실례하겠습니다.
   items:
     - item_seed_id: it_jama
@@ -11061,7 +11061,7 @@
         example_translation: 실례했습니다(잘 있다 갑니다).
 
 - seed_id: sn_0623
-  japanese: 勉強の邪魔をしないで。
+  text: 勉強の邪魔をしないで。
   korean_translation: 공부 방해하지 마.
   items:
     - item_seed_id: it_jama
@@ -11078,7 +11078,7 @@
         example_translation: 일에 방해가 되지 않도록 한다.
 
 - seed_id: sn_0624
-  japanese: お忙しいところ、お邪魔しました。
+  text: お忙しいところ、お邪魔しました。
   korean_translation: 바쁘신데 실례했습니다.
   items:
     - item_seed_id: it_jama
@@ -11095,7 +11095,7 @@
         example_translation: 오래 폐를 끼쳐서 죄송했습니다.
 
 - seed_id: sn_0625
-  japanese: 子どもたちがおもちゃのことで喧嘩している。
+  text: 子どもたちがおもちゃのことで喧嘩している。
   korean_translation: 아이들이 장난감 때문에 싸우고 있다.
   items:
     - item_seed_id: it_kenka
@@ -11112,7 +11112,7 @@
         example_translation: 형제끼리 과자 때문에 싸웠다.
 
 - seed_id: sn_0626
-  japanese: 喧嘩しても、すぐに仲直りする。
+  text: 喧嘩しても、すぐに仲直りする。
   korean_translation: 싸워도 금방 화해한다.
   items:
     - item_seed_id: it_kenka
@@ -11129,7 +11129,7 @@
         example_translation: 싸웠지만 이미 화해했다.
 
 - seed_id: sn_0627
-  japanese: 駅前で酔っ払いが喧嘩をしていた。
+  text: 駅前で酔っ払いが喧嘩をしていた。
   korean_translation: 역 앞에서 취객들이 싸우고 있었다.
   items:
     - item_seed_id: it_kenka
@@ -11146,7 +11146,7 @@
         example_translation: 싸움을 말리러 들어갔다.
 
 - seed_id: sn_0628
-  japanese: 大学の友達と久しぶりに飲み会をした。
+  text: 大学の友達と久しぶりに飲み会をした。
   korean_translation: 대학 친구들과 오랜만에 술자리를 가졌다.
   items:
     - item_seed_id: it_nomikai
@@ -11163,7 +11163,7 @@
         example_translation: 고등학교 동창들과 술자리를 가졌다.
 
 - seed_id: sn_0629
-  japanese: 今日の飲み会は、用事があって行けない。
+  text: 今日の飲み会は、用事があって行けない。
   korean_translation: 오늘 술자리는 볼일이 있어서 못 간다.
   items:
     - item_seed_id: it_nomikai
@@ -11180,7 +11180,7 @@
         example_translation: 술자리에는 참석하지 않을게요.
 
 - seed_id: sn_0630
-  japanese: 来週の飲み会の店を予約した。
+  text: 来週の飲み会の店を予約した。
   korean_translation: 다음 주 술자리 가게를 예약했다.
   items:
     - item_seed_id: it_nomikai
@@ -11197,7 +11197,7 @@
         example_translation: 술자리 총무를 부탁받았다.
 
 - seed_id: sn_0631
-  japanese: 最近、残業が多くて疲れた。
+  text: 最近、残業が多くて疲れた。
   korean_translation: 요즘 야근이 많아서 지쳤다.
   items:
     - item_seed_id: it_zangyou
@@ -11214,7 +11214,7 @@
         example_translation: 이번 달은 잔업이 적다.
 
 - seed_id: sn_0632
-  japanese: この会社は、残業がほとんどない。
+  text: この会社は、残業がほとんどない。
   korean_translation: 이 회사는 야근이 거의 없다.
   items:
     - item_seed_id: it_zangyou
@@ -11231,7 +11231,7 @@
         example_translation: 야근 없는 회사에서 일하고 싶다.
 
 - seed_id: sn_0633
-  japanese: 残業代がちゃんと出る。
+  text: 残業代がちゃんと出る。
   korean_translation: 야근 수당이 제대로 나온다.
   items:
     - item_seed_id: it_zangyou
@@ -11250,7 +11250,7 @@
 # ---- round8 추가분
 
 - seed_id: sn_0634
-  japanese: レポートの締め切りは金曜日だ。
+  text: レポートの締め切りは金曜日だ。
   korean_translation: 리포트 마감은 금요일이다.
   items:
     - item_seed_id: it_shimekiri
@@ -11267,7 +11267,7 @@
         example_translation: 원고 마감은 내일이에요.
 
 - seed_id: sn_0635
-  japanese: 出かける前に、窓が閉まっているか確認した。
+  text: 出かける前に、窓が閉まっているか確認した。
   korean_translation: 나가기 전에 창문이 닫혀 있는지 확인했다.
   items:
     - item_seed_id: it_kakunin
@@ -11284,7 +11284,7 @@
         example_translation: 한 번 더 주소를 확인해 주세요.
 
 - seed_id: sn_0636
-  japanese: 漢字の読み方を間違えた。
+  text: 漢字の読み方を間違えた。
   korean_translation: 한자 읽는 법을 틀렸다.
   items:
     - item_seed_id: it_machigaeru
@@ -11301,7 +11301,7 @@
         example_translation: 계산을 틀렸다.
 
 - seed_id: sn_0637
-  japanese: 駅前の景色がすっかり変わった。
+  text: 駅前の景色がすっかり変わった。
   korean_translation: 역 앞 풍경이 완전히 바뀌었다.
   items:
     - item_seed_id: it_kawaru
@@ -11318,7 +11318,7 @@
         example_translation: 이사하고 나서 생활이 바뀌었다.
 
 - seed_id: sn_0638
-  japanese: 朝の風が気持ちいい。
+  text: 朝の風が気持ちいい。
   korean_translation: 아침 바람이 상쾌하다.
   items:
     - item_seed_id: it_kimochiii
@@ -11335,7 +11335,7 @@
         example_translation: 이 수건은 감촉이 좋다.
 
 - seed_id: sn_0639
-  japanese: 駅まで大体十分です。
+  text: 駅まで大体十分です。
   korean_translation: 역까지 대략 10분이에요.
   items:
     - item_seed_id: it_daitai
@@ -11352,7 +11352,7 @@
         example_translation: 대략 3천 엔 정도예요.
 
 - seed_id: sn_0640
-  japanese: なんか、今日は疲れた。
+  text: なんか、今日は疲れた。
   korean_translation: 뭔가 오늘은 피곤하다.
   items:
     - item_seed_id: it_nanka
@@ -11369,7 +11369,7 @@
         example_translation: 뭔가 춥지 않아?
 
 - seed_id: sn_0641
-  japanese: やっと仕事が終わった。
+  text: やっと仕事が終わった。
   korean_translation: 드디어 일이 끝났다.
   items:
     - item_seed_id: it_yatto
@@ -11386,7 +11386,7 @@
         example_translation: 드디어 집에 도착했다.
 
 - seed_id: sn_0642
-  japanese: 高校のときから、彼女と付き合っている。
+  text: 高校のときから、彼女と付き合っている。
   korean_translation: 고등학교 때부터 그녀와 사귀고 있다.
   items:
     - item_seed_id: it_tsukiau
@@ -11403,7 +11403,7 @@
         example_translation: 두 사람은 사귄 지 3년이 된다.
 
 - seed_id: sn_0643
-  japanese: 落ち着いて、ゆっくり話して。
+  text: 落ち着いて、ゆっくり話して。
   korean_translation: 진정하고 천천히 말해.
   items:
     - item_seed_id: it_ochitsuku
@@ -11420,7 +11420,7 @@
         example_translation: 우선 차분히 생각하자.
 
 - seed_id: sn_0644
-  japanese: 帰りにコンビニに寄る。
+  text: 帰りにコンビニに寄る。
   korean_translation: 집에 가는 길에 편의점에 들른다.
   items:
     - item_seed_id: it_yoru
@@ -11437,7 +11437,7 @@
         example_translation: 은행에 들렀다가 집에 간다.
 
 - seed_id: sn_0645
-  japanese: 毎朝六時に起きる。
+  text: 毎朝六時に起きる。
   korean_translation: 매일 아침 6시에 일어난다.
   items:
     - item_seed_id: it_okiru
@@ -11454,7 +11454,7 @@
         example_translation: 오늘 아침엔 늦잠 자서 8시에 일어났다.
 
 - seed_id: sn_0646
-  japanese: 急に大きな音がして、びっくりした。
+  text: 急に大きな音がして、びっくりした。
   korean_translation: 갑자기 큰 소리가 나서 깜짝 놀랐다.
   items:
     - item_seed_id: it_bikkuri
@@ -11471,7 +11471,7 @@
         example_translation: 전화가 울려서 깜짝 놀랐다.
 
 - seed_id: sn_0647
-  japanese: やばい、財布を家に忘れた。
+  text: やばい、財布を家に忘れた。
   korean_translation: 큰일 났다, 지갑을 집에 두고 왔어.
   items:
     - item_seed_id: it_yabai
@@ -11488,7 +11488,7 @@
         example_translation: 큰일이다, 벌써 9시야.
 
 - seed_id: sn_0648
-  japanese: 気を使わなくていいよ。自分の家だと思って。
+  text: 気を使わなくていいよ。自分の家だと思って。
   korean_translation: 신경 안 써도 돼. 자기 집이라고 생각해.
   items:
     - item_seed_id: it_kiwotsukau
@@ -11505,7 +11505,7 @@
         example_translation: 저한테 신경 쓰지 마세요.
 
 - seed_id: sn_0649
-  japanese: 相変わらず元気そうだね。
+  text: 相変わらず元気そうだね。
   korean_translation: 여전히 건강해 보이네.
   items:
     - item_seed_id: it_aikawarazu
@@ -11522,7 +11522,7 @@
         example_translation: 여전히 잘 지내요.
 
 - seed_id: sn_0650
-  japanese: どうせ間に合わないから、ゆっくり行こう。
+  text: どうせ間に合わないから、ゆっくり行こう。
   korean_translation: 어차피 늦을 테니 천천히 가자.
   items:
     - item_seed_id: it_douse
@@ -11539,7 +11539,7 @@
         example_translation: 어차피 비 오니까 집에 있자.
 
 - seed_id: sn_0651
-  japanese: 荷物は明日届くはずだ。
+  text: 荷物は明日届くはずだ。
   korean_translation: 짐은 내일 도착할 것이다.
   items:
     - item_seed_id: it_hazu
@@ -11556,7 +11556,7 @@
         example_translation: 그는 이미 집에 도착했을 것이다.
 
 - seed_id: sn_0652
-  japanese: 明日から雨が続くらしい。
+  text: 明日から雨が続くらしい。
   korean_translation: 내일부터 비가 계속된대.
   items:
     - item_seed_id: it_rashii
@@ -11573,7 +11573,7 @@
         example_translation: 그 가게 다음 달에 문 닫는대.
 
 - seed_id: sn_0653
-  japanese: 弟は毎日ゲームばかりしている。
+  text: 弟は毎日ゲームばかりしている。
   korean_translation: 남동생은 매일 게임만 한다.
   items:
     - item_seed_id: it_bakari
@@ -11590,7 +11590,7 @@
         example_translation: 단 것만 먹고 있다.
 
 - seed_id: sn_0654
-  japanese: 申し込みの締め切りが近い。
+  text: 申し込みの締め切りが近い。
   korean_translation: 신청 마감이 가깝다.
   items:
     - item_seed_id: it_shimekiri
@@ -11607,7 +11607,7 @@
         example_translation: 응모 마감은 이달 말이에요.
 
 - seed_id: sn_0655
-  japanese: 締め切りに追われて、毎日忙しい。
+  text: 締め切りに追われて、毎日忙しい。
   korean_translation: 마감에 쫓겨서 매일 바쁘다.
   items:
     - item_seed_id: it_shimekiri
@@ -11624,7 +11624,7 @@
         example_translation: 마감 전에는 밤샘이 계속된다.
 
 - seed_id: sn_0656
-  japanese: 締め切りを一週間延ばしてもらった。
+  text: 締め切りを一週間延ばしてもらった。
   korean_translation: 마감을 일주일 연장받았다.
   items:
     - item_seed_id: it_shimekiri
@@ -11641,7 +11641,7 @@
         example_translation: 마감에 맞추지 못했다.
 
 - seed_id: sn_0657
-  japanese: 担当者に確認して、折り返しご連絡します。
+  text: 担当者に確認して、折り返しご連絡します。
   korean_translation: 담당자에게 확인하고 다시 연락드리겠습니다.
   items:
     - item_seed_id: it_kakunin
@@ -11658,7 +11658,7 @@
         example_translation: 확인하고 다시 연락할게요.
 
 - seed_id: sn_0658
-  japanese: 送る前に、宛先をよく確認してください。
+  text: 送る前に、宛先をよく確認してください。
   korean_translation: 보내기 전에 받는 사람을 잘 확인하세요.
   items:
     - item_seed_id: it_kakunin
@@ -11675,7 +11675,7 @@
         example_translation: 내용을 잘 확인하고 나서 사인하세요.
 
 - seed_id: sn_0659
-  japanese: 本人確認のため、身分証を見せてください。
+  text: 本人確認のため、身分証を見せてください。
   korean_translation: 본인 확인을 위해 신분증을 보여 주세요.
   items:
     - item_seed_id: it_kakunin
@@ -11692,7 +11692,7 @@
         example_translation: 재고를 확인하고 있어요.
 
 - seed_id: sn_0660
-  japanese: 田中さんと山田さんを間違えてしまった。
+  text: 田中さんと山田さんを間違えてしまった。
   korean_translation: 다나카 씨와 야마다 씨를 헷갈려 버렸다.
   items:
     - item_seed_id: it_machigaeru
@@ -11709,7 +11709,7 @@
         example_translation: 소금이랑 설탕을 헷갈렸다.
 
 - seed_id: sn_0661
-  japanese: 電車を間違えて、反対方向に行ってしまった。
+  text: 電車を間違えて、反対方向に行ってしまった。
   korean_translation: 전철을 잘못 타서 반대 방향으로 가 버렸다.
   items:
     - item_seed_id: it_machigaeru
@@ -11726,7 +11726,7 @@
         example_translation: 길을 잘못 들어서 늦어졌다.
 
 - seed_id: sn_0662
-  japanese: 名前を間違えないように、気をつけてください。
+  text: 名前を間違えないように、気をつけてください。
   korean_translation: 이름을 틀리지 않게 조심하세요.
   items:
     - item_seed_id: it_machigaeru
@@ -11743,7 +11743,7 @@
         example_translation: 날짜 틀리지 마.
 
 - seed_id: sn_0663
-  japanese: 会議の場所が変わりました。
+  text: 会議の場所が変わりました。
   korean_translation: 회의 장소가 바뀌었습니다.
   items:
     - item_seed_id: it_kawaru
@@ -11760,7 +11760,7 @@
         example_translation: 전화번호가 바뀌었습니다.
 
 - seed_id: sn_0664
-  japanese: 彼はちょっと変わっている。
+  text: 彼はちょっと変わっている。
   korean_translation: 그는 좀 특이하다.
   items:
     - item_seed_id: it_kawaru
@@ -11777,7 +11777,7 @@
         example_translation: 특이한 이름이네요.
 
 - seed_id: sn_0665
-  japanese: 山の天気は変わりやすい。
+  text: 山の天気は変わりやすい。
   korean_translation: 산 날씨는 변하기 쉽다.
   items:
     - item_seed_id: it_kawaru
@@ -11794,7 +11794,7 @@
         example_translation: 기분이 바뀌었다.
 
 - seed_id: sn_0666
-  japanese: 温泉に入ると、本当に気持ちいい。
+  text: 温泉に入ると、本当に気持ちいい。
   korean_translation: 온천에 들어가면 정말 기분 좋다.
   items:
     - item_seed_id: it_kimochiii
@@ -11811,7 +11811,7 @@
         example_translation: 목욕하니 기분 좋다.
 
 - seed_id: sn_0667
-  japanese: 部屋を掃除したら、気持ちよくなった。
+  text: 部屋を掃除したら、気持ちよくなった。
   korean_translation: 방을 청소했더니 개운해졌다.
   items:
     - item_seed_id: it_kimochiii
@@ -11828,7 +11828,7 @@
         example_translation: 땀을 흘리니 개운했다.
 
 - seed_id: sn_0668
-  japanese: 猫が気持ちよさそうに寝ている。
+  text: 猫が気持ちよさそうに寝ている。
   korean_translation: 고양이가 기분 좋은 듯이 자고 있다.
   items:
     - item_seed_id: it_kimochiii
@@ -11845,7 +11845,7 @@
         example_translation: 아기가 편안하게 자고 있다.
 
 - seed_id: sn_0669
-  japanese: 宿題は大体終わった。
+  text: 宿題は大体終わった。
   korean_translation: 숙제는 대충 끝났다.
   items:
     - item_seed_id: it_daitai
@@ -11862,7 +11862,7 @@
         example_translation: 이야기는 대충 알았다.
 
 - seed_id: sn_0670
-  japanese: 大体、君が遅れてきたのが悪い。
+  text: 大体、君が遅れてきたのが悪い。
   korean_translation: 애초에 네가 늦게 온 게 잘못이야.
   items:
     - item_seed_id: it_daitai
@@ -11879,7 +11879,7 @@
         example_translation: 도대체 왜 그런 짓을 했어?
 
 - seed_id: sn_0671
-  japanese: 大体の人は、この方法を知っている。
+  text: 大体の人は、この方法を知っている。
   korean_translation: 대부분의 사람은 이 방법을 알고 있다.
   items:
     - item_seed_id: it_daitai
@@ -11896,7 +11896,7 @@
         example_translation: 대부분의 가게는 10시에 연다.
 
 - seed_id: sn_0672
-  japanese: なんか食べたいな。
+  text: なんか食べたいな。
   korean_translation: 뭔가 먹고 싶다.
   items:
     - item_seed_id: it_nanka
@@ -11913,7 +11913,7 @@
         example_translation: 뭐 좀 마실래?
 
 - seed_id: sn_0673
-  japanese: お茶なんかどうですか。
+  text: お茶なんかどうですか。
   korean_translation: 차 같은 거 어떠세요?
   items:
     - item_seed_id: it_nanka
@@ -11930,7 +11930,7 @@
         example_translation: 일요일 같은 날은 어때?
 
 - seed_id: sn_0674
-  japanese: 私なんか、まだまだです。
+  text: 私なんか、まだまだです。
   korean_translation: 저 같은 건 아직 멀었어요.
   items:
     - item_seed_id: it_nanka
@@ -11947,7 +11947,7 @@
         example_translation: 나 같은 게 할 수 있을까.
 
 - seed_id: sn_0675
-  japanese: 一時間並んで、やっと店に入れた。
+  text: 一時間並んで、やっと店に入れた。
   korean_translation: 한 시간 줄 서서 겨우 가게에 들어갔다.
   items:
     - item_seed_id: it_yatto
@@ -11964,7 +11964,7 @@
         example_translation: 겨우 차례가 왔다.
 
 - seed_id: sn_0676
-  japanese: 日本語で、やっと自己紹介ができるようになった。
+  text: 日本語で、やっと自己紹介ができるようになった。
   korean_translation: 일본어로 겨우 자기소개를 할 수 있게 됐다.
   items:
     - item_seed_id: it_yatto
@@ -11981,7 +11981,7 @@
         example_translation: 드디어 자전거를 탈 수 있게 됐다.
 
 - seed_id: sn_0677
-  japanese: やっと春が来た。
+  text: やっと春が来た。
   korean_translation: 드디어 봄이 왔다.
   items:
     - item_seed_id: it_yatto
@@ -11998,7 +11998,7 @@
         example_translation: 드디어 주말이다.
 
 - seed_id: sn_0678
-  japanese: 買い物に付き合ってくれない？
+  text: 買い物に付き合ってくれない？
   korean_translation: 쇼핑 같이 가 줄래?
   items:
     - item_seed_id: it_tsukiau
@@ -12015,7 +12015,7 @@
         example_translation: 산책 좀 같이 가 줘.
 
 - seed_id: sn_0679
-  japanese: 職場の人とうまく付き合うのは難しい。
+  text: 職場の人とうまく付き合うのは難しい。
   korean_translation: 직장 사람들과 잘 지내는 건 어렵다.
   items:
     - item_seed_id: it_tsukiau
@@ -12032,7 +12032,7 @@
         example_translation: 이웃과 사이좋게 지내고 있다.
 
 - seed_id: sn_0680
-  japanese: 今日はとことん付き合うよ。
+  text: 今日はとことん付き合うよ。
   korean_translation: 오늘은 끝까지 같이 있어 줄게.
   items:
     - item_seed_id: it_tsukiau
@@ -12049,7 +12049,7 @@
         example_translation: 이야기라면 얼마든지 들어줄게.
 
 - seed_id: sn_0681
-  japanese: この部屋は静かで落ち着く。
+  text: この部屋は静かで落ち着く。
   korean_translation: 이 방은 조용해서 마음이 편하다.
   items:
     - item_seed_id: it_ochitsuku
@@ -12066,7 +12066,7 @@
         example_translation: 본가에 가면 마음이 편하다.
 
 - seed_id: sn_0682
-  japanese: 仕事が落ち着いたら、旅行に行きたい。
+  text: 仕事が落ち着いたら、旅行に行きたい。
   korean_translation: 일이 좀 잠잠해지면 여행 가고 싶다.
   items:
     - item_seed_id: it_ochitsuku
@@ -12083,7 +12083,7 @@
         example_translation: 이사가 정리되면 놀러 와.
 
 - seed_id: sn_0683
-  japanese: 彼女はいつも落ち着いている。
+  text: 彼女はいつも落ち着いている。
   korean_translation: 그녀는 늘 침착하다.
   items:
     - item_seed_id: it_ochitsuku
@@ -12100,7 +12100,7 @@
         example_translation: 차분한 분위기의 가게다.
 
 - seed_id: sn_0684
-  japanese: 近くまで来たので、ちょっと寄ってみた。
+  text: 近くまで来たので、ちょっと寄ってみた。
   korean_translation: 근처까지 와서 잠깐 들러 봤다.
   items:
     - item_seed_id: it_yoru
@@ -12117,7 +12117,7 @@
         example_translation: 다음에 우리 집에 들러.
 
 - seed_id: sn_0685
-  japanese: もう少し右に寄ってください。
+  text: もう少し右に寄ってください。
   korean_translation: 조금 더 오른쪽으로 붙어 주세요.
   items:
     - item_seed_id: it_yoru
@@ -12134,7 +12134,7 @@
         example_translation: 좀 더 가운데로 붙어.
 
 - seed_id: sn_0686
-  japanese: 旅行の途中で、道の駅に寄った。
+  text: 旅行の途中で、道の駅に寄った。
   korean_translation: 여행 도중에 휴게소에 들렀다.
   items:
     - item_seed_id: it_yoru
@@ -12151,7 +12151,7 @@
         example_translation: 돌아오는 길에 본가에 들렀다.
 
 - seed_id: sn_0687
-  japanese: まだ起きてる？
+  text: まだ起きてる？
   korean_translation: 아직 안 자?
   items:
     - item_seed_id: it_okiru
@@ -12168,7 +12168,7 @@
         example_translation: 어제는 늦게까지 안 자고 있었다.
 
 - seed_id: sn_0688
-  japanese: 駅で事故が起きた。
+  text: 駅で事故が起きた。
   korean_translation: 역에서 사고가 일어났다.
   items:
     - item_seed_id: it_okiru
@@ -12185,7 +12185,7 @@
         example_translation: 문제가 생기면 바로 연락해.
 
 - seed_id: sn_0689
-  japanese: 昨日は夜中に三回も起きた。
+  text: 昨日は夜中に三回も起きた。
   korean_translation: 어젯밤에는 한밤중에 세 번이나 깼다.
   items:
     - item_seed_id: it_okiru
@@ -12202,7 +12202,7 @@
         example_translation: 소리에 잠이 깨서 일어나 버렸다.
 
 - seed_id: sn_0690
-  japanese: 彼の結婚の話には、みんなびっくりしていた。
+  text: 彼の結婚の話には、みんなびっくりしていた。
   korean_translation: 그의 결혼 소식에 다들 깜짝 놀랐다.
   items:
     - item_seed_id: it_bikkuri
@@ -12219,7 +12219,7 @@
         example_translation: 합격했다고 들어서 깜짝 놀랐다.
 
 - seed_id: sn_0691
-  japanese: 値段を見てびっくり。
+  text: 値段を見てびっくり。
   korean_translation: 가격 보고 깜짝.
   items:
     - item_seed_id: it_bikkuri
@@ -12236,7 +12236,7 @@
         example_translation: 놀랄 만큼 쌌다.
 
 - seed_id: sn_0692
-  japanese: もう、びっくりさせないでよ。
+  text: もう、びっくりさせないでよ。
   korean_translation: 아이 참, 놀라게 하지 마.
   items:
     - item_seed_id: it_bikkuri
@@ -12253,7 +12253,7 @@
         example_translation: 모두를 깜짝 놀라게 하고 싶다.
 
 - seed_id: sn_0693
-  japanese: このラーメン、やばい。めちゃくちゃうまい。
+  text: このラーメン、やばい。めちゃくちゃうまい。
   korean_translation: 이 라멘 대박. 완전 맛있어.
   items:
     - item_seed_id: it_yabai
@@ -12270,7 +12270,7 @@
         example_translation: 이 경치 대박 아니야?
 
 - seed_id: sn_0694
-  japanese: その道、夜は暗くてやばいから通らないほうがいいよ。
+  text: その道、夜は暗くてやばいから通らないほうがいいよ。
   korean_translation: 그 길은 밤에 어두워서 위험하니까 안 지나가는 게 좋아.
   items:
     - item_seed_id: it_yabai
@@ -12287,7 +12287,7 @@
         example_translation: 이 다리 좀 위험해 보여.
 
 - seed_id: sn_0695
-  japanese: 今日の暑さ、やばいね。
+  text: 今日の暑さ、やばいね。
   korean_translation: 오늘 더위 장난 아니다.
   items:
     - item_seed_id: it_yabai
@@ -12304,7 +12304,7 @@
         example_translation: 어제 비는 장난 아니었다.
 
 - seed_id: sn_0696
-  japanese: 彼女は周りの人にとても気を使う。
+  text: 彼女は周りの人にとても気を使う。
   korean_translation: 그녀는 주변 사람들에게 무척 신경을 쓴다.
   items:
     - item_seed_id: it_kiwotsukau
@@ -12321,7 +12321,7 @@
         example_translation: 그는 늘 후배들을 배려한다.
 
 - seed_id: sn_0697
-  japanese: お土産を選ぶとき、相手の好みに気を使った。
+  text: お土産を選ぶとき、相手の好みに気を使った。
   korean_translation: 기념품을 고를 때 상대 취향을 신경 썼다.
   items:
     - item_seed_id: it_kiwotsukau
@@ -12338,7 +12338,7 @@
         example_translation: 요리 간에 신경 썼다.
 
 - seed_id: sn_0698
-  japanese: 新しいクラスで、みんなに気を使いすぎて疲れた。
+  text: 新しいクラスで、みんなに気を使いすぎて疲れた。
   korean_translation: 새 반에서 다들한테 너무 신경 써서 지쳤다.
   items:
     - item_seed_id: it_kiwotsukau
@@ -12355,7 +12355,7 @@
         example_translation: 그렇게까지 신경 안 써도 괜찮아.
 
 - seed_id: sn_0699
-  japanese: 彼の部屋は相変わらず散らかっている。
+  text: 彼の部屋は相変わらず散らかっている。
   korean_translation: 그의 방은 여전히 어질러져 있다.
   items:
     - item_seed_id: it_aikawarazu
@@ -12372,7 +12372,7 @@
         example_translation: 여전히 아침에 약하다.
 
 - seed_id: sn_0700
-  japanese: 相変わらず忙しいです。
+  text: 相変わらず忙しいです。
   korean_translation: 여전히 바빠요.
   items:
     - item_seed_id: it_aikawarazu
@@ -12389,7 +12389,7 @@
         example_translation: 덕분에 여전히 잘 지내요.
 
 - seed_id: sn_0701
-  japanese: 遅刻？相変わらずだね。
+  text: 遅刻？相変わらずだね。
   korean_translation: 지각? 여전하네.
   items:
     - item_seed_id: it_aikawarazu
@@ -12406,7 +12406,7 @@
         example_translation: 그 웃는 모습 여전하네.
 
 - seed_id: sn_0702
-  japanese: どうせ私には無理だよ。
+  text: どうせ私には無理だよ。
   korean_translation: 어차피 나는 못 해.
   items:
     - item_seed_id: it_douse
@@ -12423,7 +12423,7 @@
         example_translation: 어차피 무슨 말을 해도 소용없다.
 
 - seed_id: sn_0703
-  japanese: どうせなら、一番いいのを買おう。
+  text: どうせなら、一番いいのを買おう。
   korean_translation: 기왕이면 제일 좋은 걸 사자.
   items:
     - item_seed_id: it_douse
@@ -12440,7 +12440,7 @@
         example_translation: 기왕이면 다 같이 가자.
 
 - seed_id: sn_0704
-  japanese: どうせ彼は来ないよ。
+  text: どうせ彼は来ないよ。
   korean_translation: 어차피 그는 안 올 거야.
   items:
     - item_seed_id: it_douse
@@ -12457,7 +12457,7 @@
         example_translation: 어차피 또 늦게 올 거야.
 
 - seed_id: sn_0705
-  japanese: ここに置いたはずなのに、ない。
+  text: ここに置いたはずなのに、ない。
   korean_translation: 여기에 뒀을 텐데 없다.
   items:
     - item_seed_id: it_hazu
@@ -12474,7 +12474,7 @@
         example_translation: 예약했을 텐데 이름이 없다.
 
 - seed_id: sn_0706
-  japanese: 彼がそんなことを言うはずがない。
+  text: 彼がそんなことを言うはずがない。
   korean_translation: 그가 그런 말을 할 리가 없다.
   items:
     - item_seed_id: it_hazu
@@ -12491,7 +12491,7 @@
         example_translation: 그렇게 간단할 리가 없다.
 
 - seed_id: sn_0707
-  japanese: 田中さんなら、この問題が分かるはずです。
+  text: 田中さんなら、この問題が分かるはずです。
   korean_translation: 다나카 씨라면 이 문제를 알 거예요.
   items:
     - item_seed_id: it_hazu
@@ -12508,7 +12508,7 @@
         example_translation: 그녀라면 분명 알고 있을 거야.
 
 - seed_id: sn_0708
-  japanese: 今日は春らしい天気だ。
+  text: 今日は春らしい天気だ。
   korean_translation: 오늘은 봄다운 날씨다.
   items:
     - item_seed_id: it_rashii
@@ -12525,7 +12525,7 @@
         example_translation: 아이다운 그림이네.
 
 - seed_id: sn_0709
-  japanese: そんな弱気なこと、君らしくないよ。
+  text: そんな弱気なこと、君らしくないよ。
   korean_translation: 그런 약한 소리, 너답지 않아.
   items:
     - item_seed_id: it_rashii
@@ -12542,7 +12542,7 @@
         example_translation: 요즘 그답지 않은 실수가 많다.
 
 - seed_id: sn_0710
-  japanese: あの二人、付き合っているらしいよ。
+  text: あの二人、付き合っているらしいよ。
   korean_translation: 그 둘 사귄다나 봐.
   items:
     - item_seed_id: it_rashii
@@ -12559,7 +12559,7 @@
         example_translation: 그 사람 회사 그만둔대.
 
 - seed_id: sn_0711
-  japanese: 日本に来たばかりで、まだ何も分からない。
+  text: 日本に来たばかりで、まだ何も分からない。
   korean_translation: 일본에 온 지 얼마 안 돼서 아직 아무것도 모른다.
   items:
     - item_seed_id: it_bakari
@@ -12576,7 +12576,7 @@
         example_translation: 방금 막 일어났다.
 
 - seed_id: sn_0712
-  japanese: 文句を言ってばかりいないで、手伝って。
+  text: 文句を言ってばかりいないで、手伝って。
   korean_translation: 불평만 하지 말고 도와줘.
   items:
     - item_seed_id: it_bakari
@@ -12593,7 +12593,7 @@
         example_translation: 울기만 해서는 소용없다.
 
 - seed_id: sn_0713
-  japanese: この靴は買ったばかりなのに、もう壊れた。
+  text: この靴は買ったばかりなのに、もう壊れた。
   korean_translation: 이 신발 산 지 얼마 안 됐는데 벌써 망가졌다.
   items:
     - item_seed_id: it_bakari
@@ -12612,7 +12612,7 @@
 # ---- round9 추가분
 
 - seed_id: sn_0714
-  japanese: 今から出かけるところだ。
+  text: 今から出かけるところだ。
   korean_translation: 지금 막 나가려던 참이다.
   items:
     - item_seed_id: it_tokoro
@@ -12629,7 +12629,7 @@
         example_translation: 마침 전화하려던 참이었다.
 
 - seed_id: sn_0715
-  japanese: 嫌いなわけじゃないけど、今日は食べたくない。
+  text: 嫌いなわけじゃないけど、今日は食べたくない。
   korean_translation: 싫어하는 건 아니지만 오늘은 먹고 싶지 않다.
   items:
     - item_seed_id: it_wakejanai
@@ -12646,7 +12646,7 @@
         example_translation: 화난 건 아니야.
 
 - seed_id: sn_0716
-  japanese: 毎日野菜を食べるようにしている。
+  text: 毎日野菜を食べるようにしている。
   korean_translation: 매일 채소를 먹도록 하고 있다.
   items:
     - item_seed_id: it_younisuru
@@ -12663,7 +12663,7 @@
         example_translation: 매일 아침 일찍 일어나도록 하고 있다.
 
 - seed_id: sn_0717
-  japanese: とんでもないです。こちらこそ、ありがとうございました。
+  text: とんでもないです。こちらこそ、ありがとうございました。
   korean_translation: 천만에요. 저야말로 감사했습니다.
   items:
     - item_seed_id: it_tondemonai
@@ -12680,7 +12680,7 @@
         example_translation: 감사라니요, 천만에요.
 
 - seed_id: sn_0718
-  japanese: いつもお世話になっております。
+  text: いつもお世話になっております。
   korean_translation: 늘 신세 지고 있습니다.
   items:
     - item_seed_id: it_osewa
@@ -12697,7 +12697,7 @@
         example_translation: 늘 신세 지고 있습니다. 다나카입니다.
 
 - seed_id: sn_0719
-  japanese: 約束を破られて、腹が立った。
+  text: 約束を破られて、腹が立った。
   korean_translation: 약속을 어겨서 화가 났다.
   items:
     - item_seed_id: it_haragatatsu
@@ -12714,7 +12714,7 @@
         example_translation: 무례한 태도에 화가 났다.
 
 - seed_id: sn_0720
-  japanese: 友達に仕事の愚痴を聞いてもらった。
+  text: 友達に仕事の愚痴を聞いてもらった。
   korean_translation: 친구에게 일 푸념을 들어 달라고 했다.
   items:
     - item_seed_id: it_guchi
@@ -12731,7 +12731,7 @@
         example_translation: 가끔은 푸념해도 돼.
 
 - seed_id: sn_0721
-  japanese: 息子は最近、サッカーに夢中だ。
+  text: 息子は最近、サッカーに夢中だ。
   korean_translation: 아들은 요즘 축구에 푹 빠져 있다.
   items:
     - item_seed_id: it_muchuu
@@ -12748,7 +12748,7 @@
         example_translation: 딸은 애니메이션에 푹 빠져 있다.
 
 - seed_id: sn_0722
-  japanese: 彼はいつも料理に文句を言う。
+  text: 彼はいつも料理に文句を言う。
   korean_translation: 그는 늘 요리에 트집을 잡는다.
   items:
     - item_seed_id: it_monku
@@ -12765,7 +12765,7 @@
         example_translation: 불평만 하지 마.
 
 - seed_id: sn_0723
-  japanese: この料理、意外と簡単だった。
+  text: この料理、意外と簡単だった。
   korean_translation: 이 요리 의외로 간단했다.
   items:
     - item_seed_id: it_igaito
@@ -12782,7 +12782,7 @@
         example_translation: 이 과자 의외로 맛있다.
 
 - seed_id: sn_0724
-  japanese: 試験に落ちて、落ち込んでいる。
+  text: 試験に落ちて、落ち込んでいる。
   korean_translation: 시험에 떨어져서 우울해하고 있다.
   items:
     - item_seed_id: it_ochikomu
@@ -12799,7 +12799,7 @@
         example_translation: 실연해서 우울해하고 있다.
 
 - seed_id: sn_0725
-  japanese: せめて連絡くらいしてほしかった。
+  text: せめて連絡くらいしてほしかった。
   korean_translation: 적어도 연락 정도는 해 줬으면 했다.
   items:
     - item_seed_id: it_semete
@@ -12816,7 +12816,7 @@
         example_translation: 적어도 한마디 사과는 했으면 좋겠다.
 
 - seed_id: sn_0726
-  japanese: 買ったばかりのカメラを、早速使ってみた。
+  text: 買ったばかりのカメラを、早速使ってみた。
   korean_translation: 막 산 카메라를 바로 써 봤다.
   items:
     - item_seed_id: it_sassoku
@@ -12833,7 +12833,7 @@
         example_translation: 받은 책을 곧바로 읽었다.
 
 - seed_id: sn_0727
-  japanese: 今、ご飯を食べているところです。
+  text: 今、ご飯を食べているところです。
   korean_translation: 지금 밥 먹는 중이에요.
   items:
     - item_seed_id: it_tokoro
@@ -12850,7 +12850,7 @@
         example_translation: 지금 준비하는 중이에요.
 
 - seed_id: sn_0728
-  japanese: ちょうど今、駅に着いたところ。
+  text: ちょうど今、駅に着いたところ。
   korean_translation: 마침 지금 막 역에 도착했어.
   items:
     - item_seed_id: it_tokoro
@@ -12867,7 +12867,7 @@
         example_translation: 지금 막 일이 끝났어요.
 
 - seed_id: sn_0729
-  japanese: 危うく財布を忘れるところだった。
+  text: 危うく財布を忘れるところだった。
   korean_translation: 하마터면 지갑을 두고 올 뻔했다.
   items:
     - item_seed_id: it_tokoro
@@ -12884,7 +12884,7 @@
         example_translation: 하마터면 지각할 뻔했다.
 
 - seed_id: sn_0730
-  japanese: 毎日暇なわけじゃない。
+  text: 毎日暇なわけじゃない。
   korean_translation: 매일 한가한 건 아니다.
   items:
     - item_seed_id: it_wakejanai
@@ -12901,7 +12901,7 @@
         example_translation: 늘 집에 있는 건 아니다.
 
 - seed_id: sn_0731
-  japanese: 反対しているわけではありません。
+  text: 反対しているわけではありません。
   korean_translation: 반대하는 건 아닙니다.
   items:
     - item_seed_id: it_wakejanai
@@ -12918,7 +12918,7 @@
         example_translation: 불만이 있는 건 아닙니다.
 
 - seed_id: sn_0732
-  japanese: 日本人がみんな納豆を好きなわけじゃない。
+  text: 日本人がみんな納豆を好きなわけじゃない。
   korean_translation: 일본인이 다 낫토를 좋아하는 건 아니다.
   items:
     - item_seed_id: it_wakejanai
@@ -12935,7 +12935,7 @@
         example_translation: 비싸다고 좋은 건 아니다.
 
 - seed_id: sn_0733
-  japanese: 夜はコーヒーを飲まないようにしている。
+  text: 夜はコーヒーを飲まないようにしている。
   korean_translation: 밤에는 커피를 안 마시도록 하고 있다.
   items:
     - item_seed_id: it_younisuru
@@ -12952,7 +12952,7 @@
         example_translation: 과식하지 않도록 하고 있다.
 
 - seed_id: sn_0734
-  japanese: 遅れないようにしてください。
+  text: 遅れないようにしてください。
   korean_translation: 늦지 않도록 해 주세요.
   items:
     - item_seed_id: it_younisuru
@@ -12969,7 +12969,7 @@
         example_translation: 물건을 두고 가지 않도록 해 주세요.
 
 - seed_id: sn_0735
-  japanese: これからは、もっと早く返事をするようにします。
+  text: これからは、もっと早く返事をするようにします。
   korean_translation: 앞으로는 더 빨리 답장하도록 할게요.
   items:
     - item_seed_id: it_younisuru
@@ -12986,7 +12986,7 @@
         example_translation: 다음부터 조심하도록 할게요.
 
 - seed_id: sn_0736
-  japanese: 私が上手だなんて、とんでもない。
+  text: 私が上手だなんて、とんでもない。
   korean_translation: 제가 잘하다니요, 당치도 않아요.
   items:
     - item_seed_id: it_tondemonai
@@ -13003,7 +13003,7 @@
         example_translation: 선생님이라니요, 당치도 않아요.
 
 - seed_id: sn_0737
-  japanese: この小さな部屋で十万円なんて、とんでもない値段だ。
+  text: この小さな部屋で十万円なんて、とんでもない値段だ。
   korean_translation: 이 작은 방이 10만 엔이라니 터무니없는 가격이다.
   items:
     - item_seed_id: it_tondemonai
@@ -13020,7 +13020,7 @@
         example_translation: 터무니없는 요구를 받았다.
 
 - seed_id: sn_0738
-  japanese: 寝坊して、とんでもないことになった。
+  text: 寝坊して、とんでもないことになった。
   korean_translation: 늦잠 자서 큰일이 나 버렸다.
   items:
     - item_seed_id: it_tondemonai
@@ -13037,7 +13037,7 @@
         example_translation: 엄청난 실수를 해 버렸다.
 
 - seed_id: sn_0739
-  japanese: 三年間、本当にお世話になりました。
+  text: 三年間、本当にお世話になりました。
   korean_translation: 3년 동안 정말 신세 많이 졌습니다.
   items:
     - item_seed_id: it_osewa
@@ -13054,7 +13054,7 @@
         example_translation: 짧은 기간이었지만 신세 많이 졌습니다.
 
 - seed_id: sn_0740
-  japanese: 旅行中は、友達の家にお世話になった。
+  text: 旅行中は、友達の家にお世話になった。
   korean_translation: 여행 중에는 친구 집에서 신세를 졌다.
   items:
     - item_seed_id: it_osewa
@@ -13071,7 +13071,7 @@
         example_translation: 유학 중에 홈스테이 가족에게 신세를 졌다.
 
 - seed_id: sn_0741
-  japanese: 入院中、看護師さんにとてもお世話になった。
+  text: 入院中、看護師さんにとてもお世話になった。
   korean_translation: 입원 중에 간호사분들께 큰 신세를 졌다.
   items:
     - item_seed_id: it_osewa
@@ -13088,7 +13088,7 @@
         example_translation: 선생님께는 정말 신세를 많이 졌다.
 
 - seed_id: sn_0742
-  japanese: 彼の言い方に腹が立つ。
+  text: 彼の言い方に腹が立つ。
   korean_translation: 그의 말투에 화가 난다.
   items:
     - item_seed_id: it_haragatatsu
@@ -13105,7 +13105,7 @@
         example_translation: 저 사람 태도에 화가 난다.
 
 - seed_id: sn_0743
-  japanese: 何もできなかった自分に腹が立つ。
+  text: 何もできなかった自分に腹が立つ。
   korean_translation: 아무것도 못 한 나 자신에게 화가 난다.
   items:
     - item_seed_id: it_haragatatsu
@@ -13122,7 +13122,7 @@
         example_translation: 늦잠 잔 나에게 화가 났다.
 
 - seed_id: sn_0744
-  japanese: 不公平なニュースを見ると、腹が立つ。
+  text: 不公平なニュースを見ると、腹が立つ。
   korean_translation: 불공평한 뉴스를 보면 화가 난다.
   items:
     - item_seed_id: it_haragatatsu
@@ -13139,7 +13139,7 @@
         example_translation: 거짓말을 들으면 화가 난다.
 
 - seed_id: sn_0745
-  japanese: 彼は会うたびに愚痴ばかり言う。
+  text: 彼は会うたびに愚痴ばかり言う。
   korean_translation: 그는 만날 때마다 푸념만 한다.
   items:
     - item_seed_id: it_guchi
@@ -13156,7 +13156,7 @@
         example_translation: 푸념 듣는 건 피곤하다.
 
 - seed_id: sn_0746
-  japanese: 愚痴を言ってごめんね。
+  text: 愚痴を言ってごめんね。
   korean_translation: 푸념해서 미안해.
   items:
     - item_seed_id: it_guchi
@@ -13173,7 +13173,7 @@
         example_translation: 푸념처럼 돼서 미안.
 
 - seed_id: sn_0747
-  japanese: 愚痴を言っても、何も変わらない。
+  text: 愚痴を言っても、何も変わらない。
   korean_translation: 푸념해도 아무것도 바뀌지 않는다.
   items:
     - item_seed_id: it_guchi
@@ -13190,7 +13190,7 @@
         example_translation: 푸념보다 행동하자.
 
 - seed_id: sn_0748
-  japanese: 本に夢中になって、時間を忘れた。
+  text: 本に夢中になって、時間を忘れた。
   korean_translation: 책에 빠져서 시간 가는 줄 몰랐다.
   items:
     - item_seed_id: it_muchuu
@@ -13207,7 +13207,7 @@
         example_translation: 게임에 빠져서 숙제를 잊었다.
 
 - seed_id: sn_0749
-  japanese: 彼はすっかり彼女に夢中だ。
+  text: 彼はすっかり彼女に夢中だ。
   korean_translation: 그는 완전히 그녀에게 빠져 있다.
   items:
     - item_seed_id: it_muchuu
@@ -13224,7 +13224,7 @@
         example_translation: 딸은 그 가수에게 푹 빠져 있다.
 
 - seed_id: sn_0750
-  japanese: 夢中で走って、なんとか間に合った。
+  text: 夢中で走って、なんとか間に合った。
   korean_translation: 정신없이 달려서 겨우 늦지 않았다.
   items:
     - item_seed_id: it_muchuu
@@ -13241,7 +13241,7 @@
         example_translation: 정신없이 도망쳤다.
 
 - seed_id: sn_0751
-  japanese: この味なら文句なしだ。
+  text: この味なら文句なしだ。
   korean_translation: 이 맛이면 흠잡을 데가 없다.
   items:
     - item_seed_id: it_monku
@@ -13258,7 +13258,7 @@
         example_translation: 흠잡을 데 없는 결과다.
 
 - seed_id: sn_0752
-  japanese: 隣の人に、音がうるさいと文句を言われた。
+  text: 隣の人に、音がうるさいと文句を言われた。
   korean_translation: 옆집 사람에게 소리가 시끄럽다고 항의를 받았다.
   items:
     - item_seed_id: it_monku
@@ -13275,7 +13275,7 @@
         example_translation: 점원에게 항의하는 손님이 있었다.
 
 - seed_id: sn_0753
-  japanese: 文句があるなら、自分でやって。
+  text: 文句があるなら、自分でやって。
   korean_translation: 불만 있으면 네가 해.
   items:
     - item_seed_id: it_monku
@@ -13292,7 +13292,7 @@
         example_translation: 뭐 불만 있어?
 
 - seed_id: sn_0754
-  japanese: 意外と時間がかかった。
+  text: 意外と時間がかかった。
   korean_translation: 의외로 시간이 걸렸다.
   items:
     - item_seed_id: it_igaito
@@ -13309,7 +13309,7 @@
         example_translation: 의외로 비쌌다.
 
 - seed_id: sn_0755
-  japanese: 彼は怖そうに見えて、意外と優しい。
+  text: 彼は怖そうに見えて、意外と優しい。
   korean_translation: 그는 무서워 보이는데 의외로 다정하다.
   items:
     - item_seed_id: it_igaito
@@ -13326,7 +13326,7 @@
         example_translation: 그녀는 의외로 요리를 잘한다.
 
 - seed_id: sn_0756
-  japanese: 駅から意外と近い。
+  text: 駅から意外と近い。
   korean_translation: 역에서 의외로 가깝다.
   items:
     - item_seed_id: it_igaito
@@ -13343,7 +13343,7 @@
         example_translation: 걸어 보니 의외로 멀었다.
 
 - seed_id: sn_0757
-  japanese: そんなに落ち込まないで。
+  text: そんなに落ち込まないで。
   korean_translation: 그렇게 풀 죽지 마.
   items:
     - item_seed_id: it_ochikomu
@@ -13360,7 +13360,7 @@
         example_translation: 한 번 실패했다고 풀 죽지 마.
 
 - seed_id: sn_0758
-  japanese: 今年は売り上げが落ち込んだ。
+  text: 今年は売り上げが落ち込んだ。
   korean_translation: 올해는 매출이 떨어졌다.
   items:
     - item_seed_id: it_ochikomu
@@ -13377,7 +13377,7 @@
         example_translation: 경기가 침체되어 있다.
 
 - seed_id: sn_0759
-  japanese: 彼女は少し注意されただけで、すぐ落ち込む。
+  text: 彼女は少し注意されただけで、すぐ落ち込む。
   korean_translation: 그녀는 조금 주의를 받기만 해도 금방 풀이 죽는다.
   items:
     - item_seed_id: it_ochikomu
@@ -13394,7 +13394,7 @@
         example_translation: 나쁜 뉴스를 보면 우울해진다.
 
 - seed_id: sn_0760
-  japanese: 旅行は無理でも、せめて一日休みたい。
+  text: 旅行は無理でも、せめて一日休みたい。
   korean_translation: 여행은 무리라도 하다못해 하루는 쉬고 싶다.
   items:
     - item_seed_id: it_semete
@@ -13411,7 +13411,7 @@
         example_translation: 적어도 주말 정도는 푹 쉬고 싶다.
 
 - seed_id: sn_0761
-  japanese: 勝てなくても、せめて一点は取りたい。
+  text: 勝てなくても、せめて一点は取りたい。
   korean_translation: 못 이기더라도 적어도 1점은 따고 싶다.
   items:
     - item_seed_id: it_semete
@@ -13428,7 +13428,7 @@
         example_translation: 적어도 끝까지는 달리고 싶다.
 
 - seed_id: sn_0762
-  japanese: せめてものお礼に、これを受け取ってください。
+  text: せめてものお礼に、これを受け取ってください。
   korean_translation: 작은 성의지만 이걸 받아 주세요.
   items:
     - item_seed_id: it_semete
@@ -13445,7 +13445,7 @@
         example_translation: 작은 마음이에요.
 
 - seed_id: sn_0763
-  japanese: 早速ですが、本題に入ります。
+  text: 早速ですが、本題に入ります。
   korean_translation: 바로 본론으로 들어가겠습니다.
   items:
     - item_seed_id: it_sassoku
@@ -13462,7 +13462,7 @@
         example_translation: 바로 자료를 봐 주세요.
 
 - seed_id: sn_0764
-  japanese: ご連絡ありがとうございます。早速確認いたします。
+  text: ご連絡ありがとうございます。早速確認いたします。
   korean_translation: 연락 감사합니다. 바로 확인하겠습니다.
   items:
     - item_seed_id: it_sassoku
@@ -13479,7 +13479,7 @@
         example_translation: 바로 대응해 주셔서 감사합니다.
 
 - seed_id: sn_0765
-  japanese: 教えてもらった店に、早速行ってきた。
+  text: 教えてもらった店に、早速行ってきた。
   korean_translation: 알려 준 가게에 곧장 다녀왔다.
   items:
     - item_seed_id: it_sassoku
