@@ -9,6 +9,7 @@
 #
 # 예문은 PHRASE List/PHaVE List의 원문을 베끼지 않고 새로 쓴 것이다(불변식 27, ADR-024
 # 결정 1). 원본은 scripts/select_english_candidates.py가 참고만 하고 저장소에 없다.
+# backend/tests/test_repo_hygiene.py가 원본과의 일치를 실제로 대조한다.
 
 - seed_id: en_sn_0001
   text: I mean, we could just order pizza instead.
@@ -1344,22 +1345,23 @@
       example_sentence: We're supposed to wear uniforms here.
       example_translation: 우리 여기서 유니폼 입기로 되어 있어.
 - seed_id: en_sn_0079
-  text: I didn't go, but I was supposed to.
-  korean_translation: 나 안 갔는데, 가기로 돼 있었어.
+  text: This button is supposed to open the gate.
+  korean_translation: 이 버튼 누르면 문이 열려야 하는데.
   items:
   - item_seed_id: en_it_0028
     surface_form: supposed to
     is_tappable: true
     spans:
-    - start_codepoint: 23
-      end_codepoint: 34
+    - start_codepoint: 15
+      end_codepoint: 26
       span_order: 0
     explanation:
       core_meaning: ~하기로 되어 있다
-      meaning_in_context: 동사를 생략하고 'supposed to'로 문장을 끝내기도 한다.
-      nuance: 과거형(was/were supposed to)으로 쓰일 때는 '하기로 했는데 안 했다'는 뉘앙스가 강하다.
-      example_sentence: He was supposed to, but he forgot.
-      example_translation: 걔 하기로 돼 있었는데, 깜빡했어.
+      meaning_in_context: 기계나 장치가 원래 그렇게 작동해야 한다고 기대될 때도 쓴다.
+      nuance: '''원래 그렇게 되어 있다''는 기대를 말하므로 실제로는 그렇게 안 되고 있다는 불만이 섞일 때가 많다. 친구·동료 사이에서
+        자연스럽고 격식 자리에서도 쓸 수 있다.'
+      example_sentence: The train is supposed to be here by now.
+      example_translation: 기차가 지금쯤이면 와 있어야 하는데.
 - seed_id: en_sn_0080
   text: She turned down the job offer because of the pay.
   korean_translation: 걔는 급여 때문에 그 일자리 제안을 거절했어.
@@ -1769,22 +1771,23 @@
       example_sentence: She got into painting during the pandemic.
       example_translation: 걔는 팬데믹 때 그림 그리기에 빠졌어.
 - seed_id: en_sn_0104
-  text: I really got into what he was talking about.
-  korean_translation: 나 걔가 말하는 내용에 완전 몰입했어.
+  text: Let's not get into that right now.
+  korean_translation: 그 얘긴 지금 하지 말자.
   items:
   - item_seed_id: en_it_0037
-    surface_form: got into
+    surface_form: get into
     is_tappable: true
     spans:
-    - start_codepoint: 9
-      end_codepoint: 17
+    - start_codepoint: 10
+      end_codepoint: 18
       span_order: 0
     explanation:
-      core_meaning: 몰입하다, 빠져들다
-      meaning_in_context: 대화나 주제에 흥미롭게 몰입했을 때도 쓴다.
-      nuance: '''be interested in''보다 더 구어적이고 능동적으로 몰입한 느낌을 준다.'
-      example_sentence: Once you get into it, it's really fun.
-      example_translation: 일단 빠지기 시작하면, 진짜 재밌어.
+      core_meaning: (화제를) 꺼내다, 파고들다
+      meaning_in_context: 어떤 화제를 자세히 다루기 시작한다는 뜻이다. 부정형이면 '그 얘긴 하지 말자'가 된다.
+      nuance: '''get into'' 뒤에 화제가 오면 ''그 주제로 들어간다''는 뜻이 된다. ''Let''s not get into
+        it''은 지금 그 얘기를 피하고 싶을 때 쓰는 아주 흔한 말이다.'
+      example_sentence: We don't have time to get into the details.
+      example_translation: 세부 사항까지 파고들 시간은 없어.
 - seed_id: en_sn_0105
   text: He got into trouble for skipping class.
   korean_translation: 걔는 수업을 빠져서 곤란한 상황에 처했어.
@@ -1837,22 +1840,22 @@
       example_sentence: Look, it's not that simple.
       example_translation: 있잖아, 그게 그렇게 간단한 게 아니야.
 - seed_id: en_sn_0108
-  text: I could really go for a hamburger right now.
-  korean_translation: 나 지금 햄버거가 진짜 땡겨.
+  text: I could go for a cold beer after today.
+  korean_translation: 오늘 같은 날엔 시원한 맥주 한 잔 땡기네.
   items:
   - item_seed_id: en_it_0039
     surface_form: go for
     is_tappable: true
     spans:
-    - start_codepoint: 15
-      end_codepoint: 21
+    - start_codepoint: 8
+      end_codepoint: 14
       span_order: 0
     explanation:
       core_meaning: ~가 당기다, ~을 먹고 싶다
       meaning_in_context: '''could go for ~''는 지금 그것이 먹고 싶거나 하고 싶다는 뜻이다.'
       nuance: 주로 음식이나 음료에 대해 캐주얼하게 쓴다.
-      example_sentence: I could go for a cup of coffee.
-      example_translation: 나 커피 한 잔 진짜 땡겨.
+      example_sentence: Honestly, I could go for a nap.
+      example_translation: 솔직히 지금 한숨 자고 싶다.
 - seed_id: en_sn_0109
   text: Let's go for the cheaper option this time.
   korean_translation: 이번엔 좀 더 저렴한 걸로 가자.
@@ -4490,8 +4493,8 @@
       core_meaning: 애초에, 처음부터
       meaning_in_context: 어떤 일이 시작된 근본적인 시점이나 이유를 되짚을 때 쓴다.
       nuance: 약간 짜증이나 의아함이 섞인 톤으로 자주 쓰인다.
-      example_sentence: He couldn't see how it got there in the first place.
-      example_translation: 걔는 애초에 그게 거기 어떻게 있게 됐는지 이해할 수 없었어.
+      example_sentence: I never wanted the job in the first place.
+      example_translation: 난 애초에 그 일을 원한 적도 없어.
 - seed_id: en_sn_0264
   text: Maybe we shouldn't have started this in the first place.
   korean_translation: 애초에 이걸 시작하지 말았어야 했는지도 몰라.
@@ -4629,22 +4632,23 @@
       example_sentence: Whatever you decide, I'll support you.
       example_translation: 뭘 결정하든 내가 지지해줄게.
 - seed_id: en_sn_0272
-  text: I'll leave it up to you if that's all right.
-  korean_translation: 괜찮다면 그건 너한테 맡길게.
+  text: It's up to you where we go for dinner.
+  korean_translation: 저녁 어디서 먹을지는 네가 정해.
   items:
   - item_seed_id: en_it_0094
     surface_form: up to
     is_tappable: true
     spans:
-    - start_codepoint: 14
-      end_codepoint: 19
+    - start_codepoint: 5
+      end_codepoint: 10
       span_order: 0
     explanation:
       core_meaning: ~에게 달려 있다, ~의 결정에 맡기다
       meaning_in_context: 결정권을 상대에게 넘긴다는 뜻이다.
-      nuance: '''leave it up to you''는 책임이나 선택권을 넘길 때 정중하게 쓰는 표현이다.'
-      example_sentence: It's up to you whether we go or stay.
-      example_translation: 가든 머물든 그건 너한테 달렸어.
+      nuance: '''It''s up to you''는 선택을 상대에게 넘길 때 가장 흔하게 쓰는 말이다. 톤에 따라 배려로도, 무심함으로도
+        들릴 수 있다.'
+      example_sentence: Honestly, the final call is up to her.
+      example_translation: 솔직히 최종 결정은 걔한테 달렸어.
 - seed_id: en_sn_0273
   text: Whether we succeed or not is up to all of us.
   korean_translation: 우리가 성공할지 아닐지는 우리 모두에게 달려 있어.
@@ -6490,19 +6494,19 @@
       example_sentence: Did you put out the recycling this week?
       example_translation: 이번 주 재활용 쓰레기 내놨어?
 - seed_id: en_sn_0381
-  text: I'll have to think some more before deciding.
-  korean_translation: 결정하기 전에 좀 더 생각해봐야 할 것 같아.
+  text: Add some more salt, it's a bit bland.
+  korean_translation: 소금 좀 더 넣어, 좀 싱거워.
   items:
   - item_seed_id: en_it_0131
     surface_form: some more
     is_tappable: true
     spans:
-    - start_codepoint: 19
-      end_codepoint: 28
+    - start_codepoint: 4
+      end_codepoint: 13
       span_order: 0
     explanation:
       core_meaning: 조금 더, 좀 더
-      meaning_in_context: 이미 어느 정도 한 상태에서 양이나 정도를 조금 더 추가한다는 뜻이다.
+      meaning_in_context: 이미 들어간 양에 조금 더 보태라는 뜻이다.
       nuance: '''a bit more''와 거의 같은 뜻으로 구어체에서 자연스럽게 쓴다.'
       example_sentence: Do you want some more coffee?
       example_translation: 커피 좀 더 줄까?
