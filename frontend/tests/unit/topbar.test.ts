@@ -11,7 +11,9 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mount as mountDemo } from '../../src/demo/demo'
-import { mount as mountHome } from '../../src/home/home'
+import { mount as mountEnHome } from '../../src/home/en'
+import { mount as mountJaHome } from '../../src/home/ja'
+import { mount as mountLanguageSelectHome } from '../../src/home/language-select'
 import type { PublicScreenContext } from '../../src/routes'
 import { mountHistory } from '../../src/ui/history'
 import { mountLogin } from '../../src/ui/login'
@@ -134,13 +136,14 @@ describe('top bar on each screen', () => {
     return buttons(byClass(bar[0]!, 'topbar-actions')[0]!).map((button) => button.textContent)
   }
 
-  function publicContext(): PublicScreenContext {
+  function publicContext(language: 'ja' | 'en' | null): PublicScreenContext {
     return {
       root: root as unknown as HTMLElement,
       signal: new AbortController().signal,
       subpath: '',
       navigate: () => {},
       openLogin: () => {},
+      language,
     }
   }
 
@@ -152,13 +155,23 @@ describe('top bar on each screen', () => {
     vi.stubGlobal('fetch', () => new Promise<Response>(() => {}))
   })
 
-  it('home: 로그인', () => {
-    mountHome(publicContext())
+  it('language select home: 로그인', () => {
+    mountLanguageSelectHome(publicContext(null))
+    expect(right()).toEqual(['로그인'])
+  })
+
+  it('ja home: 로그인', () => {
+    mountJaHome(publicContext('ja'))
+    expect(right()).toEqual(['로그인'])
+  })
+
+  it('en home: 로그인', () => {
+    mountEnHome(publicContext('en'))
     expect(right()).toEqual(['로그인'])
   })
 
   it('demo: 후리가나, 로그인', () => {
-    mountDemo(publicContext())
+    mountDemo(publicContext('ja'))
     expect(right()).toEqual(['후리가나', '로그인'])
   })
 
@@ -171,13 +184,23 @@ describe('top bar on each screen', () => {
   })
 
   it('study: 학습 기록, 로그아웃, 후리가나', () => {
-    mountStudy(root as unknown as HTMLElement, new AbortController().signal, {
+    mountStudy(root as unknown as HTMLElement, new AbortController().signal, 'ja', {
       onHome: noop,
       onUnauthenticated: noop,
       onOpenHistory: noop,
       onLoggedOut: noop,
     })
     expect(right()).toEqual(['학습 기록', '로그아웃', '후리가나'])
+  })
+
+  it('study (영어): 학습 기록, 로그아웃 (후리가나 토글 없음)', () => {
+    mountStudy(root as unknown as HTMLElement, new AbortController().signal, 'en', {
+      onHome: noop,
+      onUnauthenticated: noop,
+      onOpenHistory: noop,
+      onLoggedOut: noop,
+    })
+    expect(right()).toEqual(['학습 기록', '로그아웃'])
   })
 
   it('history: 로그아웃 only', () => {

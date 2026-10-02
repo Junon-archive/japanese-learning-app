@@ -21,6 +21,7 @@ import type {
   Explanation,
   HistoryItemsResponse,
   HistorySessionsResponse,
+  Language,
   LoginBody,
   NextPresentationResponse,
   OpenSessionResponse,
@@ -67,9 +68,12 @@ export function fetchOpenSession(): Promise<OpenSessionResponse> {
   return apiGet<OpenSessionResponse>('/api/study/session')
 }
 
-/** create 또는 resume. body를 받지 않는다. */
-export function startSession(): Promise<StartSessionResponse> {
-  return apiPost<StartSessionResponse>('/api/study/session')
+/**
+ * create 또는 resume. `language`는 필수 body 필드다(05_API_SPEC.md의 `세션 언어와 409`).
+ * 열린 session이 있고 그 language가 다르면 409(`SessionLanguageMismatch`)다.
+ */
+export function startSession(language: Language): Promise<StartSessionResponse> {
+  return apiPostJson<StartSessionResponse>('/api/study/session', { language })
 }
 
 /** Ready Pool이 비면 `presentation: null` + 200이다. 오류가 아니다. */

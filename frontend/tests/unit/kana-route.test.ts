@@ -79,7 +79,7 @@ describe('entering kana learning', () => {
   }
 
   it('opens from the home card without a request', async () => {
-    await boot('')
+    await boot('#/ja')
 
     byClass(root, 'home-card')[1]!.click()
     await settle()
@@ -102,15 +102,15 @@ describe('entering kana learning', () => {
 })
 
 describe('leaving kana learning', () => {
-  it('goes home with the back button without a request', async () => {
-    await boot('')
+  it('goes back to the ja home with the back button without a request', async () => {
+    await boot('#/ja')
     byClass(root, 'home-card')[1]!.click()
     await settle()
 
     history.back()
     await settle()
 
-    expect(location.hash).toBe('')
+    expect(location.hash).toBe('#/ja')
     expect(screenClass()).toContain('home')
   })
 

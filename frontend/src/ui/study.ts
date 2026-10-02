@@ -23,8 +23,15 @@
  *     그 자리에서 "이미 기록했습니다"로 끝낸다(`reportInteractionFailure`).
  * 6.  **`presentation: null`은 오류가 아니다.** 짧은 안내와 **수동** 재시도 버튼을 둔다.
  *     자동 재시도 루프를 만들지 않는다(무한 spinner 금지).
+ * 7.  **언어는 `language` 인자가 고정한다.** `/session`이 409(`SessionLanguageMismatch`)를
+ *     돌려주면(다른 탭·기기가 이미 다른 언어로 세션을 열었다) 재전송하지 않고 두 선택지를
+ *     보여준다 --- `이어서 하기`(그 세션의 language로 다시 시작)와 `마치고 바꾸기`(그 세션을
+ *     끝내고 고른 language로 시작). `03_UI_UX_SPEC.md`의 `언어 선택 화면`,
+ *     `05_API_SPEC.md`의 `세션 언어와 409`. **상단바에 언어 전환 버튼을 두지 않는다**
+ *     (ADR-025 결정 2) --- 언어를 바꾸려면 세션을 끝내야 하고, 그 입구는 이 409 분기 하나다.
  */
 
+import type { OpenSessionConflict } from '../api'
 import { ApiError } from '../api'
 import {
   clickItem,
@@ -40,7 +47,7 @@ import {
   selfReport,
   startSession,
 } from '../endpoints'
-import type { Presentation, StudySession } from '../types'
+import type { Language, Presentation, StudySession } from '../types'
 import type { InteractionFailure, InteractionOps, InteractionsHandle } from './interactions'
 import { createInteractions } from './interactions'
 import { errorMessage } from './api-failure'
@@ -62,11 +69,27 @@ export type StudyActions = {
   onLoggedOut: () => void
 }
 
+/** 409 `session_language_mismatch`의 언어 코드 -> 화면 라벨. */
+const LANGUAGE_LABELS: Record<Language, string> = { ja: MESSAGES.languageJa, en: MESSAGES.languageEn }
+
+function languageMismatchMessage(openLanguage: Language, chosenLanguage: Language): string {
+  return `${LANGUAGE_LABELS[openLanguage]} 학습이 진행 중이에요. 마치고 ${LANGUAGE_LABELS[chosenLanguage]}로 바꿀까요?`
+}
+
 /**
  * `signal`은 로그인 영역의 것이다. 떠났으면(abort) 화면을 그리지 않고 `POST /api/study/session`도
  * 보내지 않는다 --- 로그인 확인이나 로그인 성공이 늦게 도착해도 study session을 만들거나 resume하지 않는다.
+ *
+ * `language`는 이 화면에 **들어올 때** 고른 값이다(`private.ts`). 상단바(후리가나 토글 유무)는
+ * 이 값으로 한 번만 정해진다 --- 409 분기로 실제 session의 language가 달라져도 다시 그리지
+ * 않는다(드문 경합이고, 세션 시작 자체가 그 language로 성공한다).
  */
-export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: StudyActions): void {
+export function mountStudy(
+  root: HTMLElement,
+  signal: AbortSignal,
+  language: Language,
+  actions: StudyActions,
+): void {
   const onUnauthenticated = actions.onUnauthenticated
 
   const screen = document.createElement('main')
@@ -91,9 +114,11 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     },
   })
 
+  // 후리가나 토글은 일본어 화면에만 있다(03_UI_UX_SPEC.md의 `상단바`, ADR-025 결정 2) --- 영어
+  // 문장에는 ruby가 없다.
   const topBar = renderTopBar({
     onHome: actions.onHome,
-    actions: [historyButton, logoutButton, renderFuriganaToggle()],
+    actions: [historyButton, logoutButton, ...(language === 'ja' ? [renderFuriganaToggle()] : [])],
   })
 
   // 화면 제목. 보이는 제목을 두지 않고 스크린 리더와 포커스 이동에만 쓴다.
@@ -326,7 +351,33 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
   async function begin(): Promise<void> {
     // 떠난 화면은 새 화면 진입 요청을 시작하지 않는다(04_SECURITY_AND_DATA.md의 `모듈 경계`).
     if (signal.aborted) return
-    const started = await startSession()
+    await startWithLanguage(language)
+  }
+
+  /**
+   * `startSession` 호출 + 성공 뒤 공통 처리. 409 `SessionLanguageMismatch`는 여기서 바로
+   * 처리하고 `handleError`로 넘기지 않는다 --- 일반 409 복구(`recoverSession`)는 "같은
+   * language로 다시 얻는다"이고, 이 409는 language 자체가 다르다는 뜻이라 다른 선택지
+   * (`showLanguageMismatch`)가 필요하다.
+   */
+  async function startWithLanguage(lang: Language): Promise<void> {
+    let started: Awaited<ReturnType<typeof startSession>>
+    try {
+      started = await startSession(lang)
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.kind === 'StateGate' &&
+        error.conflictReason === 'SessionLanguageMismatch' &&
+        error.openSessionConflict !== null
+      ) {
+        // 응답을 기다리는 동안 떠났다. 안내를 띄우지 않는다.
+        if (signal.aborted) return
+        showLanguageMismatch(error.openSessionConflict, lang)
+        return
+      }
+      throw error
+    }
     // 응답을 기다리는 동안 떠났다. 안내도 `/next`도 없다.
     if (signal.aborted) return
     applySession(started.session)
@@ -339,6 +390,39 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
       showToast(MESSAGES.sessionResumed)
     }
     await loadNext()
+  }
+
+  /**
+   * `03_UI_UX_SPEC.md`의 `언어 선택 화면` 409 분기. `이어서 하기`는 열린 session의 language로
+   * 다시 시작하고(성공해야 한다 --- 그 session이 바로 그 language다), `마치고 바꾸기`는
+   * `/finish` 뒤 고른 language로 다시 시작한다(05_API_SPEC.md의 `세션 언어와 409`).
+   */
+  function showLanguageMismatch(conflict: OpenSessionConflict, chosenLanguage: Language): void {
+    // `language`는 DB CHECK 제약이 강제하는 서버 enum이다(ADR-023 결정 1). 모르는 값이 오면
+    // 라벨을 못 찾을 뿐 동작은 그대로다.
+    const openLanguage = conflict.language as Language
+    setNotice(
+      renderNotice(languageMismatchMessage(openLanguage, chosenLanguage), 'info', [
+        {
+          label: MESSAGES.continueOtherSession,
+          onClick: () => {
+            setNotice(null)
+            void run(() => startWithLanguage(openLanguage))
+          },
+        },
+        {
+          label: MESSAGES.finishAndSwitch,
+          onClick: () => {
+            setNotice(null)
+            void run(async () => {
+              await finishSession(conflict.id)
+              if (signal.aborted) return
+              await startWithLanguage(chosenLanguage)
+            })
+          },
+        },
+      ]),
+    )
   }
 
   async function loadNext(): Promise<void> {
@@ -460,6 +544,8 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
   /**
    * 409 복구. 거부된 요청을 다시 보내지 않고 현재 session을 다시 얻는다.
    *
+   * **같은 language로 다시 얻는다** --- 이 경로는 닫힌 session / 완료된 presentation 복구이고
+   * language 자체가 다른 409(`SessionLanguageMismatch`)는 `startWithLanguage`가 따로 가른다.
    * 이 안에서 다시 실패하면 **재귀하지 않는다.** 안내와 수동 재시도로 끝낸다.
    */
   async function recoverSession(): Promise<void> {
@@ -467,7 +553,7 @@ export function mountStudy(root: HTMLElement, signal: AbortSignal, actions: Stud
     if (signal.aborted) return
     clearSentence()
     try {
-      const started = await startSession()
+      const started = await startSession(session?.language ?? language)
       if (signal.aborted) return
       applySession(started.session)
       setNotice(renderNotice(MESSAGES.sessionChanged, 'info'))

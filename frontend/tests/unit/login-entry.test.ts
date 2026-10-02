@@ -27,6 +27,7 @@ const USER: User = { user_id: 1, login_id: 'owner', timezone: 'Asia/Seoul', star
 
 const SESSION: StudySession = {
   session_id: 7,
+  language: 'ja',
   started_at: '2026-09-13T09:00:00Z',
   last_activity_at: '2026-09-13T09:00:00Z',
   ended_at: null,
@@ -93,11 +94,20 @@ function screenClass(): string {
   return root.children[0]?.className ?? ''
 }
 
-/** `/api/auth/me`만 정한 값으로 답하고 나머지 요청은 끝나지 않게 둔다. */
+/**
+ * `/api/auth/me`만 정한 값으로 답하고 나머지 요청은 끝나지 않게 둔다 --- **단, `GET
+ * /api/study/session`은 열린 session(`SESSION`, language `ja`)으로 답해 언어 선택 화면을
+ * 건너뛴다.** `/api/auth/me`가 실패하는 테스트는 그 GET에 닿지 않으므로 영향이 없다.
+ */
 function answerMe(respond: () => Promise<Response>): void {
-  fetchMock.mockImplementation((url) =>
-    String(url).endsWith('/api/auth/me') ? respond() : new Promise<Response>(() => {}),
-  )
+  fetchMock.mockImplementation((url, init) => {
+    const path = String(url)
+    if (path.endsWith('/api/auth/me')) return respond()
+    if (path.endsWith('/api/study/session') && (init?.method ?? 'GET') === 'GET') {
+      return Promise.resolve(json(200, { session: SESSION }))
+    }
+    return new Promise<Response>(() => {})
+  })
 }
 
 /** `METHOD /path`별 응답. 표에 없는 요청은 끝나지 않게 둔다. */
@@ -177,13 +187,15 @@ describe('login entry result', () => {
     await settle()
 
     expect(screenClass()).toContain('study')
-    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session'])
+    expect(calls()).toEqual(['GET /api/auth/me', 'GET /api/study/session', 'POST /api/study/session'])
   })
 
   it('titles the study screen for screen readers and says a resumed session in a toast', async () => {
     await boot('')
     answer({
       'GET /api/auth/me': async () => json(200, USER),
+      // 열린 session이 있다고 답해 언어 선택 화면을 건너뛴다.
+      'GET /api/study/session': async () => json(200, { session: SESSION }),
       'POST /api/study/session': async () =>
         json(200, { session: SESSION, resumed: true, timed_out_session_id: null }),
       'POST /api/study/session/7/next': async () =>
@@ -217,14 +229,24 @@ describe('login entry result', () => {
     expect(byClass(body, 'toast').map((toast) => toast.textContent)).toEqual([MESSAGES.sessionResumed])
     // 안내는 오류가 아니다. 화면 안에 인라인 안내로 남기지 않는다.
     expect(flatText(byClass(root, 'notice-slot')[0]!)).not.toContain(MESSAGES.sessionResumed)
-    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session', 'POST /api/study/session/7/next'])
+    expect(calls()).toEqual([
+      'GET /api/auth/me',
+      'GET /api/study/session',
+      'POST /api/study/session',
+      'POST /api/study/session/7/next',
+    ])
     // 문장 아래 힌트. 어느 표현이 학습 대상인지 암시하지 않는다.
     expect(flatText(byClass(root, 'sentence-box')[0]!)).toContain('모르는 표현을 눌러 보세요.')
   })
 
   it('keeps the app name usable while the study screen waits, and closes no session on the way home', async () => {
     await boot('')
-    answer({ 'GET /api/auth/me': async () => json(200, USER) })
+    answer({
+      'GET /api/auth/me': async () => json(200, USER),
+      // 열린 session이 있다고 답해 언어 선택 화면을 건너뛴다. `POST /session`은 응답하지 않는다
+      // --- Study Screen이 그것을 기다리는 동안 떠나는 것이 이 테스트의 목적이다.
+      'GET /api/study/session': async () => json(200, { session: SESSION }),
+    })
     loginButton().click()
     await settle()
 
@@ -234,7 +256,7 @@ describe('login entry result', () => {
     await settle()
 
     expect(screenClass()).toContain('home')
-    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/study/session'])
+    expect(calls()).toEqual(['GET /api/auth/me', 'GET /api/study/session', 'POST /api/study/session'])
   })
 
   it('goes to the login form on 401', async () => {
@@ -285,7 +307,11 @@ describe('login entry result', () => {
     await settle()
 
     // fetchMe만 다시 불렸다. hash 처리(replaceState)는 되풀이되지 않았다.
-    expect(calls().slice(meCalls)).toEqual(['GET /api/auth/me', 'POST /api/study/session'])
+    expect(calls().slice(meCalls)).toEqual([
+      'GET /api/auth/me',
+      'GET /api/study/session',
+      'POST /api/study/session',
+    ])
     expect(browser.replaceStateCalls).toHaveLength(1)
     expect(screenClass()).toContain('study')
   })
@@ -503,6 +529,8 @@ describe('leaving after logging in', () => {
     answer({
       'GET /api/auth/me': async () => json(401, { detail: 'Not authenticated' }),
       'POST /api/auth/login': async () => json(200, USER),
+      // 열린 session이 있다고 답해 언어 선택 화면을 건너뛴다.
+      'GET /api/study/session': async () => json(200, { session: SESSION }),
     })
     loginButton().click()
     await settle()
@@ -511,7 +539,12 @@ describe('leaving after logging in', () => {
     await settle()
 
     expect(screenClass()).toContain('study')
-    expect(calls()).toEqual(['GET /api/auth/me', 'POST /api/auth/login', 'POST /api/study/session'])
+    expect(calls()).toEqual([
+      'GET /api/auth/me',
+      'POST /api/auth/login',
+      'GET /api/study/session',
+      'POST /api/study/session',
+    ])
   })
 })
 
@@ -753,7 +786,7 @@ describe('openLogin call site (AST)', () => {
   it('positive control: the value is actually passed from main.ts and the public screens', () => {
     // 참조가 하나도 없어서 초록인 것이 아니다. 값 전달을 세면 허용 목록이 비어 있지 않다.
     const project = createProject()
-    for (const file of ['main.ts', 'routes.ts', 'home/home.ts']) {
+    for (const file of ['main.ts', 'routes.ts', 'home/language-select.ts']) {
       expect(project.read(file)).toMatch(/onLogin: (ctx\.)?openLogin/)
     }
   })

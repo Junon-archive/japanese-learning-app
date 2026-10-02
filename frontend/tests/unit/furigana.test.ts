@@ -325,6 +325,7 @@ describe('toggling does not re-render', () => {
 describe('toggle on the study screen', () => {
   const SESSION = {
     session_id: 7,
+    language: 'ja',
     started_at: '2026-09-13T09:00:00Z',
     last_activity_at: '2026-09-13T09:00:00Z',
     ended_at: null,
@@ -384,7 +385,7 @@ describe('toggle on the study screen', () => {
     const { mountStudy } = await import('../../src/ui/study')
     const root = createFakeElement('div')
     const noop = (): void => {}
-    mountStudy(root as unknown as HTMLElement, new AbortController().signal, {
+    mountStudy(root as unknown as HTMLElement, new AbortController().signal, 'ja', {
       onHome: noop,
       onUnauthenticated: noop,
       onOpenHistory: noop,

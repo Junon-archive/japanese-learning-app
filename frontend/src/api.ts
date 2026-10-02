@@ -52,13 +52,21 @@ export type ApiErrorKind =
  * 사유 코드 체계를 새로 만들지 않는다 --- 구분 수단은 응답 body의 `detail` 문구
  * 그대로이고, 그 문구가 사유 코드다(같은 절). 알 수 없는 문구는 `Unknown`이며
  * 화면은 그것을 일반 오류로 다룬다.
+ *
+ * `SessionLanguageMismatch`만 다르다 --- `detail` 문자열이 아니라 `error`/`open_session`
+ * 키로 따로 온다(05_API_SPEC.md의 `세션 언어와 409`, `backend/app/main.py`의
+ * `_session_language_mismatch_handler`).
  */
 export type ConflictReason =
   | 'SessionFinished'
   | 'PresentationCompleted'
   | 'EvidenceAlreadyRecorded'
   | 'EventKeyUsed'
+  | 'SessionLanguageMismatch'
   | 'Unknown'
+
+/** 409 `session_language_mismatch`의 `open_session`. `language`는 서버 값 그대로 `string`이다. */
+export type OpenSessionConflict = { id: number; language: string }
 
 export class ApiError extends Error {
   readonly kind: ApiErrorKind
@@ -66,13 +74,21 @@ export class ApiError extends Error {
   readonly status: number
   /** `kind`가 `StateGate`일 때만 뜻이 있다. 그 밖에는 `Unknown`이다. */
   readonly conflictReason: ConflictReason
+  /** `conflictReason`이 `SessionLanguageMismatch`일 때만 값이 있다. */
+  readonly openSessionConflict: OpenSessionConflict | null
 
-  constructor(kind: ApiErrorKind, status: number, conflictReason: ConflictReason = 'Unknown') {
+  constructor(
+    kind: ApiErrorKind,
+    status: number,
+    conflictReason: ConflictReason = 'Unknown',
+    openSessionConflict: OpenSessionConflict | null = null,
+  ) {
     super(`API request failed (${kind}, status ${status})`)
     this.name = 'ApiError'
     this.kind = kind
     this.status = status
     this.conflictReason = conflictReason
+    this.openSessionConflict = openSessionConflict
   }
 }
 
@@ -114,16 +130,26 @@ const CONFLICT_REASONS: [RegExp, ConflictReason][] = [
   [/client_event_id/i, 'EventKeyUsed'],
 ]
 
-async function conflictReason(response: Response): Promise<ConflictReason> {
+type ConflictInfo = { reason: ConflictReason; openSession: OpenSessionConflict | null }
+
+async function conflictInfo(response: Response): Promise<ConflictInfo> {
   let detail = ''
+  let openSession: OpenSessionConflict | null = null
   try {
     const body: unknown = JSON.parse(await response.text())
-    const value = (body as { detail?: unknown } | null)?.detail
-    if (typeof value === 'string') detail = value
+    const record = body as { detail?: unknown; error?: unknown; open_session?: unknown } | null
+    if (typeof record?.detail === 'string') detail = record.detail
+    if (record?.error === 'session_language_mismatch') {
+      const raw = record.open_session as { id?: unknown; language?: unknown } | null
+      if (raw !== null && typeof raw === 'object' && typeof raw.id === 'number' && typeof raw.language === 'string') {
+        openSession = { id: raw.id, language: raw.language }
+      }
+    }
   } catch {
     // body가 비었거나 JSON이 아니다. 사유를 알 수 없으면 일반 오류로 다룬다.
   }
-  return CONFLICT_REASONS.find(([pattern]) => pattern.test(detail))?.[1] ?? 'Unknown'
+  if (openSession !== null) return { reason: 'SessionLanguageMismatch', openSession }
+  return { reason: CONFLICT_REASONS.find(([pattern]) => pattern.test(detail))?.[1] ?? 'Unknown', openSession: null }
 }
 
 async function readBody(response: Response): Promise<unknown> {
@@ -165,11 +191,8 @@ async function send(method: string, path: string, body: string | undefined): Pro
 
     const kind = errorKind(response.status)
     // 409만 body를 읽는다. 사유로 갈릴 수 있는 실패가 그것뿐이다.
-    const error = new ApiError(
-      kind,
-      response.status,
-      kind === 'StateGate' ? await conflictReason(response) : 'Unknown',
-    )
+    const info = kind === 'StateGate' ? await conflictInfo(response) : null
+    const error = new ApiError(kind, response.status, info?.reason ?? 'Unknown', info?.openSession ?? null)
     if (error.kind !== 'Transient') {
       throw error
     }
@@ -205,8 +228,9 @@ export function apiPost<T>(path: string): Promise<T> {
 }
 
 /**
- * body는 보내지만 `client_event_id`는 **붙이지 않는** POST. 지금은 `/api/auth/login`
- * 하나다 --- login은 learning event가 아니므로 idempotency key가 없다.
+ * body는 보내지만 `client_event_id`는 **붙이지 않는** POST. `/api/auth/login`과
+ * `POST /api/study/session`(05_API_SPEC.md의 `세션 언어와 409`)이 쓴다 --- 둘 다 learning
+ * event가 아니므로 idempotency key가 없다.
  *
  * dedupe key에 body를 넣지 않는다. body에 평문 password가 들어 있어서 key로 쓰면
  * 요청이 끝날 때까지 Map의 key 문자열로 남는다. 대신 화면이 제출 버튼을 비활성화하고,

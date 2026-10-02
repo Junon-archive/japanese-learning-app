@@ -22,6 +22,7 @@ const USER: User = { user_id: 1, login_id: 'owner', timezone: 'UTC', starting_le
 
 const SESSION: StudySession = {
   session_id: 7,
+  language: 'ja',
   started_at: '2026-09-13T09:00:00Z',
   last_activity_at: '2026-09-13T09:00:00Z',
   ended_at: null,
@@ -115,6 +116,8 @@ function toasts(): FakeElement[] {
 async function enterStudy(session: StudySession = SESSION): Promise<AbortController> {
   table = {
     'GET /api/auth/me': async () => json(200, USER),
+    // 열린 session이 있으므로 `afterLogin`이 언어 선택 화면을 건너뛰고 바로 Study Screen이다.
+    'GET /api/study/session': async () => json(200, { session }),
     'POST /api/study/session': async () => json(200, { session, resumed: false, timed_out_session_id: null }),
     'POST /api/study/session/7/next': async () => json(200, { presentation: PRESENTATION }),
     ...table,
@@ -204,6 +207,11 @@ describe('late 409 after leaving', () => {
     return calls().filter((call) => call === 'POST /api/study/session').length
   }
 
+  /** `enterStudy`의 `afterLogin`이 진입 시 한 번 부른다(언어 선택 화면을 건너뛰는 분기). */
+  function sessionGets(): number {
+    return calls().filter((call) => call === 'GET /api/study/session').length
+  }
+
   it('starts no session for a late 409 on /click', async () => {
     const click = deferred()
     table = { [CLICK]: () => click.promise }
@@ -249,7 +257,9 @@ describe('late 409 after leaving', () => {
     await settle()
 
     expect(sessionStarts()).toBe(1)
-    expect(calls()).not.toContain('GET /api/study/session')
+    // 떠난 뒤 늦게 온 409는 `refreshSession`(=`GET /api/study/session`)으로 이어지지 않는다.
+    // 진입 때의 한 번(언어 선택 화면을 건너뛰는 분기) 말고는 더 부르지 않는다.
+    expect(sessionGets()).toBe(1)
   })
 
   it('recovers with a new session when the user stayed', async () => {
@@ -268,7 +278,7 @@ describe('late session start after leaving', () => {
     const start = deferred()
     table = { 'POST /api/study/session': () => start.promise }
     const screen = new AbortController()
-    mountStudy(root as unknown as HTMLElement, screen.signal, {
+    mountStudy(root as unknown as HTMLElement, screen.signal, 'ja', {
       onHome: () => {},
       onUnauthenticated: () => {},
       onOpenHistory: () => {},
@@ -289,7 +299,7 @@ describe('late session start after leaving', () => {
     table = {
       'POST /api/study/session': async () => json(200, { session: SESSION, resumed: true, timed_out_session_id: null }),
     }
-    mountStudy(root as unknown as HTMLElement, new AbortController().signal, {
+    mountStudy(root as unknown as HTMLElement, new AbortController().signal, 'ja', {
       onHome: () => {},
       onUnauthenticated: () => {},
       onOpenHistory: () => {},

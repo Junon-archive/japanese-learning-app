@@ -165,6 +165,23 @@ describe('from the login area', () => {
     fetchMock.mockImplementation((url, init) => {
       const path = String(url)
       if (path.endsWith('/api/auth/me')) return Promise.resolve(json(200, USER))
+      // 열린 session이 있다고 답해 언어 선택 화면을 건너뛰고 바로 Study Screen으로 간다.
+      if (path.endsWith('/api/study/session') && (init?.method ?? 'GET') === 'GET') {
+        return Promise.resolve(
+          json(200, {
+            session: {
+              session_id: 1,
+              language: 'ja',
+              started_at: '2026-09-13T09:00:00Z',
+              last_activity_at: '2026-09-13T09:00:00Z',
+              ended_at: null,
+              active_seconds: 0,
+              target_minutes: 12,
+              extended_minutes: 0,
+            },
+          }),
+        )
+      }
       if (path.endsWith('/api/auth/logout') && init?.method === 'POST') {
         return Promise.resolve(json(logoutStatus, { detail: 'x' }))
       }
