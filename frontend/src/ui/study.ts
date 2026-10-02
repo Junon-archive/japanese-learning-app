@@ -240,9 +240,13 @@ export function mountStudy(
     hint.className = 'sentence-hint'
     hint.textContent = MESSAGES.sentenceHint
     sentenceSlot.replaceChildren(
-      renderSentence(next.render_segments, (sentenceItemId) => {
-        handle.tapItem(sentenceItemId)
-      }),
+      renderSentence(
+        next.render_segments,
+        (sentenceItemId) => {
+          handle.tapItem(sentenceItemId)
+        },
+        language,
+      ),
       // 영어만 문장 옆에 재생 버튼이 있다(ADR-025 결정 4). 문장 전체를 읽고, 다음 문장으로
       // 넘어가거나 화면을 떠나면(`life`) 멈춘다. 상단바에는 두지 않는다.
       ...(language === 'en' ? [renderSpeakButton(joinSegments(next.render_segments), life)] : []),

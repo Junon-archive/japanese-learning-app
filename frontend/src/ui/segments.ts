@@ -18,7 +18,7 @@
  * 문장에서 무엇이 평가 대상인지가 드러난다.
  */
 
-import type { RenderSegment } from '../types'
+import type { Language, RenderSegment } from '../types'
 
 /**
  * segment의 `text`를 순서대로 이은 문장. 값은 payload의 `text`와 같아야 한다.
@@ -64,10 +64,14 @@ function fillSegment(target: HTMLElement, segment: RenderSegment): void {
 export function renderSentence(
   segments: RenderSegment[],
   onTapItem: (sentenceItemId: number) => void,
+  language: Language | null = null,
 ): HTMLElement {
   const sentence = document.createElement('p')
   sentence.className = 'sentence'
-  sentence.lang = 'ja'
+  // `Language` 값이 곧 `lang` 속성 값이다(`'ja'` / `'en'`). 영어 문장에 `'ja'`를 적으면
+  // 스크린 리더가 영어를 일본어 음성으로 읽는다. 모르면(null) 적지 않는다 ---
+  // `ui/explanation.ts`와 같은 규칙이다.
+  if (language !== null) sentence.lang = language
   sentence.setAttribute('aria-label', joinSegments(segments))
 
   for (const segment of segments) {

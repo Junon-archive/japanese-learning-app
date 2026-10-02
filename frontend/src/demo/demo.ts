@@ -250,9 +250,13 @@ export function mountDemo(ctx: PublicScreenContext, options: DemoScreenOptions):
       hint.className = 'sentence-hint'
       hint.textContent = MESSAGES.sentenceHint
       sentenceSlot.replaceChildren(
-        renderSentence(view.sentence.presentation.render_segments, (sentenceItemId) => {
-          handle.tapItem(sentenceItemId)
-        }),
+        renderSentence(
+          view.sentence.presentation.render_segments,
+          (sentenceItemId) => {
+            handle.tapItem(sentenceItemId)
+          },
+          ctx.language,
+        ),
         // 영어 demo만 문장 옆에 재생 버튼이 있다. Study Screen과 같은 자리·같은 모듈이다.
         ...(ctx.language === 'en'
           ? [renderSpeakButton(joinSegments(view.sentence.presentation.render_segments), signal)]

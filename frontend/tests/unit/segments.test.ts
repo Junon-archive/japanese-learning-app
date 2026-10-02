@@ -253,3 +253,33 @@ describe('renderSentence with ruby', () => {
     expect(on).toEqual(READINGS)
   })
 })
+
+/**
+ * `lang` 속성은 호출자가 준 언어가 정한다. 영어 문장에 `'ja'`를 적으면 스크린 리더가 영어를
+ * 일본어 음성으로 읽는다(`ui/explanation.ts`와 같은 규칙).
+ */
+describe('lang attribute', () => {
+  const EN_SEGMENTS: RenderSegment[] = [
+    { text: 'I mean', sentence_item_id: 9001, ruby: [] },
+    { text: ", that's not what I said.", sentence_item_id: null, ruby: [] },
+  ]
+
+  it('marks a Japanese sentence as ja', () => {
+    const sentence = renderSentence(SEGMENTS, () => {}, 'ja') as unknown as FakeElement
+
+    expect(sentence.lang).toBe('ja')
+  })
+
+  it('marks an English sentence as en, not ja', () => {
+    const sentence = renderSentence(EN_SEGMENTS, () => {}, 'en') as unknown as FakeElement
+
+    expect(sentence.lang).toBe('en')
+  })
+
+  it('writes no lang when the caller does not know the language', () => {
+    const sentence = renderSentence(SEGMENTS, () => {}) as unknown as FakeElement
+
+    // 속성을 적지 않으면 DOM에서 `lang`은 빈 문자열이다. `'ja'`가 아닌 것이 요점이다.
+    expect(sentence.lang).toBe('')
+  })
+})
