@@ -515,7 +515,9 @@ def fixture_id(data: Sequence[dict[str, Any]]) -> str:
 
 def build(seed_dir: Path, max_tappable: int, language: str) -> BuildResult:
     items = parse_items(seed_dir / ITEMS_FILE)
-    sentences = parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items}, language)
+    sentences = parse_sentences(
+        seed_dir / SENTENCES_FILE, {item.seed_id for item in items}, language
+    )
 
     excluded: list[tuple[str, str]] = []
     passing: list[SeedSentence] = []
