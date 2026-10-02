@@ -73,6 +73,9 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 # 테스트는 assert를 쓰고 리터럴 credential을 다룬다(S101/S105/S106).
 "backend/tests/**" = ["S101", "S105", "S106", "ANN201", "ANN001"]
+# PHRASE List 원본 표기를 그대로 딕셔너리 키로 쓴다(curly quote 포함) --- 바꾸면 더 이상
+# 매칭이 안 된다. CLI 스크립트라 결과를 stdout에 print로 보여주는 것이 전부다.
+"scripts/select_english_candidates.py" = ["RUF001", "T201"]
 
 [tool.mypy]
 strict = true
