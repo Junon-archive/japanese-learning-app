@@ -1838,7 +1838,7 @@ sudo cp /etc/nihongo-context/config.yaml /etc/nihongo-context/config.yaml.pre-mv
 -   다시 쓴 뒤 **호스트에서 먼저 읽혀 보고** 기동 전에 실패를 잡는다.
 
 ``` sh
-NC_CONFIG_PATH=/etc/nihongo-context/config.yaml uv run python -c 'import os; from pathlib import Path; from app.config import load_config; c = load_config(Path(os.environ["NC_CONFIG_PATH"])); print("config ok", c.content.max_sentence_length_chars, "| 한도", c.llm.daily_request_limit, c.llm.daily_token_limit)'
+NC_CONFIG_PATH=/etc/nihongo-context/config.yaml uv run python -c 'import os, sys; sys.path.insert(0, "backend"); from pathlib import Path; from app.config import load_config; c = load_config(Path(os.environ["NC_CONFIG_PATH"])); print("config ok", c.content.max_sentence_length_chars, "| 한도", c.llm.daily_request_limit, c.llm.daily_token_limit)'
 ```
 
 -   기대: `config ok` 와 `ja`/`en` 두 값, 그리고 **보존된 비용 한도 두 값**. 한도가 `None`으로 나오면
