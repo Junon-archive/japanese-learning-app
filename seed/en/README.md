@@ -12,8 +12,8 @@
 |---|---|---|---|---|
 | PHRASE List | Martinez & Schmitt, 2012 | 구어 빈도 상위 구문(phrase) 뼈대 | 저자 사이트 무료 배포. CC 아님 | norbertschmitt.co.uk |
 | PHaVE List | Garnier & Schmitt, 2015 | 구동사 150개와 1순위 의미(sense) | 저자 사이트 무료 배포. CC 아님 | norbertschmitt.co.uk |
-| NGSL-Spoken 1.2 | Browne, Culligan & Phillips | 구어 상위 빈도 단어 목록 | CC BY-SA | newgeneralservicelist.com |
-| NGSL 1.01 (+ Supplemental) | Browne, Culligan & Phillips | 참고용 표제어 빈도 (1차 선별에는 NGSL-Spoken만 실제로 썼다) | CC BY-SA | newgeneralservicelist.com |
+| NGSL-Spoken 1.2 | Browne, Culligan & Phillips, 2013 (목록 버전 1.2) | 구어 상위 빈도 단어 목록 | CC BY-SA | newgeneralservicelist.com |
+| NGSL 1.01 (+ Supplemental) | Browne, Culligan & Phillips, 2013 (목록 버전 1.01) | 참고용 표제어 빈도 (1차 선별에는 NGSL-Spoken만 실제로 썼다) | CC BY-SA | newgeneralservicelist.com |
 | SUBTLEX-US | Brysbaert & New, 2009 | 참고용 자막 코퍼스 빈도 (1차 선별 결과에는 반영되지 않았다) | CC BY-SA | lexique.org / UGent |
 
 ## 왜 원본을 커밋하지 않는가

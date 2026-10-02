@@ -11,7 +11,7 @@
 | U-003 | [후리가나 on/off](done/U-003-furigana.md) | 높음 | 완료 | `03_UI_UX_SPEC`, `04_DB_SPEC`, `05_API_SPEC`, `08_LLM_SPEC`, `14_CONFIGURATION` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 8b89619, 82e9794, a55ce3a, ec581a7 |
 | U-004 | [히라가나·가타카나 학습](done/U-004-kana-learning.md) | 높음 | 완료 | `00_SCOPE`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 db32fc7, 6b131ab |
 | U-005 | [demo 확장과 방문자 진도 저장](done/U-005-demo-expansion.md) | 높음 | 완료 | `01_USER_FLOW`, `03_UI_UX_SPEC`, `spec/04_SECURITY_AND_DATA` | 명세 b1ea50d, 7178f41, 78a3b38, 0b405c9 · 머지 1305fc2 · 직접 526a48d |
-| U-006 | [영어 학습 추가](U-006-english-learning.md) | 높음 | 명세 반영 | `spec/mvp-03-english/*`, `spec/00~06`, `spec/mvp-01-core/*` 거의 전부, ADR-023·024·025 | - |
+| U-006 | [영어 학습 추가](U-006-english-learning.md) | 높음 | 배포 대기 | `spec/mvp-03-english/*`, `spec/00~06`, `spec/mvp-01-core/*` 거의 전부, ADR-023·024·025 | 명세 498884c, 8f4d0eb · 직접 f0ef10e, f27c1f4, 794228a, 7e6e04d, 0d0638b, 58daff5, 860268b, 90aba3f, 6f836ff, cc6b217, 98dca0d, 9a5bb50, 4f7b0d6 · 머지 86540a1, f2dc014, f6edb70, 766de3d, 10698b3, a90b660 · 문서 e236a0a |
 | - | 비밀번호 규칙과 로그인 방식 | - | 검토 후 유지 | `03_UI_UX_SPEC`의 `Login`, `05_API_SPEC`의 `Authentication` | - |
 | - | README 스크린샷 | - | 보류 | `README.md`(U-002) | - |
 
@@ -40,12 +40,12 @@
 | Wave | 방식 | 내용 |
 |---|---|---|
 | 0 | 직렬, main | **(완료)** 외부 자료 확보, 결정 수집, ADR-023·024·025, `spec/mvp-03-english/` 신설, 기존 명세 제자리 수정, 요청서 U-006 |
-| 1 | 직렬, main | DB migration(리네임·`language`·`seed_id`·제약)과 모델 |
-| 2 | 직렬, main | 리네임 전파 --- 모델·API·LLM 스키마·seed 파일·프론트·테스트 |
-| 3 | 병렬 레인 | `engine-lang` · `seed-infra` · `prompt-lang` |
-| 4 | 직렬, main | 영어 seed 생성·선별·검수(**사용자 확인 필요**)와 `seed/en/*.yaml` 커밋 |
-| 5 | 병렬 레인 | `home-route` · `demo-en` · `speech` |
-| 6 | 직렬, main | 배포 절차 문서, README, 상태 갱신 |
+| 1 | 직렬, main | **(완료)** DB migration(리네임·`language`·`seed_id`·제약)과 모델 |
+| 2 | 직렬, main | **(완료)** 리네임 전파 --- 모델·API·LLM 스키마·seed 파일·프론트·테스트 |
+| 3 | 병렬 레인 | **(완료)** `engine-lang` · `seed-infra` · `prompt-lang` |
+| 4 | 직렬, main | **(완료)** 영어 seed 생성·선별·검수(**사용자 확인 필요**)와 `seed/en/*.yaml` 커밋 |
+| 5 | 병렬 레인 | **(완료)** `home-route` · `demo-en` · `speech` |
+| 6 | 직렬, main | **(진행 중)** 배포 절차 문서, README, 상태 갱신 |
 
 -   Wave 3 머지 순서: `seed-infra` → `prompt-lang` → `engine-lang`
 -   Wave 5 머지 순서: `home-route` → `demo-en` → `speech`
