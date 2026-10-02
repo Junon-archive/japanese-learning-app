@@ -43,19 +43,25 @@
 ## 세션 언어
 
 8.  `POST /api/study/session`이 `language`를 필수로 받는다(없거나 허용값 밖이면 422). 기본값이
-    없다. `GET /api/study/session` 응답에 `language`가 있다. (불변식 22)
+    없다. `GET /api/study/session` 응답에 `language`와 `resumable`이 있다. `resumable`은 그
+    세션이 idle timeout 이내인지를 **서버가 계산한** 값이고, **조회는 timeout을 넘긴 세션도
+    닫지 않는다**(`ended_at`이 여전히 NULL이다). 경계 판정이 `POST /session`의 resume 분기와
+    같다. (불변식 22, `05_API_SPEC.md`의 `resumable`)
     확인: `test_study_api.py`.
-9.  열린 세션과 다른 언어를 보내면 **409이고 세션이 닫히지 않는다**(`ended_at`이 여전히 NULL).
-    응답이 열린 세션의 id와 언어를 알려준다. 화면은 오류가 아니라 두 선택지를 보여주고,
-    `마치고 바꾸기`를 눌러야 `/finish`가 불린다. (ADR-023 결정 7)
+9.  **이어서 할 수 있는** 세션과 다른 언어를 보내면 **409이고 세션이 닫히지 않는다**
+    (`ended_at`이 여전히 NULL). 응답이 열린 세션의 id와 언어를 알려준다. 화면은 오류가 아니라
+    두 선택지를 보여주고, `마치고 바꾸기`를 눌러야 `/finish`가 불린다. (ADR-023 결정 7)
     확인: `test_study_api.py`, `language-select.test.ts`.
 10. **일본어 세션의 Ready Pool·materialization·exploration·probe·backlog에 영어가 섞이지
     않는다.** 특히 영어 due item을 `backlog_threshold`보다 많이 쌓아 두어도 일본어 세션이
     backlog 모드로 바뀌지 않는다. 영어 세션에서 좌우를 바꿔도 같다. (불변식 22)
     확인: `test_engine_language_scope.py`, 변이 검증 22.
-11. 로그인 후 열린 세션이 있으면 언어를 묻지 않고 그 언어로 학습이 이어진다. 없으면 언어 선택
-    화면이 나온다. 선택 결과를 저장해 두고 다음에 건너뛰지 않는다.
-    확인: `language-select.test.ts`.
+11. 로그인 후 **이어서 할 수 있는 세션**(`GET /api/study/session`의 `resumable`)이 있으면 언어를
+    묻지 않고 그 언어로 학습이 이어진다. 없으면 --- 열린 세션이 아예 없거나, 있어도 idle
+    timeout을 넘겼으면 --- 언어 선택 화면이 나오고, 고른 언어로 세션이 시작된다(옛 세션의
+    언어가 아니다). 화면이 `session !== null`로 가르지 않는다. 선택 결과를 저장해 두고 다음에
+    건너뛰지 않는다. (ADR-025 결정 2의 `개정 (2026-10-02)`)
+    확인: `language-select.test.ts`, `test_study_api.py`.
 
 ## 영어 콘텐츠
 

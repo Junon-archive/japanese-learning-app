@@ -24,11 +24,12 @@ App Open
 → Authentication check (GET /api/auth/me, 누를 때만)
    ├─ 로그인되어 있음 → 아래로
    └─ 401 → Login → 성공 → 아래로
-→ GET /api/study/session
-   ├─ 열린 세션 있음 → 그 세션의 language로 바로 아래로 (언어를 묻지 않는다)
-   └─ 없음          → 언어 선택 화면 → 고른 언어로 아래로
+→ GET /api/study/session  (응답의 resumable로 가른다. 이 조회는 상태를 바꾸지 않는다)
+   ├─ 이어서 할 수 있는 세션 있음 → 그 세션의 language로 바로 아래로 (언어를 묻지 않는다)
+   └─ 없음                      → 언어 선택 화면 → 고른 언어로 아래로
+      (열린 세션이 없거나 idle timeout을 넘겼다)
 → Today session create/resume (idle timeout 초과 시 새 session)
-   열린 세션과 다른 언어를 보내면 409. 조용히 닫지 않는다 (05_API_SPEC.md)
+   이어서 할 수 있는 세션과 다른 언어를 보내면 409. 조용히 닫지 않는다 (05_API_SPEC.md)
 → Learning Engine이 다음 candidate 선택 → study_presentation 생성
    조회·집계는 전부 그 세션의 language 범위다 (06_LEARNING_ENGINE.md)
 → Sentence displayed (대상 언어 원문 먼저)
@@ -64,9 +65,13 @@ App Open
     확인하지 않는다. API 서버가 꺼져 있어도 공개 화면 여섯(언어 선택 홈, 언어별 홈 둘, demo 둘,
     Kana Learning)은 그대로 쓸 수 있다.
 -   Login·Study·History 화면에서 새로고침하면 **언어 선택 홈(`#/`)**으로 돌아온다. 다시
-    `로그인`을 누르면 쿠키가 유효하므로 곧바로 `GET /api/study/session`으로 가고, 열린 세션이
-    있으면 그 언어로 학습이 이어진다. 로그아웃하면 언어 선택 홈으로 간다(`03_UI_UX_SPEC.md`의
-    `상단바`).
+    `로그인`을 누르면 쿠키가 유효하므로 곧바로 `GET /api/study/session`으로 가고, **이어서 할 수
+    있는** 세션이 있으면 그 언어로 학습이 이어진다. 로그아웃하면 언어 선택 홈으로 간다
+    (`03_UI_UX_SPEC.md`의 `상단바`).
+-   **"열린 세션이 있는가"가 아니라 "이어서 할 수 있는가"로 묻는 것을 가른다.** 조회는 idle
+    timeout을 적용하지 않으므로 며칠 전에 열어 둔 세션도 열린 채로 나오고, 그것만 보면 언어
+    질문이 다시는 나오지 않아 **사용자가 처음 고른 언어에 갇힌다**. 서버가 응답에 `resumable`을
+    계산해 싣는다(`05_API_SPEC.md`의 `resumable`, ADR-025 결정 2의 `개정 (2026-10-02)`).
 -   **언어를 바꾸는 전용 버튼이 어디에도 없다.** 상단바에도, 완료 화면에도 두지 않는다
     (ADR-025 결정 2). 언어를 바꾸려면 세션을 끝내야 하므로(불변식 22) 그 버튼은 "세션을 끝내는
     버튼"이고, 완료 화면에 두는 것은 `03_UI_UX_SPEC.md`의 `완료 화면`이 이미 금지한 **새 세션

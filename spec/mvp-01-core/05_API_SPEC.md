@@ -224,6 +224,7 @@ POST /api/study/session/{id}/extend    extra_session_minutes 만큼 연장
 ``` text
 POST /api/study/session   body: {"language": "ja" | "en"}        필수
 GET  /api/study/session   응답에 language가 있다 (열린 세션이 없으면 null 그대로)
+                         열린 세션이 idle timeout을 넘겼는지는 resumable이 말한다 (아래)
 ```
 
 `POST /session`의 분기는 셋이다.
@@ -259,6 +260,46 @@ GET  /api/study/session   응답에 language가 있다 (열린 세션이 없으�
 `06_LEARNING_ENGINE.md`의 `Candidate Materialization`을 **요청 사용자
 한 명분** 실행한다. seed만 적재된 신규 사용자의 Ready Pool이 이 시점에
 채워지므로 첫 세션을 시작할 수 있다.
+
+### `resumable` --- 이어서 할 수 있는 세션인가 (MVP-03 보강)
+
+``` text
+GET /api/study/session   -> {"session": {...} | null, "resumable": true | false}
+```
+
+`resumable`은 **그 세션이 idle timeout 이내인가**를 서버가 계산해 실은 값이다
+(`14_CONFIGURATION.md`의 `study_session_idle_timeout_minutes`). 열린 세션이 없으면
+(`session: null`) `false`다.
+
+-   **이 조회는 여전히 상태를 바꾸지 않는다.** `resumable`이 `false`인 세션도 `ended_at`이
+    NULL로 남고, 두 번 읽어도 닫히지 않는다. **만료시키는 것은 `POST /session` 하나뿐이다.**
+    `resumable`은 **계산**이므로 아래 `진행 상태의 갱신과 세션 종료 판정`의 "여기에 상태
+    변경을 추가하지 않는다"에 걸리지 않는다 --- 닫히게 될지만 알려준다.
+-   **판정은 `POST /session`의 resume 분기와 같은 한 곳에서 한다.** 같은 비교를 두 곳에 따로
+    두면 조회가 "이어진다"고 답한 세션을 POST가 만료시키는(또는 그 반대) 불일치가 생기고,
+    경계(정확히 timeout 분)에서 화면과 서버의 판정이 갈린다.
+-   **frontend가 직접 계산할 수 없다.** 판정에 필요한 timeout 값은 서버 설정이고 **어떤 응답에도
+    싣지 않는다.** 내려보내 화면이 비교하게 하면 그것이 곧 정책값 하드코딩이다 --- 아래
+    `진행 상태의 갱신과 세션 종료 판정`이 같은 이유로 `default_session_minutes`와
+    `extra_session_minutes`를 frontend가 읽는 것을 금지한다. 그래서 `last_activity_at`과
+    timeout을 함께 내려보내는 대신 판정 결과만 내린다.
+-   **화면은 `session !== null`이 아니라 이 값으로 "언어를 물을지"를 가른다**
+    (`03_UI_UX_SPEC.md`의 `언어 선택 화면 (MVP-03)`, ADR-025 결정 2의 `개정 (2026-10-02)`).
+
+이 필드가 없을 때의 실패 모드다. **2026-10-02 운영에서 확인했다**(2026-09-15부터 열린 채인
+세션 하나가 정확히 이 상태였고, 사용자가 "로그인해서는 영어를 공부할 수가 없다"고 신고했다).
+
+``` text
+며칠 전 열어 둔 세션이 조회에 열린 채로 나온다 (조회는 만료시키지 않으므로)
+→ 화면이 "열린 세션이 있다"고 보아 언어를 묻지 않고 그 세션의 language로 들어간다
+→ POST /session이 그 세션을 만료시키고 **같은 language로** 새 세션을 만든다
+→ 다시 "열린 세션이 있는" 상태가 된다 → 언어 질문이 다시는 나오지 않는다
+```
+
+사용자는 처음 고른 언어에 영구히 갇히고 **화면에는 아무 오류도 보이지 않는다** --- 학습은
+정상으로 열린다. 그래서 `GET /session`에 idle timeout을 적용해(세션을 닫아) 고치는 길은
+택하지 않았다. 그 조회가 `touch()`를 하지 않는 성질에 진행 표시가 의존한다(아래
+`진행 상태의 갱신과 세션 종료 판정`).
 
 ### 열린 presentation 불변식
 
@@ -509,7 +550,9 @@ GET /api/study/session 을 한 번 다시 호출해 session payload를 갱신한
 -   `GET /api/study/session`이 이 용도로 안전한 이유는 **그것이 `touch()`를 하지
     않기 때문이다.** 이 endpoint는 조회이므로 `last_activity_at`도
     `active_seconds`도 옮기지 않고 idle timeout도 적용하지 않는다. 진행 표시가 이
-    성질에 의존하므로 **여기에 상태 변경을 추가하지 않는다.**
+    성질에 의존하므로 **여기에 상태 변경을 추가하지 않는다.** 응답의 `resumable`은 이
+    조항의 예외가 아니다 --- 그것은 timeout을 **적용**하지 않고 **계산**만 한 값이다
+    (위 `resumable`).
 -   따라서 `GET /session`이 돌려주는 `active_seconds`는 마지막 상태 변경 시점의
     값이다. 문장을 읽는 동안에는 진행바가 멈춰 있고 `/complete` 뒤에 한 칸
     움직인다. 이것은 결함이 아니라 `active_seconds`의 정의 그대로다.

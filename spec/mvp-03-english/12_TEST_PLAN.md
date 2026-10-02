@@ -193,6 +193,18 @@ test_migrations.py   migration 자체: 빈 DB 왕복, 0004 -> 0005 행 단위 �
 -   idle timeout을 넘긴 세션이 있으면 다른 언어여도 409가 아니라 새 세션이다.
 -   `GET /session` 응답에 `language`가 있다.
 
+`GET /session`의 `resumable` (`05_API_SPEC.md`의 `resumable`). 같은 파일에 추가한다.
+
+-   timeout 이내면 `resumable`이 `true`다.
+-   **timeout을 넘기면 `false`인데 세션은 여전히 열려 있다.** 같은 응답의 `session`이 그
+    세션이고 `ended_at`이 NULL이며, **한 번 더 읽어도 NULL이다**(조회가 만료 처리를 하지
+    않는다는 단언. 이 두 줄이 "조회는 상태를 바꾸지 않는다"를 지킨다).
+-   **경계(정확히 timeout 분)는 `true`이고, 같은 시점의 `POST /session`도 `resumed`다.**
+    두 판정이 한 곳에서 나온다는 단언이다 --- 어긋나면 화면이 "이어진다"고 본 세션을 POST가
+    만료시킨다.
+-   열린 세션이 없을 때의 응답 모양이 `{"session": null, "resumable": false}`다(기존 단언의
+    모양을 갱신한 것이다).
+
 ### payload (`05_API_SPEC.md`)
 
 -   presentation payload의 문장 필드 이름이 `text`다.
@@ -259,9 +271,14 @@ test_migrations.py   migration 자체: 빈 DB 왕복, 0004 -> 0005 행 단위 �
 
 위치: 새 `frontend/tests/unit/language-select.test.ts`.
 
--   `GET /api/study/session`에 열린 세션이 있으면 **선택 화면을 건너뛰고** 그 언어로 Study
-    Screen이다.
+-   `GET /api/study/session`에 **이어서 할 수 있는** 세션(`resumable: true`)이 있으면 **선택
+    화면을 건너뛰고** 그 언어로 Study Screen이다.
 -   없으면 선택 화면이 뜨고, 고르면 그 `language`로 `POST /session`을 보낸다.
+-   **`resumable: false`인 열린 세션이 있으면 선택 화면이 뜬다.** 묻는 동안 `GET` 둘(`/auth/me`,
+    `/session`) 밖의 요청이 0건이다(`/finish`를 포함해 아무 상태도 바꾸지 않는다 --- 만료는
+    `POST /session`의 일이다).
+-   **그때 고른 언어로 세션이 시작된다.** 옛 세션의 언어가 아니다. 이것이 "처음 고른 언어에
+    갇힌다"의 회귀 테스트다(`05_API_SPEC.md`의 `resumable`).
 -   409면 안내와 버튼 둘이 뜬다. `이어서 하기`는 열린 세션의 언어로 가고 `/finish`를 부르지
     않는다. `마치고 바꾸기`는 `/finish` 뒤 새 `POST /session`을 보낸다.
 -   **"마지막에 고른 언어"를 저장하지 않는다**(선택 후 localStorage 쓰기 0건).
@@ -283,6 +300,10 @@ test_migrations.py   migration 자체: 빈 DB 왕복, 0004 -> 0005 행 단위 �
 -   `#/demo`로 열면 URL이 `#/ja/demo`가 된다.
 -   영어 demo를 끝까지 보고 새로고침해도 일본어 demo는 처음부터다(진도 분리).
 -   언어 선택 홈 → 영어 홈 → 영어 demo 경로가 동작하고 카드가 하나다.
+-   **시계를 idle timeout 뒤로 옮긴 뒤 다시 들어가면 언어를 다시 묻는다.** 공용 helper
+    (`backend/tests/e2e/study_flow.py`의 `reopen`)가 돌아갈 언어를 인자로 받아, 묻는 경우와
+    묻지 않는 경우를 함께 받는다(`choose_language_if_asked`). 이전 세션의 종료는 고른 뒤의
+    `POST /session`이 한다.
 
 ## 변이 검증 (불변식 21\~28)
 
