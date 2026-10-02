@@ -106,9 +106,9 @@ create-user:
 backfill-ruby:
 	$(UV) run python scripts/backfill_ruby.py $(ARGS)
 
-# Public Demo fixture(frontend/src/demo/fixture-data.ts)를 seed/에서 다시 만든다. DB·LLM 없음.
+# Public Demo fixture(frontend/src/demo/{ja,en}/fixture-data.ts)를 seed/에서 다시 만든다. DB·LLM 없음.
 # seed/, 분석기, config/default.yaml의 learning.max_new_items_per_sentence가 바뀌면 다시 만들어 커밋한다.
-# 예: make demo-fixture / make demo-fixture ARGS=--check (다르면 exit 2)
+# 예: make demo-fixture / make demo-fixture ARGS="--language en --check" (다르면 exit 2)
 demo-fixture:
 	$(UV) run python scripts/build_demo_fixture.py $(ARGS)
 

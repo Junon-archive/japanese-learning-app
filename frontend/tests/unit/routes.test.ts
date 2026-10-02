@@ -78,7 +78,7 @@ beforeEach(() => {
 
 afterEach(() => {
   expect(fetchMock).not.toHaveBeenCalled()
-  vi.doUnmock('../../src/demo/demo')
+  vi.doUnmock('../../src/demo/ja/demo')
   vi.unstubAllGlobals()
   vi.resetModules()
 })
@@ -266,7 +266,7 @@ describe('router', () => {
   })
 
   it('shows the route failure message inline when the route fails to load', async () => {
-    vi.doMock('../../src/demo/demo', () => {
+    vi.doMock('../../src/demo/ja/demo', () => {
       throw new Error('chunk load failed')
     })
     await boot('#/ja/demo')

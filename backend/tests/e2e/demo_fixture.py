@@ -16,7 +16,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_SCRIPT = REPO_ROOT / "scripts" / "build_demo_fixture.py"
-FIXTURE_DATA = REPO_ROOT / "frontend" / "src" / "demo" / "fixture-data.ts"
+FIXTURE_DATA = REPO_ROOT / "frontend" / "src" / "demo" / "ja" / "fixture-data.ts"
 CONSTANTS = REPO_ROOT / "frontend" / "src" / "demo" / "constants.ts"
 
 DEMO_KEY = "nc.demo.ja.v1"

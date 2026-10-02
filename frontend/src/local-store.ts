@@ -7,7 +7,7 @@
  * 그 페이지 안에서는 값이 이어진다. 모든 저장소 접근은 던질 수 있다고 보고 감싼다.
  */
 
-export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'] as const
+export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1', 'nc.demo.en.v1'] as const
 export type LocalStoreKey = (typeof LOCAL_STORE_KEYS)[number]
 
 export type LocalSlot<T> = {

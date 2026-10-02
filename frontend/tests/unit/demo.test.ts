@@ -15,7 +15,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEMO_PROBE_EVERY_SENTENCES as P, DEMO_REVIEW_AFTER_SENTENCES as R } from '../../src/demo/constants'
-import { DEMO_FIXTURE_ID, DEMO_SENTENCES } from '../../src/demo/fixture'
+import { DEMO_FIXTURE_ID, DEMO_SENTENCES } from '../../src/demo/ja/fixture'
+import { initialProgress } from '../../src/demo/progress'
 import { MESSAGES } from '../../src/ui/notice'
 import type { FakeElement } from './fake-dom'
 import { buttons, byClass, descendants, fakeDocument, flatText, textWithoutRt } from './fake-dom'
@@ -439,7 +440,7 @@ describe('demo screen', () => {
 
 /** 첫 문장 진도의 저장 모양(지금 fixture). 완료 직전 값을 만들 때 쓴다. */
 function startOf(): Record<string, unknown> {
-  const { initialProgress, DEMO_FIXTURE } = modules.progress
+  const { DEMO_FIXTURE } = modules.progress
   const start = initialProgress(DEMO_FIXTURE)
   expect(start.fixtureId).toBe(DEMO_FIXTURE_ID)
   return { ...start }

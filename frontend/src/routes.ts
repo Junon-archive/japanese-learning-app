@@ -81,7 +81,7 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   },
   {
     prefix: '#/ja/demo',
-    load: () => import('./demo/demo'),
+    load: () => import('./demo/ja/demo'),
     loadFailure: MESSAGES.demoLoadFailed,
     acceptsSubpath: false,
     language: 'ja',

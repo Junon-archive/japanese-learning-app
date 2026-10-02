@@ -87,6 +87,13 @@ describe('renderExplanationPanel', () => {
     expect(flatText(panel)).not.toContain(String(EXPLANATION.example_translation))
   })
 
+  it('omits the reading line entirely when the server has none (영어, ADR-023 결정 6)', () => {
+    const panel = render({ explanation: { ...EXPLANATION, reading: null } })
+
+    // 빈 줄이나 `-`가 아니라 줄 자체가 없다(03_UI_UX_SPEC.md, 합격 기준 24).
+    expect(byClass(panel, 'reading')).toEqual([])
+  })
+
   it('pairs the surface form in the sentence with its reading, and puts the canonical form apart', () => {
     const panel = render()
 

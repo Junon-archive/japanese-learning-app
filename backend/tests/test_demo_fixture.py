@@ -32,7 +32,7 @@ from app.schemas.study import ExplanationResponse, PresentationPayload
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SEED_DIR = REPO_ROOT / "seed" / "ja"
-COMMITTED = REPO_ROOT / "frontend" / "src" / "demo" / "fixture-data.ts"
+COMMITTED = REPO_ROOT / "frontend" / "src" / "demo" / "ja" / "fixture-data.ts"
 CONFIG_PATH = REPO_ROOT / "config" / "default.yaml"
 
 EXIT_OK = 0
@@ -655,7 +655,7 @@ def test_generated_file_shape(fixture_script: ModuleType) -> None:
     lines = text.split("\n")
     assert lines[0] == "// 생성 파일. 손으로 고치지 않는다. scripts/build_demo_fixture.py"
     assert "http" not in lines[0]
-    assert lines[1] == "import type { DemoSentence } from './fixture'"
+    assert lines[1] == "import type { DemoSentence } from '../fixture'"
     assert f"export const DEMO_FIXTURE_ID = '{identifier}'" in lines
     assert text.endswith("]\n")
     # 문장당 한 줄

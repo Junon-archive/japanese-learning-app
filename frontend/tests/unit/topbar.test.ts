@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mount as mountDemo } from '../../src/demo/demo'
+import { mount as mountEnDemo } from '../../src/demo/en/demo'
+import { mount as mountJaDemo } from '../../src/demo/ja/demo'
 import { mount as mountEnHome } from '../../src/home/en'
 import { mount as mountJaHome } from '../../src/home/ja'
 import { mount as mountLanguageSelectHome } from '../../src/home/language-select'
@@ -170,9 +171,14 @@ describe('top bar on each screen', () => {
     expect(right()).toEqual(['로그인'])
   })
 
-  it('demo: 후리가나, 로그인', () => {
-    mountDemo(publicContext('ja'))
+  it('ja demo: 후리가나, 로그인', () => {
+    mountJaDemo(publicContext('ja'))
     expect(right()).toEqual(['후리가나', '로그인'])
+  })
+
+  it('en demo: 로그인 (후리가나 토글 없음)', () => {
+    mountEnDemo(publicContext('en'))
+    expect(right()).toEqual(['로그인'])
   })
 
   it('login: nothing', () => {

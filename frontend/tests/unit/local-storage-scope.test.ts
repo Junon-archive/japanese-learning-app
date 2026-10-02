@@ -24,20 +24,26 @@ const SRC = fileURLToPath(new URL('../../src', import.meta.url))
 /** `src` 기준 경로(`/` 구분). */
 const STORE_MODULE = 'local-store.ts'
 
-const EXPECTED_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'] as const
+const EXPECTED_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1', 'nc.demo.en.v1'] as const
 type StoreKey = (typeof EXPECTED_KEYS)[number]
 
-/** slot 소유 위치(04 `slot 소유`). */
+/** slot 소유 위치(04 `slot 소유`). 두 demo key 모두 `demo/` 아래가 소유한다(ADR-025 결정 3). */
 const SLOT_OWNER: Record<StoreKey, (path: string) => boolean> = {
   'nc.furigana.v1': (path) => path === 'ui/furigana.ts',
   'nc.kana.v1': (path) => path.startsWith('kana/'),
   'nc.demo.ja.v1': (path) => path.startsWith('demo/'),
+  'nc.demo.en.v1': (path) => path.startsWith('demo/'),
 }
 
 /**
- * 최종 규칙: 세 key 모두 `localSlot` 호출이 정확히 1회다(04 `slot 소유`). 이 목록은 세 key 전부다.
+ * 최종 규칙: 네 key 모두 `localSlot` 호출이 정확히 1회다(04 `slot 소유`). 이 목록은 네 key 전부다.
  */
-const REQUIRED_SLOT_KEYS: readonly StoreKey[] = ['nc.kana.v1', 'nc.furigana.v1', 'nc.demo.ja.v1']
+const REQUIRED_SLOT_KEYS: readonly StoreKey[] = [
+  'nc.kana.v1',
+  'nc.furigana.v1',
+  'nc.demo.ja.v1',
+  'nc.demo.en.v1',
+]
 
 /** local-store.ts가 export해도 되는 이름 전부. 임의 key·임의 값을 쓰는 함수는 없다. */
 const STORE_EXPORTS = ['LOCAL_STORE_KEYS', 'LocalSlot', 'LocalStoreKey', 'localSlot']
@@ -417,7 +423,7 @@ describe('browser storage scope in frontend/src', () => {
 // ---------------------------------------------------------------------------
 
 const VALID_STORE = `
-export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'] as const
+export const LOCAL_STORE_KEYS = ['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1', 'nc.demo.en.v1'] as const
 export type LocalStoreKey = (typeof LOCAL_STORE_KEYS)[number]
 export type LocalSlot<T> = { read: () => T | undefined }
 export function localSlot<T>(key: LocalStoreKey, isValid: (value: unknown) => value is T): LocalSlot<T> {
@@ -449,7 +455,8 @@ describe('positive controls', () => {
         record['name'] = navigator.language
       `,
       'ui/furigana.ts': `import { localSlot } from '../local-store'\nlocalSlot<Flag>('nc.furigana.v1', isFlag)`,
-      'demo/progress.ts': `import { localSlot } from '../local-store'\nlocalSlot('nc.demo.ja.v1', isDemo)`,
+      'demo/ja/progress.ts': `import { localSlot } from '../../local-store'\nlocalSlot('nc.demo.ja.v1', isDemo)`,
+      'demo/en/progress.ts': `import { localSlot } from '../../local-store'\nlocalSlot('nc.demo.en.v1', isDemo)`,
     })
     expect(localStorageOutsideStore(sources)).toEqual([])
     expect(computedGlobalAccess(sources)).toEqual([])
@@ -530,9 +537,9 @@ describe('positive controls', () => {
   })
 
   it.each([
-    ['a fourth key', VALID_STORE.replace(`'nc.demo.ja.v1']`, `'nc.demo.ja.v1', 'nc.extra.v1']`)],
-    ['a missing key', VALID_STORE.replace(`, 'nc.demo.ja.v1']`, `]`)],
-    ['a non-literal key', VALID_STORE.replace(`'nc.demo.ja.v1']`, `DEMO_KEY]`)],
+    ['a fifth key', VALID_STORE.replace(`'nc.demo.en.v1']`, `'nc.demo.en.v1', 'nc.extra.v1']`)],
+    ['a missing key', VALID_STORE.replace(`, 'nc.demo.en.v1']`, `]`)],
+    ['a non-literal key', VALID_STORE.replace(`'nc.demo.en.v1']`, `DEMO_KEY]`)],
     ['an arbitrary-key export', `${VALID_STORE}\nexport function writeAny(k: string) { localStorage.setItem(k, '') }`],
     ['a re-export', `${VALID_STORE}\nexport * from './other'`],
     ['clear()', VALID_STORE.replace('localStorage.removeItem(key)', 'localStorage.clear()')],
@@ -585,6 +592,7 @@ describe('positive controls', () => {
     expect(slotCallCounts(sources, REQUIRED_SLOT_KEYS)).toEqual([
       `localSlot('nc.kana.v1') must be called exactly once, found 0`,
       `localSlot('nc.demo.ja.v1') must be called exactly once, found 0`,
+      `localSlot('nc.demo.en.v1') must be called exactly once, found 0`,
     ])
   })
 })
