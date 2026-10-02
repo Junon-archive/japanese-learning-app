@@ -104,7 +104,7 @@ function answerMe(respond: () => Promise<Response>): void {
     const path = String(url)
     if (path.endsWith('/api/auth/me')) return respond()
     if (path.endsWith('/api/study/session') && (init?.method ?? 'GET') === 'GET') {
-      return Promise.resolve(json(200, { session: SESSION }))
+      return Promise.resolve(json(200, { session: SESSION, resumable: true }))
     }
     return new Promise<Response>(() => {})
   })
@@ -237,7 +237,7 @@ describe('login entry result', () => {
     answer({
       'GET /api/auth/me': async () => json(200, USER),
       // 열린 session이 있다고 답해 언어 선택 화면을 건너뛴다.
-      'GET /api/study/session': async () => json(200, { session: SESSION }),
+      'GET /api/study/session': async () => json(200, { session: SESSION, resumable: true }),
       'POST /api/study/session': async () =>
         json(200, { session: SESSION, resumed: true, timed_out_session_id: null }),
       'POST /api/study/session/7/next': async () =>
@@ -287,7 +287,7 @@ describe('login entry result', () => {
       'GET /api/auth/me': async () => json(200, USER),
       // 열린 session이 있다고 답해 언어 선택 화면을 건너뛴다. `POST /session`은 응답하지 않는다
       // --- Study Screen이 그것을 기다리는 동안 떠나는 것이 이 테스트의 목적이다.
-      'GET /api/study/session': async () => json(200, { session: SESSION }),
+      'GET /api/study/session': async () => json(200, { session: SESSION, resumable: true }),
     })
     loginButton().click()
     await settle()
@@ -572,7 +572,7 @@ describe('leaving after logging in', () => {
       'GET /api/auth/me': async () => json(401, { detail: 'Not authenticated' }),
       'POST /api/auth/login': async () => json(200, USER),
       // 열린 session이 있다고 답해 언어 선택 화면을 건너뛴다.
-      'GET /api/study/session': async () => json(200, { session: SESSION }),
+      'GET /api/study/session': async () => json(200, { session: SESSION, resumable: true }),
     })
     loginButton().click()
     await settle()

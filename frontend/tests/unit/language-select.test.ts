@@ -172,7 +172,7 @@ afterEach(() => {
 describe('열린 세션이 있을 때', () => {
   it('does not ask and continues in that session language', async () => {
     table = {
-      [OPEN_SESSION]: async () => json(200, { session: session('en') }),
+      [OPEN_SESSION]: async () => json(200, { session: session('en'), resumable: true }),
       [START]: async () => json(200, { session: session('en'), resumed: true, timed_out_session_id: null }),
       [NEXT]: async () => json(200, { presentation: PRESENTATION }),
     }
@@ -187,7 +187,7 @@ describe('열린 세션이 있을 때', () => {
 
   it('has no language switch button on the study screen top bar', async () => {
     table = {
-      [OPEN_SESSION]: async () => json(200, { session: session('en') }),
+      [OPEN_SESSION]: async () => json(200, { session: session('en'), resumable: true }),
       [START]: async () => json(200, { session: session('en'), resumed: false, timed_out_session_id: null }),
       [NEXT]: async () => json(200, { presentation: PRESENTATION }),
     }
@@ -209,7 +209,7 @@ describe('열린 세션이 있을 때', () => {
     const reached = { ...session('en'), active_seconds: 720 }
     const finished = { ...reached, ended_at: '2026-10-01T09:12:00Z' }
     table = {
-      [OPEN_SESSION]: async () => json(200, { session: reached }),
+      [OPEN_SESSION]: async () => json(200, { session: reached, resumable: true }),
       [START]: async () => json(200, { session: reached, resumed: false, timed_out_session_id: null }),
       [NEXT]: async () => json(200, { presentation: PRESENTATION }),
       [FINISH]: async () => json(200, { session: finished }),
@@ -227,10 +227,44 @@ describe('열린 세션이 있을 때', () => {
   })
 })
 
+describe('열린 세션이 idle timeout을 넘겼을 때', () => {
+  // **`session !== null`로 가르면 안 되는 이유.** 조회(`GET /session`)는 상태를 바꾸지 않으므로
+  // idle timeout을 넘긴 session도 열린 채로 나온다(`05_API_SPEC.md`). 그것만 보고 바로 학습으로
+  // 들어가면 `POST /session`이 그 session을 만료시키고 **같은 language로** 새 session을 만든다.
+  // 결과는 조용하다: 화면은 멀쩡히 학습이 열리고, 언어 질문만 다시는 나오지 않아 사용자가 처음
+  // 고른 언어에 갇힌다. 운영에서 실제로 걸린 길이다(2026-10-02).
+  beforeEach(() => {
+    table = {
+      [OPEN_SESSION]: async () => json(200, { session: session('ja'), resumable: false }),
+      [START]: async () =>
+        json(200, { session: session('en'), resumed: false, timed_out_session_id: SESSION_ID }),
+      [NEXT]: async () => json(200, { presentation: PRESENTATION }),
+    }
+  })
+
+  it('asks which language instead of resuming the stale session', async () => {
+    await enter()
+
+    expect(screenClass()).toContain('language-select')
+    // 묻기만 하고 세션을 건드리지 않는다 --- 만료는 `POST /session`의 일이다.
+    expect(calls()).toEqual([ME, OPEN_SESSION])
+  })
+
+  it('lets the user reach the other language, which the stale session had hidden', async () => {
+    await enter()
+    press(MESSAGES.languageEn)
+    await settle()
+
+    expect(screenClass()).toContain('study')
+    // 옛 세션의 language(`ja`)가 아니라 사용자가 고른 `en`으로 시작한다.
+    expect(startedLanguages()).toEqual(['en'])
+  })
+})
+
 describe('열린 세션이 없을 때', () => {
   beforeEach(() => {
     table = {
-      [OPEN_SESSION]: async () => json(200, { session: null }),
+      [OPEN_SESSION]: async () => json(200, { session: null, resumable: false }),
       [START]: async () => json(200, { session: session('en'), resumed: false, timed_out_session_id: null }),
       [NEXT]: async () => json(200, { presentation: PRESENTATION }),
     }
@@ -289,7 +323,7 @@ describe('고른 언어와 열린 세션이 다를 때(409)', () => {
   /** 언어 선택 화면에서 `en`을 골랐고 서버에는 `ja` 세션이 열려 있다. */
   async function chooseEnglishAgainstAJapaneseSession(): Promise<void> {
     table = {
-      [OPEN_SESSION]: async () => json(200, { session: null }),
+      [OPEN_SESSION]: async () => json(200, { session: null, resumable: false }),
       [START]: async () => mismatch('ja'),
       [NEXT]: async () => json(200, { presentation: PRESENTATION }),
       ...table,

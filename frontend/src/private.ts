@@ -86,7 +86,7 @@ export function enterPrivate(ctx: PrivateContext): void {
   }
 
   /**
-   * 열린 study session이 없을 때만 들어온다(`afterLogin`). 고른 언어는 `showStudy`로 넘기기만
+   * 이어서 할 수 있는 study session이 없을 때만 들어온다(`afterLogin`). 고른 언어는 `showStudy`로 넘기기만
    * 한다 --- `POST /api/study/session`은 그 화면의 `begin()`이 부른다(ADR-025 결정 2).
    */
   function showLanguageSelect(timezone: string): void {
@@ -123,15 +123,21 @@ export function enterPrivate(ctx: PrivateContext): void {
 
   /**
    * `GET /api/auth/me`(또는 로그인 성공) 뒤 공통 분기(`03_UI_UX_SPEC.md`의 `언어 선택 화면`,
-   * ADR-025 결정 2). 열린 session이 있으면 그 language로 바로 Study Screen이고(언어를 묻지
-   * 않는다), 없으면 언어 선택 화면이다.
+   * ADR-025 결정 2). **이어서 할 수 있는** session이 있으면 그 language로 바로 Study
+   * Screen이고(언어를 묻지 않는다), 없으면 언어 선택 화면이다.
+   *
+   * **`session !== null`만으로 가르지 않는다.** idle timeout을 넘긴 session도 조회에는
+   * 열린 채로 나오므로(05_API_SPEC.md: 조회는 상태를 바꾸지 않는다), 그것만 보면 며칠 전에
+   * 열어 둔 session이 언어 질문을 영원히 가린다. 그 session으로 들어가면 `POST /session`이
+   * 그것을 만료시키고 **같은 language로** 새 session을 만들어, 사용자는 처음 고른 언어에
+   * 갇힌다. 그래서 서버가 계산한 `resumable`을 함께 본다.
    */
   async function afterLogin(user: User): Promise<void> {
     if (signal.aborted) return
     try {
       const open = await fetchOpenSession()
       if (signal.aborted) return
-      if (open.session !== null) {
+      if (open.session !== null && open.resumable) {
         showStudy(user.timezone, open.session.language)
       } else {
         showLanguageSelect(user.timezone)

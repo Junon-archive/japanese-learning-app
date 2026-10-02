@@ -330,15 +330,18 @@ def _empty_pool_notice(page: Page) -> bool:
     return page.locator(".notice", has_text=EMPTY_POOL_TEXT).count() > 0
 
 
-def reopen(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentation | None:
+def reopen(
+    page: Page, stack: E2EStack, learner: Learner, language: str = LANGUAGE_JA
+) -> StudyPresentation | None:
     """페이지를 다시 띄우고 상단바 `로그인`으로 학습 화면에 돌아간다.
 
     로그인 영역에는 hash가 없으므로 새로고침하면 선택 홈이다(03_UI_UX_SPEC.md의 `화면 이동`).
-    쿠키가 유효하므로 `로그인`을 누르면 곧바로 학습 화면이고, 그 마운트가 `POST /session`으로
-    세션을 얻고 `/next`를 부른다.
+    쿠키가 유효하므로 `로그인`을 누르면 로그인 영역으로 들어간다.
 
-    시계를 옮긴 뒤에 쓴다 --- idle timeout을 넘겼으면 이전 세션이 종료되고 새 세션이
-    시작된다. 그 판정은 서버가 하고 화면은 안내 한 줄을 띄운다.
+    시계를 옮긴 뒤에 쓴다 --- **idle timeout을 넘겼으면 언어를 다시 묻는다.** 조회가
+    `resumable: false`로 답하기 때문이다(05_API_SPEC.md의 `resumable`). 이어서 할 수 있는
+    세션이면 묻지 않고 바로 학습 화면이다. 그래서 두 경우를 `choose_language_if_asked`로
+    함께 받는다. 이전 세션의 종료는 고른 뒤 `POST /session`이 한다.
 
     Ready Pool이 비어 있으면 `None`이다. 그것은 오류가 아니라 상태이므로
     `wait_for_sentence`로 15초를 태우지 않고 호출부가 단언할 수 있게 돌려준다.
@@ -346,6 +349,7 @@ def reopen(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentation |
     page.reload()
     page.locator(".screen.home").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
     press_topbar_login(page)
+    choose_language_if_asked(page, language)
 
     def settled() -> tuple[StudyPresentation | None] | None:
         row = open_presentation(stack, learner)

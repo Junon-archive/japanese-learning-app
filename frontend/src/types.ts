@@ -74,9 +74,16 @@ export type StudySession = {
   extended_minutes: number
 }
 
-/** `GET /api/study/session`. 열린 session이 없으면 `session: null`이다. */
+/**
+ * `GET /api/study/session`. 열린 session이 없으면 `session: null`이다.
+ *
+ * `resumable`은 그 session이 idle timeout 이내인지를 **서버가 계산해** 보낸 값이다
+ * (05_API_SPEC.md의 `resumable`). timeout 값은 서버 설정이므로 화면이 직접 계산하지
+ * 않는다. `session`이 `null`이면 `false`다.
+ */
 export type OpenSessionResponse = {
   session: StudySession | null
+  resumable: boolean
 }
 
 /** `POST /api/study/session`. */

@@ -111,10 +111,26 @@ def touch(session: StudySession, *, now: datetime, cfg: SessionConfig) -> None:
     session.last_activity_at = now
 
 
+def is_resumable(session: StudySession, *, now: datetime, cfg: AppConfig) -> bool:
+    """이 session이 idle timeout 이내인가. **상태를 바꾸지 않는다.**
+
+    `GET /api/study/session`이 `resumable`로 싣는 값이고, `start_or_resume`의 resume
+    분기가 쓰는 판정과 **같은 함수여야 한다.** 두 곳에 같은 비교를 따로 쓰면 조회가
+    "이어진다"고 답한 session을 POST가 만료시키는(또는 그 반대) 불일치가 생긴다.
+
+    열린 session이 있다는 것만으로 언어를 묻지 않으면, 며칠 전에 열어 둔 session이
+    영원히 언어 질문을 가린다(05_API_SPEC.md의 `resumable`). 그래서 frontend는
+    `session !== null`이 아니라 이 값으로 가른다.
+    """
+    idle = now - session.last_activity_at
+    return idle <= timedelta(minutes=cfg.session.study_session_idle_timeout_minutes)
+
+
 def get_open_session(db: Session, *, user_id: int) -> StudySession | None:
     """아직 끝나지 않은 session. 없으면 None (`GET /api/study/session`).
 
-    idle timeout을 여기서 적용하지 않는다. 조회는 상태를 바꾸지 않는다.
+    idle timeout을 여기서 적용하지 않는다. 조회는 상태를 바꾸지 않는다. idle timeout을
+    넘겼는지는 `is_resumable`이 따로 답한다.
     """
     return db.execute(
         sa.select(StudySession)
@@ -144,8 +160,7 @@ def start_or_resume(
     timed_out_session_id: int | None = None
 
     if open_session is not None:
-        idle = now - open_session.last_activity_at
-        if idle <= timedelta(minutes=cfg.session.study_session_idle_timeout_minutes):
+        if is_resumable(open_session, now=now, cfg=cfg):
             if open_session.language != language:
                 raise SessionLanguageMismatchError(open_session)
             touch(open_session, now=now, cfg=cfg.session)

@@ -117,7 +117,7 @@ async function enterStudy(session: StudySession = SESSION): Promise<AbortControl
   table = {
     'GET /api/auth/me': async () => json(200, USER),
     // 열린 session이 있으므로 `afterLogin`이 언어 선택 화면을 건너뛰고 바로 Study Screen이다.
-    'GET /api/study/session': async () => json(200, { session }),
+    'GET /api/study/session': async () => json(200, { session, resumable: true }),
     'POST /api/study/session': async () => json(200, { session, resumed: false, timed_out_session_id: null }),
     'POST /api/study/session/7/next': async () => json(200, { presentation: PRESENTATION }),
     ...table,

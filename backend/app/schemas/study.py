@@ -187,9 +187,18 @@ class StudySessionPayload(BaseModel):
 
 
 class OpenSessionResponse(BaseModel):
-    """`GET /api/study/session`. 열린 session이 없으면 `session: null`이다."""
+    """`GET /api/study/session`. 열린 session이 없으면 `session: null`이다.
+
+    `resumable`은 그 session이 idle timeout 이내인지를 **서버가 계산한** 값이다
+    (05_API_SPEC.md의 `resumable`). 이 조회는 여전히 상태를 바꾸지 않는다 --- timeout을
+    적용해 session을 닫지 않고, 닫히게 될지만 알려준다. frontend가 직접 계산할 수 없다:
+    timeout 값은 서버 설정이고 화면에 내려보내지 않는다.
+
+    session이 `null`이면 `resumable`은 `false`다.
+    """
 
     session: StudySessionPayload | None
+    resumable: bool
 
 
 class StartSessionResponse(BaseModel):

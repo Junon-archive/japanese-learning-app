@@ -1191,7 +1191,8 @@ def test_reading_the_open_session_returns_null_when_there_is_none(
     response = api.get("/api/study/session")
 
     assert response.status_code == 200
-    assert response.json() == {"session": None}
+    # 응답 모양 전체를 고정한다. `resumable`은 session이 없으면 `false`다(05_API_SPEC.md).
+    assert response.json() == {"session": None, "resumable": False}
 
 
 # --------------------------------------------------------------------------
@@ -1312,3 +1313,58 @@ def test_reading_the_open_session_includes_its_language(
 
     assert response.status_code == 200
     assert response.json()["session"]["language"] == "en"
+
+
+def test_an_open_session_within_the_idle_timeout_is_resumable(
+    api: TestClient, db_session: Session
+) -> None:
+    _login(api, db_session)
+    assert api.post("/api/study/session", json={"language": "en"}).status_code == 200
+
+    response = api.get("/api/study/session")
+
+    assert response.status_code == 200
+    assert response.json()["resumable"] is True
+
+
+def test_an_idle_timed_out_session_is_still_open_but_not_resumable(
+    api: TestClient, db_session: Session, study_clock: MutableClock
+) -> None:
+    """`resumable`은 **계산**이다. 조회가 session을 닫지 않는다(05_API_SPEC.md).
+
+    이 값이 없으면 frontend는 `session !== null`로 가를 수밖에 없고, 며칠 전에 열어 둔
+    session이 언어 질문을 영원히 가린다. 그 session으로 들어가면 `POST /session`이 그것을
+    만료시키고 **같은 language로** 새 session을 만들어, 사용자는 처음 고른 언어에 갇힌다.
+    """
+    cfg = get_config()
+    _login(api, db_session)
+    started = api.post("/api/study/session", json={"language": "ja"})
+    assert started.status_code == 200
+    session_id = started.json()["session"]["session_id"]
+
+    study_clock.advance(timedelta(minutes=cfg.session.study_session_idle_timeout_minutes + 1))
+    response = api.get("/api/study/session")
+
+    assert response.status_code == 200
+    assert response.json()["resumable"] is False
+    # 조회는 상태를 바꾸지 않는다 --- 여전히 열려 있고 닫은 쪽은 아무도 없다.
+    assert response.json()["session"]["session_id"] == session_id
+    assert response.json()["session"]["ended_at"] is None
+    # 한 번 더 읽어도 같다(조회가 만료 처리를 하지 않는다는 뜻이다).
+    assert api.get("/api/study/session").json()["session"]["ended_at"] is None
+
+
+def test_the_boundary_minute_is_still_resumable(
+    api: TestClient, db_session: Session, study_clock: MutableClock
+) -> None:
+    """`POST /session`의 resume 판정과 **같은 경계**여야 한다(`is_resumable` 공유)."""
+    cfg = get_config()
+    _login(api, db_session)
+    assert api.post("/api/study/session", json={"language": "ja"}).status_code == 200
+
+    study_clock.advance(timedelta(minutes=cfg.session.study_session_idle_timeout_minutes))
+    assert api.get("/api/study/session").json()["resumable"] is True
+
+    resumed = api.post("/api/study/session", json={"language": "ja"})
+    assert resumed.status_code == 200
+    assert resumed.json()["resumed"] is True

@@ -179,6 +179,7 @@ describe('from the login area', () => {
               target_minutes: 12,
               extended_minutes: 0,
             },
+            resumable: true,
           }),
         )
       }

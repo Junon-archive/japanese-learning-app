@@ -160,11 +160,18 @@ router = APIRouter(prefix="/api/study", tags=["study"], route_class=ErrorMappedR
 
 
 @router.get("/session")
-def read_open_session(current_user: CurrentUser, db: Db) -> OpenSessionResponse:
-    """조회는 상태를 바꾸지 않는다. idle timeout을 여기서 적용하지 않는다."""
+def read_open_session(
+    current_user: CurrentUser, db: Db, now: Now, cfg: Config
+) -> OpenSessionResponse:
+    """조회는 상태를 바꾸지 않는다. idle timeout을 여기서 적용하지 않는다.
+
+    `resumable`은 **계산**이다. timeout을 넘긴 session을 여기서 닫지 않는다 --- 닫는
+    것은 `POST /session`뿐이다(05_API_SPEC.md의 `resumable`).
+    """
     session = study_session.get_open_session(db, user_id=current_user.id)
     return OpenSessionResponse(
         session=None if session is None else _session_payload(session),
+        resumable=session is not None and study_session.is_resumable(session, now=now, cfg=cfg),
     )
 
 
