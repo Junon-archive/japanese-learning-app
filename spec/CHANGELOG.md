@@ -2173,3 +2173,73 @@ duplicate_similarity_threshold, 학습 정책 config 값
         시도 횟수 제한·계정 잠금·실패 지연 없음, `scripts/create_user.py`, schema.
     -   계정 삭제·비활성화 절차는 정하지 않았다(`users.is_active`는 있지만 쓰는 운영 절차가
         없다). 알려진 공백으로 기록한다.
+
+## MVP-03 구현 역반영 --- 2026-10-02
+
+MVP-03 구현(Wave 1\~5) 중에 드러난 **명세 공백·충돌 8건**을 명세에 역반영했다. 아래 항목은
+전부 **구현이 먼저였고 명세가 따라간 것**이다 --- 구현이 사실이고 명세가 그 사실을 적지
+않았거나 다르게 적고 있었다. 새 버전 번호를 만들지 않았다(Spec Version v0.2 유지). 번호는 위
+`계정 수` 절의 [128]에 이어 붙였다. **코드·테스트·`config/`·`seed/`는 건드리지 않았다.**
+
+-   **[129] LLM 요청 context 키 두 개의 개명** (`mvp-01-core/08_LLM_SPEC.md`의 `요청 context`):
+    Wave 2가 `anchor_japanese` → `anchor_text`, `ExplainItemInput.japanese` → `text`로 바꿨는데
+    MVP-03 리네임 표에는 `sentences.japanese` → `text`만 있었다. 같은 성격의 리네임이므로 요청
+    context 절에 두 키를 적었다. **요청 context는 JSON으로 직렬화되어 provider 요청에 그대로
+    실리므로 키 이름만 바뀌어도 모델이 받는 요청이 달라진다** --- 이 사실이 [132]의 근거다.
+-   **[130] 제약·index 이름** (`mvp-01-core/04_DB_SPEC.md`의 `MVP-03: 다언어 migration`에 신설
+    `제약·index 이름`): 명세가 "UNIQUE (seed_id) WHERE ..."처럼 **정의만** 적고 이름을 적지
+    않아서, 구현·migration·테스트가 쓰는 이름(`ck_sentences_ruby_json_ja_only`,
+    `uq_learning_items_seed_id`, `uq_sentences_seed_id`,
+    `uq_prompt_versions_task_type_language_version`, `uq_prompt_versions_active`,
+    `ck_<table>_language` 다섯)이 어디에도 없었다. 더하는 것과 빼는 것의 이름을 표로 적고,
+    **어느 이름이 SQLAlchemy naming convention에서 유도되고 어느 이름이 명시인지**를 함께
+    적었다(index는 `ix_%(column_0_label)s`를 타므로 이름을 주지 않으면 unique index에 `ix_`
+    접두가 붙고, 컬럼 나열 형식은 identifier 63자에서 잘린다). `uq_prompt_versions_active`는
+    이름을 유지하고 컬럼만 교체한다.
+-   **[131] migration 데이터 보존 해시 비교의 위치 정정** (`mvp-03-english/12_TEST_PLAN.md`):
+    명세는 테이블별 md5 비교가 `test_migrations.py`에 있다고 적었으나 실제로는
+    `test_db_migrate.py`(운영 경로 `scripts/db_migrate.py`를 보는 파일)에 있다. 정정하고 **두
+    파일이 각각 무엇을 보는지**를 적었다 --- `test_db_migrate.py`는 0002의 데이터 위에서 head까지
+    올리며 (행 수, md5)로 보존을 보고, `test_migrations.py`는 빈 DB 왕복과 0004→0005의 행 단위
+    projection 비교, 그리고 스키마 차이를 **이름 집합**으로 대조한다(정의 문자열을 비교하면
+    PostgreSQL의 출력 정규화를 검사하게 된다).
+-   **[132] `explain_item_v2`의 version 올림 근거** (`mvp-01-core/04_DB_SPEC.md`의 `version 형식과
+    active 유일성`, `08_LLM_SPEC.md`의 `언어별 prompt 본문`): 명세는 일본어 prompt version 셋이
+    "응답 스키마의 `japanese` → `text` 때문에 본문이 바뀌어서" 올라간다고 적었다. 그런데
+    `EXPLAIN_ITEM`의 응답 스키마에는 `japanese` 필드가 없고 **정적 지시문이 0바이트 변경**이다.
+    실제 근거는 [129]의 **요청 context 키 개명**이며, 그것이 없으면 "내용이 같은데 version을
+    올린" 것이 되어 version 형식 원칙과 어긋난다. 근거를 task별로 갈라 적고, **"본문뿐 아니라
+    요청 context 키가 바뀌어도 `{n}`을 올린다"**는 규칙을 명시했다.
+-   **[133] `canonical_form`은 별도 필드가 아니다** (`mvp-03-english/01_ENGLISH_CONTENT.md`의
+    `필드 규약`, `mvp-01-core/04_DB_SPEC.md`의 `learning_items`): 두 문서가 `lemma`와
+    `canonical_form`을 **두 줄로** 적었으나 DB 컬럼도 seed YAML 키도 `lemma` 하나다(같은 문서의
+    작성 예 YAML에도 `lemma`만 있다). `canonical_form`은 **설명 응답에서 `lemma`를 그 이름으로
+    내보내는 것**이고, 활용형은 `sentence_items.surface_form`이 가진다. 줄을 합치고 그 사실을
+    적었다. `reading`이 "기본형의 읽기가 아니다"를 설명하는 문장의 `learning_items.canonical_form`
+    참조도 함께 고쳤다.
+-   **[134] 문장 수준 `difficulty_label`을 지웠다** (`mvp-03-english/01_ENGLISH_CONTENT.md`의
+    `필드 규약`): `sentences` 표에 `difficulty_label 문장 수준`이 있었으나 seed loader의 문장
+    파싱은 그 키를 읽지 않고(일본어 seed도 쓰지 않는다) 적어도 조용히 버려진다. 표에서 줄을
+    빼고, `sentences.difficulty_json`은 **LLM이 생성한 문장만** 채우며 seed 문장에서는 `{}`로
+    남는다는 사실을 적었다.
+-   **[135] `01_USER_FLOW.md`를 ADR-025 결정 2에 맞췄다** (`mvp-01-core/01_USER_FLOW.md`):
+    ADR-025 결정 2는 완료 화면의 `다른 언어로`를 **초안에서 철회**했고([125]) `03_UI_UX_SPEC.md`도
+    그에 맞게 고쳐졌는데, `01_USER_FLOW.md`만 "언어를 바꾸는 입구는 **완료 화면의 `다른
+    언어로`** 하나다"로 남아 있었다. **구현은 ADR을 따랐다**(완료 화면·Study Screen 상단바에 언어
+    전환 버튼이 없다). ADR이 canonical이므로 flow 쪽을 고치고, ADR이 제시한 실제 경로(세션 종료
+    → 상단바 앱 이름 → 언어 선택 홈 → `로그인` → 열린 세션이 없으므로 언어 선택 화면)를
+    적었다. 409 분기가 유일한 예외라는 것도 함께 적었다.
+-   **[136] 소리 재생의 미기재 두 가지** (`mvp-01-core/03_UI_UX_SPEC.md`의 `소리 재생`,
+    `mvp-03-english/12_TEST_PLAN.md`): speech 레인이 구현하며 스스로 정한 것 중 명세에 없던 둘을
+    사실대로 적었다.
+    -   **"아직 읽고 있는가"의 판정:** `speechSynthesis.speaking || pending`을 본다. "이 버튼이
+        시작했다"는 기억만으로 판정하면 **다 읽은 뒤의 누름까지 멈춤**이 되어 아무 소리도 나지
+        않는다. 읽는 중의 누름은 멈춤, 다 읽은 뒤의 누름은 다시 재생이다.
+    -   **"버튼을 그리지 않는다"의 DOM 결과:** 버튼이 들어갈 **빈 자리는 항상 만들고** 그 안의
+        버튼 요소만 만들지 않는다. 자리까지 만들지 않으면 늦게 온 `voiceschanged`로 버튼을 넣을
+        위치가 사라진다.
+    -   **같은 절의 라벨·상태 조항은 바꾸지 않았다.** `화면 문구 표`는 재생 버튼을 "(아이콘)
+        접근성 이름 `소리 듣기` / 재생 중 `멈추기`, `aria-pressed`"로 이미 정하고 있고 구현은
+        고정 텍스트 라벨(`재생`, `aria-pressed` 없음)이다. **이것은 공백이 아니라 구현이 명세를
+        벗어난 것이므로 명세를 구현에 맞추지 않았다**(구현 편의로 명세를 바꾸지 않는다). 어느
+        쪽을 고칠지는 사람의 결정이 필요하다.

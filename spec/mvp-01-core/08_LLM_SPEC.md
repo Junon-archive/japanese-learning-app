@@ -222,6 +222,21 @@ deterministic duplicate 검사가 한다. 사용자 식별자, `login_id`, event
 원문, mastery 수치를 프롬프트에 싣지 않는다. **언어를 프롬프트에 따로 싣지 않는다** ---
 prompt 본문 자체가 언어별이다.
 
+위 표는 `GENERATE_SENTENCE_BATCH`와 `GENERATE_REVIEW_CONTEXT`가 공통으로 싣는 것이고, task별로
+더 싣는 키가 있다. 그중 **MVP-03에서 개명한 둘**이다.
+
+``` text
+anchor_text   GENERATE_REVIEW_CONTEXT의 anchor 문장 원문    MVP-03: anchor_japanese 에서 개명
+text          EXPLAIN_ITEM의 설명 대상 문장 원문            MVP-03: japanese 에서 개명
+```
+
+-   **`sentences.japanese` → `text`와 같은 성격의 리네임이다**(`04_DB_SPEC.md`의 `text 리네임`).
+    언어 중립 이름이어야 하는 이유가 같다 --- 영어 요청에 `japanese`라는 키가 실리면 그 키가
+    거짓이 된다.
+-   요청 context는 **JSON으로 직렬화되어 provider 요청에 그대로 실린다.** 따라서 키 이름만
+    바뀌어도 모델이 받는 요청이 달라지고, 정적 지시문이 한 글자도 바뀌지 않아도 **prompt
+    version이 올라가야 한다**(`04_DB_SPEC.md`의 `version 형식과 active 유일성`).
+
 **`learner_level`은 계정에 하나뿐이라 두 언어에 같은 값이 간다.** 알려진 공백이다
 (`spec/mvp-03-english/00_SCOPE.md`).
 
@@ -231,6 +246,11 @@ prompt 본문 자체가 언어별이다.
 backend/app/llm/prompts/ja/     기존 본문을 옮겼다. 변경은 응답 필드 이름 하나(japanese -> text)
 backend/app/llm/prompts/en/     신규
 ```
+
+**`ja/explain_item`의 본문은 한 글자도 바뀌지 않았다.** 그 task의 응답 스키마에는 `japanese`
+필드가 없기 때문이다(응답은 `explanation` 객체 하나다). 그래도 version은 올라간다 --- 근거는
+위 요청 context 키 개명(`japanese` → `text`)이다(`04_DB_SPEC.md`의 `version 형식과 active
+유일성`).
 
 영어 prompt가 **일본어와 다르게 요구하는 것**이다. canonical 목록은 ADR-024 결정 5이고 여기
 요약한다.

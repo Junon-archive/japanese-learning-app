@@ -116,8 +116,7 @@ expression   그 밖의 덩어리 전부             pick up, to do with, I mean
 seed_id           en_it_0001 식. 영어 전용 이름공간. 번호는 선별 결과 순서이며 frequency_rank와 같다
 type              위 type 배정
 language          'en'
-lemma             표제형. 소문자로 적는다 (pick up, to do with, you good?)
-canonical_form    기본형. 대개 lemma와 같다. 활용하는 것만 다르다
+lemma             표제형(기본형). 소문자로 적는다 (pick up, to do with, you good?)
 reading           없다 (YAML에서 생략. DB에 NULL)
 default_meaning   한국어 canonical 의미
 difficulty_label  beginner | intermediate | advanced
@@ -129,6 +128,10 @@ frequency_rank    1..300. 작을수록 고빈도
     표기 관습이고 영어의 표기가 아니다. 문장 속 실제 표면형은
     `sentence_items.surface_form`이 가진다.
 -   `?`와 `'`를 `lemma`에 쓸 수 있다(`you good?`, `I'm afraid`). 표현의 일부다.
+-   **`canonical_form`은 별도 필드가 아니다.** YAML 키도 DB 컬럼도 아니며, 설명 응답에서
+    `lemma`를 그 이름으로 내보내는 것이다(`05_API_SPEC.md`의 Explanation 응답). 활용형은
+    `sentence_items.surface_form`이 가지므로 표제형과 기본형을 두 값으로 둘 필요가 없다 ---
+    영어 item을 활용형으로 적지 않는다(`picked up`이 아니라 `pick up`).
 -   **`metadata_json`에 출처를 기록하지 않는다.** 소비처가 없다(ADR-024 결정 3).
 
 ### `sentences`
@@ -138,9 +141,15 @@ seed_id             en_sn_0001 식
 language            'en'
 text                영어 문장
 korean_translation  한국어 번역
-difficulty_label    문장 수준
 ruby_json           없다 (DB CHECK가 NULL을 강제한다)
 ```
+
+-   **문장에 난이도를 적지 않는다.** `difficulty_label`은 `learning_items`의 필드이고 문장에는
+    없다. seed loader의 문장 파싱이 그 키를 읽지 않으므로 적어도 조용히 버려지고, 일본어 seed도
+    쓰지 않는다. `sentences.difficulty_json`은 **LLM이 생성한 문장만** 채운다(응답 스키마의
+    `difficulty_label`, `08_LLM_SPEC.md`) --- seed 문장에서는 `{}`로 남는다.
+-   **난이도 칸을 seed에 되살리지 않는다.** 사람이 매긴 값과 모델이 매긴 값을 같은 컬럼에
+    섞으면 둘을 구별할 수 없고, 문장 난이도를 읽는 코드는 생성 경로에만 있다.
 
 ### 설명 다섯 필드 --- `nuance`가 핵심이다
 

@@ -45,8 +45,21 @@ empty_japanese -> empty_text                 test_llm_validation.py
 nc.demo.v1 -> nc.demo.ja.v1                  local-storage-scope.test.ts, demo 테스트
 ```
 
--   `test_migrations.py`의 해시 비교는 MVP-02에서 "pre-migration 컬럼으로 제한"한 방식 그대로
-    **이번 migration 이전 컬럼 집합**으로 다시 제한한다. 리네임된 컬럼은 비교에서 뺀다.
+-   **테이블별 md5 해시 비교는 `test_db_migrate.py`에 있다**(`test_migrations.py`가 아니다).
+    MVP-02에서 "pre-migration 컬럼으로 제한"한 방식 그대로 **이번 migration 이전 컬럼 집합**으로
+    다시 제한하고, 리네임된 컬럼(`sentences.japanese`)은 해시에서 뺀다. 값이 보존됐다는 증거는
+    아래 `migration 왕복과 비파괴`의 "`text` 값이 옛 `japanese` 값과 같다"가 맡는다.
+
+**두 migration 테스트 파일이 보는 것이 다르다.** 고칠 때 섞지 않는다.
+
+``` text
+test_db_migrate.py   운영 경로(scripts/db_migrate.py): 대상 출력 -> pending 확인 -> 강제 백업
+                     -> upgrade. 0002의 데이터 위에서 head까지 올리고 테이블별 (행 수, md5)로
+                     보존을 본다. 백업 실패 시 revision 불변, 이미 head면 백업 없음
+test_migrations.py   migration 자체: 빈 DB 왕복, 0004 -> 0005 행 단위 비교(해시가 아니라
+                     컬럼 projection), 스키마 차이를 컬럼·index·제약 **이름 집합**으로 대조,
+                     모델과 migrated schema 일치, upgrade에 DROP 없음
+```
 
 ## Backend Unit
 
@@ -79,6 +92,10 @@ nc.demo.v1 -> nc.demo.ja.v1                  local-storage-scope.test.ts, demo �
     학습 기록을 넣고 upgrade한 뒤: 행 수가 같고, `text` 값이 옛 `japanese` 값과 같고, 모든
     `language`가 `'ja'`이고, `review_states`·`item_exposures`가 그대로다.
 -   migration이 **DROP TABLE / DROP COLUMN을 하지 않는다**(migration 파일을 소스로 단언).
+-   0004와 0005의 스키마 차이가 `04_DB_SPEC.md`의 `한 migration이 하는 일`과 `제약·index 이름`
+    그대로다. index·제약은 **이름 집합**으로 대조하고 정의 문자열 전체를 비교하지 않는다 ---
+    PostgreSQL이 `IN (...)`을 `= ANY (ARRAY[...])`로 다시 쓰므로 원문 비교는 migration이 아니라
+    PostgreSQL의 출력 규칙을 검사하게 된다. 정의가 맞는지는 위 `다언어 모델`이 본다.
 
 ### 언어별 정규화 (ADR-024 결정 6)
 
@@ -230,6 +247,9 @@ nc.demo.v1 -> nc.demo.ja.v1                  local-storage-scope.test.ts, demo �
 -   영어 음성이 하나도 없으면 버튼이 없다.
 -   `getVoices()`가 처음에 빈 배열이고 나중에 `voiceschanged`가 오면 그때 버튼이 생긴다.
 -   재생 전에 항상 `cancel()`이 먼저 불린다. 같은 버튼 재클릭은 멈춤이다.
+-   **다 읽은 뒤의 누름은 멈춤이 아니라 다시 재생이다**(`speaking || pending` 판정).
+-   쓸 음성이 없을 때 **빈 자리만 남고 버튼 요소가 없다**(자리까지 사라지지 않는다 --- 늦게 온
+    `voiceschanged`가 그 자리에 버튼을 넣는다).
 -   **화면 `signal` abort 시 `cancel()`이 불린다.**
 -   음성 이름 문자열(`Samantha` 등)이 소스에 없다.
 -   **재생이 어떤 네트워크 호출도 하지 않고 localStorage에도 쓰지 않는다**(스텁으로 단언).

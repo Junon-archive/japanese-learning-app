@@ -108,7 +108,8 @@ password 요구사항(최소 길이 등)의 canonical 정의는
 -   id
 -   **language: `ja | en` (MVP-03)**
 -   type: `word | grammar | expression`
--   lemma / canonical_form
+-   lemma (표제형 = 기본형. 컬럼은 하나다 --- API가 설명 응답에서 이 값을 `canonical_form`
+    이라는 이름으로 내보낸다. 문장 속 활용형은 `sentence_items.surface_form`이다)
 -   reading **nullable (MVP-03)**
 -   default_meaning (canonical/default 의미. 문맥 의미와 혼동 금지)
 -   difficulty_label nullable (MVP는 coarse label 하나만)
@@ -340,7 +341,7 @@ sentence를 render 가능한 segment list로 반환한다
 발음 표기를 하지 않는다(위 `learning_items`의 `reading이 nullable인 이유`). UI는 `null`이면
 설명 패널에서 그 줄을 **그리지 않는다**(빈 줄이나 `-`를 넣지 않는다).
 
-**`reading`은 문장 속 표면형의 읽기다(MVP-02 확정).** 기본형(`learning_items.canonical_form`)의 읽기가 아니다.
+**`reading`은 문장 속 표면형의 읽기다(MVP-02 확정).** 기본형(`learning_items.lemma`. 응답에서는 `canonical_form`)의 읽기가 아니다.
 예: 문장의 `任せて`에 붙은 item이면 `まかせ`처럼 span 표면형을 읽은 값이다. 기존 `explain_item_v1` prompt의
 정의("the reading of the expression as it appears in this sentence")와 같다. MVP-02 후리가나 계산은 이 값을
 tappable item span의 읽기로 먼저 쓴다(교정 계층 1, ADR-021).
@@ -901,9 +902,18 @@ EXPLAIN_ITEM             explain_item_v{n}      explain_item_en_v{n}
     `provenance_json.prompt_version`이 **문자열 하나**이고, 그 값만 보고 어느 prompt였는지 알 수
     있어야 한다. provenance에 language를 따로 싣지 않는다 --- 문장 자체가 `sentences.language`를
     가진다(ADR-023 결정 5).
--   **일본어 version도 MVP-03에서 한 번 올라간다.** 응답 스키마의 `japanese` → `text` 때문에
-    본문이 바뀌기 때문이다(위 `text 리네임`). `sentence_gen_v2` / `review_context_v2` /
-    `explain_item_v2`다.
+-   **prompt 본문뿐 아니라 요청 context의 키 이름이 바뀌어도 `{n}`을 올린다.** 요청 context는
+    JSON으로 직렬화되어 provider 요청에 그대로 실리므로, 키 이름이 바뀌면 정적 지시문이 한
+    글자도 바뀌지 않아도 모델이 받는 요청이 달라진다. `prompt_version` 하나로 "그때 무엇을
+    보냈는가"를 되짚을 수 있어야 한다는 요구가 본문과 키에 똑같이 적용된다.
+-   **일본어 version도 MVP-03에서 한 번 올라간다.** `sentence_gen_v2` / `review_context_v2` /
+    `explain_item_v2`다. 근거는 둘로 갈린다.
+    -   `sentence_gen` / `review_context`: 응답 스키마의 `japanese` → `text` 때문에 **본문이
+        바뀌었다**(위 `text 리네임`).
+    -   `explain_item`: 그 task의 응답 스키마에는 `japanese` 필드가 없고 **본문이 한 글자도
+        바뀌지 않았다.** 올린 근거는 **요청 context 키 개명**(`japanese` → `text`,
+        `08_LLM_SPEC.md`의 `요청 context`)이다. 이 근거가 없으면 "내용이 같은데 version을
+        올린" 것이 되어 위 형식 원칙과 어긋난다.
 -   prompt 본문 파일은 언어별 디렉터리에 둔다: `backend/app/llm/prompts/<language>/`.
 
 `active`는 **task_type과 language의 조합당** 최대 하나이며 **partial unique index**로
@@ -1178,6 +1188,42 @@ NULL 완화는 additive가 아니지만 데이터를 잃지 않는다. 그 둘�
 -   **`downgrade()`는 빈 DB 왕복 테스트용이다.** 운영 롤백은 downgrade가 아니라 백업 복원이다
     (위 규칙 그대로). rename의 downgrade는 데이터를 보존하지만, 그 사실이 운영 경로에 downgrade를
     두는 근거가 되지 않는다 --- 같은 migration의 다른 단계(컬럼 추가)는 되돌리면 데이터를 지운다.
+
+#### 제약·index 이름
+
+**이름 없는 제약을 만들지 않는다.** 이름이 없으면 `downgrade()`에서 DROP할 수 없고, migration이
+무엇을 바꿨는지를 이름 집합으로 대조할 수도 없다. 이 migration이 더하는 것과 빼는 것의 이름은
+다음으로 고정된다.
+
+``` text
+더하는 것
+ck_learning_items_language                       CHECK language IN ('ja','en')   convention
+ck_sentences_language                            같음                            convention
+ck_study_sessions_language                       같음                            convention
+ck_prompt_versions_language                      같음                            convention
+ck_generation_jobs_language                      같음                            convention
+ck_sentences_ruby_json_ja_only                   CHECK (language='ja' OR ruby_json IS NULL)  convention
+uq_learning_items_seed_id                        partial unique index            명시
+uq_sentences_seed_id                             partial unique index            명시
+uq_prompt_versions_task_type_language_version    UNIQUE (task_type, language, version)  convention
+uq_prompt_versions_active                        partial unique index. 이름 유지, 컬럼만 교체  명시
+
+빼는 것
+uq_prompt_versions_task_type_version             위 unique가 대체한다
+```
+
+-   **`convention`으로 적은 이름은 SQLAlchemy metadata의 naming convention에서 유도된다**
+    (`ck_%(table_name)s_%(constraint_name)s`, `uq_%(table_name)s_%(column_0_N_name)s`). 모델은
+    제약 이름을 적지 않고 뒷부분(`language`, `ruby_json_ja_only`)만 주며, migration은 애플리케이션
+    코드를 import하지 않으므로 같은 결과를 `op.f()`로 고정한다. **convention은 첫 migration 전에
+    고정했고 바꾸지 않는다** --- 바꾸면 이미 적용된 제약의 이름이 전부 달라진다.
+-   **`명시`로 적은 셋은 convention을 타지 않는다.** index는 `ix_%(column_0_label)s`를 타므로
+    이름을 주지 않으면 unique index에 `ix_` 접두가 붙고, 컬럼을 나열하는 `uq` 형식을 흉내 내면
+    PostgreSQL identifier 한계(63자)에서 잘린다. 그래서 짧은 이름을 직접 적는다.
+-   **`uq_prompt_versions_active`는 이름을 유지하고 컬럼만 `(task_type)` → `(task_type,
+    language)`로 바꾼다.** 이 이름은 구현에서 상수다.
+-   `language` enum은 PostgreSQL native enum이 아니라 **VARCHAR + 명명된 CHECK**다(기존 enum
+    컬럼과 같은 물리 타입). 그래서 2단계가 더하는 것이 type이 아니라 위 `ck_*_language`다.
 
 #### migration이 하지 않는 것
 
