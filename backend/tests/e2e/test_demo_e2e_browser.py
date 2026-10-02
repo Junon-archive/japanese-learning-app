@@ -97,10 +97,13 @@ def _watch(page: Page, frontend: Frontend) -> flow.Traffic:
 
 
 def _open_demo_from_home(page: Page, frontend_url: str) -> None:
-    """선택 홈의 카드 1로 들어간다(03_UI_UX_SPEC.md의 Demo `진입과 로딩`)."""
+    """언어 선택 홈 -> 일본어 홈 -> 카드 1로 들어간다(03_UI_UX_SPEC.md의 Demo `진입과 로딩`).
+
+    MVP-03에서 홈이 2단이 되었다(ADR-025 결정 2). 체험 카드는 `#/`가 아니라 `#/ja`에 있다.
+    """
     page.goto(frontend_url)
-    page.locator(".screen.home").wait_for(state="visible")
-    page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
+    flow.enter_language_home(page)
+    flow.press_home_card(page, DEMO_CARD_TITLE)
     page.locator(".demo-banner").wait_for(state="visible")
     page.locator(".sentence").wait_for(state="visible")
     assert page.url.endswith(DEMO_ROUTE), page.url

@@ -16,10 +16,20 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_SCRIPT = REPO_ROOT / "scripts" / "build_demo_fixture.py"
-FIXTURE_DATA = REPO_ROOT / "frontend" / "src" / "demo" / "ja" / "fixture-data.ts"
-CONSTANTS = REPO_ROOT / "frontend" / "src" / "demo" / "constants.ts"
+DEMO_DIR = REPO_ROOT / "frontend" / "src" / "demo"
+CONSTANTS = DEMO_DIR / "constants.ts"
 
-DEMO_KEY = "nc.demo.ja.v1"
+# 언어별 생성 fixture와 진도 key(ADR-025 결정 3). 진도 key가 언어별로 갈려 있으므로 두 demo의
+# 진도가 섞이지 않는다(불변식 18).
+FIXTURE_DATA_FILES = {
+    "ja": DEMO_DIR / "ja" / "fixture-data.ts",
+    "en": DEMO_DIR / "en" / "fixture-data.ts",
+}
+DEMO_KEYS = {"ja": "nc.demo.ja.v1", "en": "nc.demo.en.v1"}
+
+# 일본어 demo 쪽 기존 호출부가 쓰는 이름.
+FIXTURE_DATA = FIXTURE_DATA_FILES["ja"]
+DEMO_KEY = DEMO_KEYS["ja"]
 FURIGANA_KEY = "nc.furigana.v1"
 
 
@@ -37,9 +47,10 @@ def _fixture_script() -> ModuleType:
     return module
 
 
-def read_fixture() -> tuple[str, list[dict[str, Any]]]:
+def read_fixture(language: str = "ja") -> tuple[str, list[dict[str, Any]]]:
     """(fixture 식별자, 문장 목록). 문장은 `DemoSentence` 모양의 dict다."""
-    fixture_id, sentences = _fixture_script().read_fixture(FIXTURE_DATA)
+    path = FIXTURE_DATA_FILES[language]
+    fixture_id, sentences = _fixture_script().read_fixture(path)
     assert isinstance(fixture_id, str)
     assert isinstance(sentences, list)
     assert sentences, "demo fixture가 비었다(전제)"

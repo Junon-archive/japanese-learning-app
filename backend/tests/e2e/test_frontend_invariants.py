@@ -570,10 +570,19 @@ def test_the_server_rejects_a_second_evidence_for_the_same_exposure(
 # 공개 화면은 frontend origin 밖으로 요청을 내지 않는다 (불변식 13·14, 격리 검사 (f))
 # --------------------------------------------------------------------------
 
-# 공개 route: 선택 홈, Demo, 가나 학습.
-PUBLIC_ROUTES = ("", "#/ja/demo", "#/ja/kana")
+# 공개 route **전부**다(격리 검사 (f), MVP-03): 언어 선택 홈, 언어별 홈 둘, demo 둘, 가나 학습.
+# 하나라도 빠지면 그 화면이 밖으로 요청을 내도 이 검사가 조용히 통과한다.
+PUBLIC_ROUTES = ("", "#/ja", "#/en", "#/ja/demo", "#/en/demo", "#/ja/kana")
 HOME_HASH = "#/"
+JA_HOME_ROUTE = "#/ja"
+EN_HOME_ROUTE = "#/en"
+JA_DEMO_ROUTE = "#/ja/demo"
+EN_DEMO_ROUTE = "#/en/demo"
 KANA_ROUTE = "#/ja/kana"
+# 홈 카드 제목(03_UI_UX_SPEC.md의 `화면 문구 표`의 `상단바와 홈`). 언어 선택 홈의 카드가 둘,
+# 언어별 홈의 카드가 각각 둘·하나다.
+JA_CARD_TITLE = "일본어"
+EN_CARD_TITLE = "영어"
 DEMO_CARD_TITLE = "표현 학습 체험해 보기"
 KANA_CARD_TITLE = "글자부터 배우기"
 # 가나 학습 문구(03_UI_UX_SPEC.md의 `화면 문구 표`의 `가나 학습`).
@@ -591,10 +600,19 @@ _MAX_KANA_PRESSES = 64
 _LATE_REQUEST_WINDOW_MS = 2000
 
 
-def _operate_demo(page: Page) -> None:
-    """demo에서 사용자가 하는 것: 탭, 시트 닫기, 번역, 다음 문장."""
+def _operate_demo(page: Page, *, speak: bool = False) -> None:
+    """demo에서 사용자가 하는 것: 탭, 시트 닫기, 번역, 다음 문장.
+
+    `speak`면 문장 옆과 설명 시트 예문 옆의 재생 버튼도 누른다(영어 demo만 그 버튼이 있다).
+    로컬 영어 음성이 없는 브라우저에는 버튼이 없고 그래도 이 흐름은 끝까지 간다 --- 어느
+    분기였는지는 `test_english_demo_browser.py`가 출력에 남긴다.
+    """
     page.locator(".screen.demo .sentence").wait_for(state="visible")
+    if speak:
+        flow.press_speak_if_available(page, ".screen.demo .sentence-box")
     flow.tap(page, 0)
+    if speak:
+        flow.press_speak_if_available(page, ".screen.demo .sheet .explain")
     flow.close_sheet(page)
     page.locator(".reveal-translation").click()
     page.locator(".translation").wait_for(state="visible")
@@ -637,17 +655,60 @@ def _finish_kana_round(page: Page) -> None:
     page.locator(".screen.kana .kana-quiz-card").wait_for(state="visible")
 
 
-def _operate_home(page: Page) -> None:
-    """선택 홈에서 두 카드를 누르고 돌아온다."""
+def _operate_ja_home(page: Page) -> None:
+    """일본어 홈(`#/ja`)의 두 카드를 눌러 들어갔다 돌아온다. 끝나면 다시 `#/ja`다."""
     page.locator(".screen.home").wait_for(state="visible")
-    page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
-    _operate_demo(page)
-    page.locator(".topbar .topbar-brand").click()
+    expect(page.locator(".screen.home .home-card")).to_have_count(2)
+
+    flow.press_home_card(page, DEMO_CARD_TITLE)
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(page).to_have_url(re.compile(f"{re.escape(JA_DEMO_ROUTE)}$"))
+    page.go_back()
+
     page.locator(".screen.home").wait_for(state="visible")
-    page.locator(".home-card", has_text=KANA_CARD_TITLE).click()
+    flow.press_home_card(page, KANA_CARD_TITLE)
     page.locator(".screen.kana").wait_for(state="visible")
     expect(page).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
     page.go_back()
+    page.locator(".screen.home").wait_for(state="visible")
+
+
+def _operate_en_home(page: Page) -> None:
+    """영어 홈(`#/en`)의 카드 하나를 눌러 들어갔다 돌아온다. 끝나면 다시 `#/en`다."""
+    page.locator(".screen.home").wait_for(state="visible")
+    # 가나 학습에 대응하는 영어 보조 화면을 두지 않았다(ADR-025 결정 2).
+    expect(page.locator(".screen.home .home-card")).to_have_count(1)
+
+    flow.press_home_card(page, DEMO_CARD_TITLE)
+    page.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(page).to_have_url(re.compile(f"{re.escape(EN_DEMO_ROUTE)}$"))
+    page.go_back()
+    page.locator(".screen.home").wait_for(state="visible")
+
+
+def _operate_home(page: Page) -> None:
+    """언어 선택 홈(`#/`)에서 두 언어 홈으로 내려가 그 카드들을 전부 누른다.
+
+    Wave 5의 2단 구조다(ADR-025 결정 2): `#/`는 언어 카드 둘이고, 체험·글자 카드는 언어별 홈에
+    있다. 언어 선택 홈으로 돌아가는 길은 상단바 앱 이름이다.
+    """
+    page.locator(".screen.home").wait_for(state="visible")
+    expect(page.locator(".screen.home .home-card")).to_have_count(2)
+
+    flow.press_home_card(page, JA_CARD_TITLE)
+    expect(page).to_have_url(re.compile(f"{re.escape(JA_HOME_ROUTE)}$"))
+    _operate_ja_home(page)
+
+    page.locator(".topbar .topbar-brand").click()
+    expect(page).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
+    page.locator(".screen.home").wait_for(state="visible")
+
+    flow.press_home_card(page, EN_CARD_TITLE)
+    expect(page).to_have_url(re.compile(f"{re.escape(EN_HOME_ROUTE)}$"))
+    _operate_en_home(page)
+
+    page.locator(".topbar .topbar-brand").click()
+    expect(page).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
     page.locator(".screen.home").wait_for(state="visible")
 
 
@@ -665,16 +726,21 @@ def test_public_screens_send_nothing_outside_the_frontend_origin(
     )
     page.goto(f"{frontend.url}/{route}")
 
-    if route == "#/ja/demo":
+    if route == JA_DEMO_ROUTE:
         _operate_demo(page)
-        page.locator(".topbar .topbar-brand").click()
-        _operate_home(page)
+    elif route == EN_DEMO_ROUTE:
+        # 영어 demo만 재생 버튼이 있다. 누르는 것까지가 불변식 24의 e2e 단언이다.
+        _operate_demo(page, speak=True)
     elif route == KANA_ROUTE:
         _operate_kana(page)
-        page.locator(".topbar .topbar-brand").click()
-        _operate_home(page)
-    else:
-        _operate_home(page)
+    elif route == JA_HOME_ROUTE:
+        _operate_ja_home(page)
+    elif route == EN_HOME_ROUTE:
+        _operate_en_home(page)
+
+    # 어느 route로 들어왔든 상단바 앱 이름으로 언어 선택 홈에 올라와 거기서부터 전부 조작한다.
+    page.locator(".topbar .topbar-brand").click()
+    _operate_home(page)
 
     page.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
     traffic.assert_none_outside()
@@ -736,14 +802,15 @@ def _motion_on_entry(
         traffic = flow.watch_traffic(
             page, frontend_url=frontend.url, api_url=frontend.api_url, block=True
         )
-        page.goto(frontend.url)
+        # 체험 카드는 언어별 홈에 있다(MVP-03의 2단 구조).
+        page.goto(f"{frontend.url}/{JA_HOME_ROUTE}")
         page.locator(".screen.home").wait_for(state="visible")
 
         cdp = context.new_cdp_session(page)
         cdp.send("Animation.enable")
         cdp.send("Animation.setPlaybackRate", {"playbackRate": 0})
 
-        page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
+        flow.press_home_card(page, DEMO_CARD_TITLE)
         page.locator(".screen.demo .sentence .token").first.wait_for(state="attached")
         screen = page.evaluate(_MOTION_AT_START, ".screen.demo")
 

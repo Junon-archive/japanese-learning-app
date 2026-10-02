@@ -144,7 +144,27 @@ afterEach(() => {
 })
 
 describe('boot', () => {
-  const HASHES = ['', '#/', '#/ja/demo', '#/ja/kana', '#/ja/kana/hiragana', '#/unknown']
+  /**
+   * `04_SECURITY_AND_DATA.md`의 `격리 검사`가 열거한 부팅 hash 전부다(MVP-03). 공개 route 여섯과
+   * 가나 하위 경로, 옛 평면 경로 둘, 모르는 hash.
+   *
+   * **`#/en/demo`가 특히 중요하다.** 공개 화면 중 `voiceschanged` 리스너를 등록하는 유일한
+   * 화면이라(`ui/speech.ts`) 지연 요청 경로가 하필 그 화면에 겹친다. 그래서 "타이머를 끝까지
+   * 진행한 뒤에도 요청 0건"을 그 hash에서도 본다.
+   */
+  const HASHES = [
+    '',
+    '#/',
+    '#/ja',
+    '#/ja/demo',
+    '#/ja/kana',
+    '#/ja/kana/hiragana',
+    '#/en',
+    '#/en/demo',
+    '#/demo',
+    '#/kana',
+    '#/unknown',
+  ]
 
   for (const hash of HASHES) {
     it(`makes no request for ${JSON.stringify(hash)} even after every timer, then exactly one on 로그인`, async () => {
@@ -162,6 +182,28 @@ describe('boot', () => {
       expect(calls()).toEqual(['GET /api/auth/me'])
     })
   }
+
+  /**
+   * 양성 대조군. 위 단언이 "타이머를 진행했는데 요청이 없었다"인지 "타이머 진행 자체가 아무것도
+   * 하지 않았다"인지 가른다. 늦은 타이머가 내는 요청은 같은 sweep에 잡혀야 한다.
+   */
+  it('catches a request that a late timer makes (positive control for the timer sweep)', async () => {
+    vi.useFakeTimers()
+    await boot('#/en/demo')
+    expect(fetchMock).not.toHaveBeenCalled()
+    // 그 hash가 정말 영어 demo를 그렸다(동적 import 실패 화면이 아니다). 아니면 위 단언들이
+    // "아무것도 안 그린 화면"을 보고 통과한다.
+    expect(screenClass()).toContain('demo')
+
+    answerMe(async () => json(401, { detail: 'Not authenticated' }))
+    setTimeout(() => {
+      void fetch('/api/auth/me')
+    }, 60_000)
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    await vi.runAllTimersAsync()
+
+    expect(calls()).toEqual(['GET /api/auth/me'])
+  })
 
   it('checks once for a double tap on 로그인', async () => {
     await boot('')

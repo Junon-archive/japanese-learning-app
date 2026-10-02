@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -75,6 +76,14 @@ LOGIN_LABEL = "로그인"
 EMPTY_POOL_TEXT = "지금은 준비된 문장이 없어요."
 RECORDED_PREFIX = "기록했어요 · "
 
+# 홈 카드 제목과 언어 선택 화면(MVP-03). 홈이 2단이 되었다 --- `#/`는 언어 카드 둘이고 체험·글자
+# 카드는 언어별 홈(`#/ja`, `#/en`)에 있다(ADR-025 결정 2).
+LANGUAGE_JA = "일본어"
+LANGUAGE_EN = "영어"
+DEMO_CARD_TITLE = "표현 학습 체험해 보기"
+KANA_CARD_TITLE = "글자부터 배우기"
+LANGUAGE_SELECT_SCREEN = ".screen.language-select"
+
 # DOM/DB가 정착할 때까지의 상한. 정책값이 아니라 무한 대기 대신 실패로 끝내는 장치다.
 SETTLE_TIMEOUT_SECONDS = 15.0
 _POLL_INTERVAL_SECONDS = 0.05
@@ -121,11 +130,15 @@ def read_db(stack: E2EStack) -> Iterator[Session]:
 
 
 def sign_in(page: Page, stack: E2EStack, learner: Learner) -> None:
-    """선택 홈에서 상단바 `로그인`을 눌러 로그인 화면으로 가고, 두 필드를 실제로 채워 제출한다.
+    """언어 선택 홈에서 상단바 `로그인`을 눌러 로그인 화면으로 가고, 두 필드를 실제로 채워 제출한다.
 
     부팅은 API를 부르지 않는다(불변식 14). `로그인`을 누르면 `GET /api/auth/me`가 401을 받아
     로그인 화면이 뜬다. 제출이 성공하면 학습 화면이 뜨고 그 마운트가 `POST /api/study/session`을
     부른다.
+
+    **MVP-03: 열린 study session이 없으면 그 사이에 언어 선택 화면이 있다**(ADR-025 결정 2).
+    이 하네스의 테스트는 전부 일본어 seed를 쓰므로 `일본어`를 고른다. 그 화면 자체의 분기(묻는
+    때·안 묻는 때, 409)는 `test_home_browser.py`와 frontend unit `language-select.test.ts`가 본다.
     """
     page.goto(stack.frontend_url)
     press_topbar_login(page)
@@ -133,12 +146,50 @@ def sign_in(page: Page, stack: E2EStack, learner: Learner) -> None:
     page.locator("#login-id").fill(learner.login_id)
     page.locator("#password").fill(PASSWORD)
     page.locator(".login-form button[type=submit]").click()
+    choose_language_if_asked(page)
     wait_for_sentence(page)
+
+
+def choose_language_if_asked(page: Page, label: str = LANGUAGE_JA) -> None:
+    """언어 선택 화면이 떴으면 그 언어를 고른다. 열린 세션이 있어 묻지 않으면 아무것도 하지 않는다.
+
+    둘 중 어느 화면이 떴는지 먼저 정착을 기다린다 --- 기다리지 않고 `count()`를 보면 응답이 아직
+    오지 않은 순간에 "묻지 않았다"로 읽고 다음 단언이 빈 화면을 본다.
+    """
+    page.locator(f"{LANGUAGE_SELECT_SCREEN}, .screen.study").first.wait_for(
+        state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000
+    )
+    select = page.locator(LANGUAGE_SELECT_SCREEN)
+    if select.count() == 0:
+        return
+    select.locator(".home-card", has_text=_exact(label)).click()
 
 
 def press_topbar_login(page: Page) -> None:
     """공개 화면 상단바의 `로그인`. 로그인 진입(`GET /api/auth/me`)은 이것으로만 시작한다."""
     page.locator(".topbar .topbar-login", has_text=LOGIN_LABEL).click()
+
+
+def _exact(text: str) -> re.Pattern[str]:
+    # `has_text`는 부분 일치다. 카드 제목은 정확히 맞는 것만 눌러야 한다.
+    return re.compile(f"^{re.escape(text)}$")
+
+
+def press_home_card(page: Page, title: str) -> None:
+    """제목이 정확히 `title`인 홈 카드를 누른다.
+
+    제목으로만 가른다 --- `has_text`를 카드 전체에 걸면 설명·칩 문구에도 걸린다. 그 카드가 보일
+    때까지 기다리므로 "앞 화면에서 뒤 화면으로 넘어가는 중"도 함께 기다린다.
+    """
+    card = page.locator(".screen.home .home-card .home-card-title", has_text=_exact(title))
+    card.wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
+    card.click()
+
+
+def enter_language_home(page: Page, label: str = LANGUAGE_JA) -> None:
+    """언어 선택 홈(`#/`)에서 언어 카드를 눌러 그 언어 홈으로 간다(MVP-03의 2단 홈)."""
+    page.locator(".screen.home").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
+    press_home_card(page, label)
 
 
 def wait_for_sentence(page: Page) -> None:
@@ -213,6 +264,34 @@ def reveal_translation(page: Page) -> None:
     close_sheet(page)
     page.locator(".reveal-translation").click()
     page.locator(".translation").wait_for(state="visible", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
+
+
+# 늦게 오는 `voiceschanged`로 버튼이 생길 때까지 기다리는 시간. 정책값이 아니라 "없다"로
+# 판정하기 전의 유예다(`ui/speech.ts`는 타임아웃을 두지 않고 한 번만 기다린다).
+SPEAK_BUTTON_WAIT_MS = 3000
+
+
+def press_speak_if_available(page: Page, container: str) -> bool:
+    """`container` 안의 재생 버튼을 누른다. 눌렀으면 True, 버튼이 없으면 False.
+
+    **쓸 수 있는 로컬 영어 음성이 없는 브라우저에는 버튼이 아예 없다**(`04_SECURITY_AND_DATA.md`의
+    `소리 재생`: `localService === true`인 음성만 쓰고, 없으면 그리지 않는다). 그래서 두 분기 모두
+    정상이고, 호출부는 어느 분기였는지 돌려받아 기록한다 --- skip하지 않는다
+    (`mvp-03-english/12_TEST_PLAN.md`의 `E2E (browser)`).
+
+    자리(`.speak-slot`)는 음성이 없어도 남는다(늦게 온 `voiceschanged`가 그 자리에 버튼을 넣는다).
+    자리가 없으면 재생 경로 자체가 그려지지 않은 것이므로 실패다.
+    """
+    slot = page.locator(f"{container} .speak-slot")
+    slot.first.wait_for(state="attached", timeout=SETTLE_TIMEOUT_SECONDS * 1000)
+    button = page.locator(f"{container} .speak-slot button.speak")
+    try:
+        button.first.wait_for(state="visible", timeout=SPEAK_BUTTON_WAIT_MS)
+    except PlaywrightTimeoutError:
+        assert button.count() == 0
+        return False
+    button.first.click()
+    return True
 
 
 def press_next(page: Page, stack: E2EStack, learner: Learner) -> StudyPresentation | None:

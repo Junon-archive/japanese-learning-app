@@ -390,6 +390,8 @@ def test_the_setting_is_shared_between_the_demo_and_study(
     page.locator("#login-id").fill(learner.login_id)
     page.locator("#password").fill(flow.PASSWORD)
     page.locator(".login-form button[type=submit]").click()
+    # 열린 study session이 없는 첫 로그인은 언어 선택 화면을 지난다(MVP-03, ADR-025 결정 2).
+    flow.choose_language_if_asked(page)
     flow.wait_for_sentence(page)
     assert page.locator(".screen.demo").count() == 0
 
@@ -399,9 +401,10 @@ def test_the_setting_is_shared_between_the_demo_and_study(
     # Study에서 끄면 Demo에서도 꺼져 있다.
     _toggle(page).click()
     expect(_toggle(page)).to_have_attribute("aria-pressed", "false")
+    # 앱 이름은 **언어 선택 홈**으로 간다(MVP-03). 체험 카드는 거기서 한 단 더 내려간 `#/ja`에 있다.
     page.locator(".topbar .topbar-brand").click()
-    page.locator(".screen.home").wait_for(state="visible")
-    page.locator(".home-card", has_text=DEMO_CARD_TITLE).click()
+    flow.enter_language_home(page)
+    flow.press_home_card(page, DEMO_CARD_TITLE)
     page.locator(".screen.demo .sentence").wait_for(state="visible")
     expect(_demo_toggle(page)).to_have_attribute("aria-pressed", "false")
     _expect_all(_rts(page), visible=False)

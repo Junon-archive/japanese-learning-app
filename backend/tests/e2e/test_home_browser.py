@@ -1,14 +1,19 @@
-"""선택 홈과 로그인 진입 (mvp-02-onboarding/12_TEST_PLAN.md의 `Browser E2E`, 13_ACCEPTANCE_CRITERIA.md 1~10).
+"""홈 셋과 로그인 진입 (mvp-02-onboarding/12_TEST_PLAN.md의 `Browser E2E`, 13_ACCEPTANCE_CRITERIA.md 1~10,
+mvp-03-english/12_TEST_PLAN.md의 `E2E (browser)`, MVP-03 합격 기준 20·21).
 
 휴대폰 viewport로 돈다. "서버 요청"은 API origin으로 나간 요청이다(정적 자산 제외).
 
--   hash 없이 열면 방문자가 무슨 앱인지 바로 안다: 앱 이름, `로그인`, 한 줄 소개, 카드 2개. 카드에 문장
-    수 숫자가 없다. API 요청 0건이다.
+MVP-03에서 홈이 **2단**이 되었다(ADR-025 결정 2). `#/`는 언어 선택 홈(카드 둘: 일본어·영어)이고,
+MVP-02의 체험·글자 카드는 언어별 홈(`#/ja` 둘, `#/en` 하나)으로 내려갔다.
+
+-   hash 없이 열면 방문자가 무슨 앱인지 바로 안다: 앱 이름, `로그인`, 한 줄 소개, 언어 카드 2개. 카드에
+    숫자가 없다. API 요청 0건이다. 언어별 홈의 문구와 카드 수도 `화면 문구 표`와 같다.
 -   `로그인`을 누를 때만 `GET /api/auth/me`가 1건 나간다. 401이면 Login, 로그인하면 Study Screen.
-    로그인 영역에는 hash가 없으므로 새로고침하면 선택 홈이고, 다시 `로그인`을 누르면 곧바로 Study Screen이다.
-    로그아웃하면 선택 홈이다.
--   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 선택 홈(`#/`)이다. `#/ja/kana`는 가나 학습이다
-    (카드로 들어가도, 직접 열어도). 가나 학습 자체의 흐름은 `test_kana_browser.py`가 본다.
+    로그인 영역에는 hash가 없으므로 새로고침하면 언어 선택 홈이고, 다시 `로그인`을 누르면 곧바로
+    Study Screen이다. 로그아웃하면 언어 선택 홈이다.
+-   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 언어 선택 홈(`#/`)이다. `#/ja/kana`는 가나
+    학습이다(카드로 들어가도, 직접 열어도). 옛 경로 `#/demo`는 `#/ja/demo`로 바뀐다. 가나 학습 자체의
+    흐름은 `test_kana_browser.py`가, 영어 demo는 `test_english_demo_browser.py`가 본다.
 """
 
 from __future__ import annotations
@@ -26,18 +31,46 @@ pytestmark = pytest.mark.e2e
 
 PHONE = "iPhone 13"
 
-# 화면 문구(03_UI_UX_SPEC.md의 `화면 문구 표`의 `상단바와 선택 홈`, `Login과 로그아웃`).
+# 화면 문구(03_UI_UX_SPEC.md의 `화면 문구 표`의 `상단바와 홈`, `Login과 로그아웃`).
 APP_NAME = "Nihongo Context"
-INTRO = "일본어 표현을 실제 문장 속에서 익히는 앱이에요."
-CARDS = [
-    ("표현 학습 체험해 보기", "모르는 표현을 눌러 뜻을 확인해요.", ["로그인 없이"]),
-    ("글자부터 배우기", "히라가나와 가타카나를 표와 퀴즈로 익혀요.", ["히라가나", "가타카나"]),
+
+# 카드 하나: (제목, 설명, 칩 목록).
+Card = tuple[str, str, list[str]]
+
+# 언어 선택 홈(`#/`). 언어를 특정하지 않고, 커버리지 퍼센트도 적지 않는다.
+HOME_INTRO = "실제 문장 속에서 표현을 익히는 앱이에요."
+HOME_CARDS: list[Card] = [
+    ("일본어", "문장 속 표현과 한자 읽기를 익혀요.", []),
+    ("영어", "드라마와 대화에서 실제로 쓰는 표현을 익혀요.", []),
 ]
+
+# 언어별 홈. 체험 카드는 두 언어 공통이고 글자 카드는 일본어 홈에만 있다.
+DEMO_CARD: Card = ("표현 학습 체험해 보기", "모르는 표현을 눌러 뜻을 확인해요.", ["로그인 없이"])
+KANA_CARD: Card = (
+    "글자부터 배우기",
+    "히라가나와 가타카나를 표와 퀴즈로 익혀요.",
+    ["히라가나", "가타카나"],
+)
+JA_INTRO = "일본어 표현을 실제 문장 속에서 익히는 앱이에요."
+JA_CARDS: list[Card] = [DEMO_CARD, KANA_CARD]
+EN_INTRO = "아는 단어인데 안 들리는 표현을 문장 속에서 익혀요."
+EN_CARDS: list[Card] = [DEMO_CARD]
+
 LOGGED_OUT_TOAST = "로그아웃했어요."
 LOGOUT_LABEL = "로그아웃"
+# 언어 선택 화면(로그인 영역, MVP-03). `frontend/src/ui/notice.ts`의 `MESSAGES`가 canonical이다.
+LANGUAGE_SELECT_TITLE = "무엇을 공부할까요?"
+LANGUAGE_LABELS = ["일본어", "영어"]
 HOME_HASH = "#/"
+JA_HOME_ROUTE = "#/ja"
+EN_HOME_ROUTE = "#/en"
 DEMO_ROUTE = "#/ja/demo"
+EN_DEMO_ROUTE = "#/en/demo"
 KANA_ROUTE = "#/ja/kana"
+LEGACY_DEMO_ROUTE = "#/demo"
+
+# 언어 선택 홈의 URL. hash 없음(`''`)과 `#/` 둘 다 이 화면이다(03_UI_UX_SPEC.md의 route 표).
+_HOME_URL = re.compile(r"/(#/)?$")
 
 # 늦게 나가는 요청이 드러날 때까지 기다리는 시간. 정책값이 아니다.
 _LATE_REQUEST_WINDOW_MS = 2000
@@ -68,33 +101,76 @@ def _topbar_right(page: Page) -> list[str]:
     return page.locator(".screen .topbar .topbar-actions button").all_inner_texts()
 
 
+def _expect_home(page: Page, intro: str, cards: list[Card]) -> None:
+    """홈 한 곳의 상단바·한 줄 소개·카드가 `화면 문구 표`와 같다. 카드에 숫자가 없다."""
+    _home(page)
+    screen = page.locator(".screen.home")
+    expect(screen.locator(".topbar .topbar-brand")).to_have_text(APP_NAME)
+    assert _topbar_right(page) == [flow.LOGIN_LABEL]
+    expect(screen.locator("h1")).to_have_text(intro)
+
+    rendered = screen.locator(".home-card")
+    expect(rendered).to_have_count(len(cards))
+    for index, (title, description, pills) in enumerate(cards):
+        card = rendered.nth(index)
+        expect(card.locator(".home-card-title")).to_have_text(title)
+        expect(card.locator(".home-card-desc")).to_have_text(description)
+        if pills:
+            expect(card.locator(".pill")).to_have_text(pills)
+        else:
+            expect(card.locator(".pill")).to_have_count(0)
+        # 카드에 문장 수·커버리지 숫자를 적지 않는다.
+        assert re.search(r"\d", card.inner_text()) is None, card.inner_text()
+
+
 # --------------------------------------------------------------------------
 # backend를 띄우지 않은 구성
 # --------------------------------------------------------------------------
 
 
 def test_the_home_says_what_the_app_is_without_any_request(frontend: Frontend, phone: Page) -> None:
-    """hash 없이 열면 앱 이름, `로그인`, 한 줄 소개, 카드 2개가 있고 요청은 0건이다."""
+    """hash 없이 열면 앱 이름, `로그인`, 한 줄 소개, 언어 카드 2개가 있고 요청은 0건이다."""
     traffic = flow.watch_traffic(
         phone, frontend_url=frontend.url, api_url=frontend.api_url, block=True
     )
     phone.goto(frontend.url)
-    _home(phone)
+    _expect_home(phone, HOME_INTRO, HOME_CARDS)
 
-    screen = phone.locator(".screen.home")
-    expect(screen.locator(".topbar .topbar-brand")).to_have_text(APP_NAME)
-    assert _topbar_right(phone) == [flow.LOGIN_LABEL]
-    expect(screen.locator("h1")).to_have_text(INTRO)
+    phone.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
+    traffic.assert_none_outside()
+    assert traffic.api_calls == []
 
-    cards = screen.locator(".home-card")
-    assert cards.count() == len(CARDS)
-    for index, (title, description, pills) in enumerate(CARDS):
-        card = cards.nth(index)
-        expect(card.locator(".home-card-title")).to_have_text(title)
-        expect(card.locator(".home-card-desc")).to_have_text(description)
-        expect(card.locator(".pill")).to_have_text(pills)
-        # 카드에 문장 수 숫자를 적지 않는다.
-        assert re.search(r"\d", card.inner_text()) is None, card.inner_text()
+
+def test_the_language_homes_have_the_cards_the_copy_table_says(
+    frontend: Frontend, phone: Page
+) -> None:
+    """언어 선택 홈 -> `#/ja`(카드 둘) / `#/en`(카드 하나). 요청 0건이다 (MVP-03 합격 기준 20).
+
+    영어 홈의 카드가 하나인 것이 단언 대상이다 --- 가나 학습에 대응하는 영어 보조 화면을 만들지
+    않기로 했다(ADR-025 결정 2). 카드 하나를 채우려고 없는 기능이 생기면 여기서 빨개진다.
+    """
+    traffic = flow.watch_traffic(
+        phone, frontend_url=frontend.url, api_url=frontend.api_url, block=True
+    )
+    phone.goto(frontend.url)
+    _expect_home(phone, HOME_INTRO, HOME_CARDS)
+
+    flow.press_home_card(phone, HOME_CARDS[0][0])
+    expect(phone).to_have_url(re.compile(f"{re.escape(JA_HOME_ROUTE)}$"))
+    _expect_home(phone, JA_INTRO, JA_CARDS)
+
+    # 언어 선택 홈으로 돌아가는 길은 상단바 앱 이름이다(언어별 홈이 아니다).
+    phone.locator(".topbar .topbar-brand").click()
+    expect(phone).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
+    _expect_home(phone, HOME_INTRO, HOME_CARDS)
+
+    flow.press_home_card(phone, HOME_CARDS[1][0])
+    expect(phone).to_have_url(re.compile(f"{re.escape(EN_HOME_ROUTE)}$"))
+    _expect_home(phone, EN_INTRO, EN_CARDS)
+
+    flow.press_home_card(phone, DEMO_CARD[0])
+    phone.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(phone).to_have_url(re.compile(f"{re.escape(EN_DEMO_ROUTE)}$"))
 
     phone.wait_for_timeout(_LATE_REQUEST_WINDOW_MS)
     traffic.assert_none_outside()
@@ -102,27 +178,45 @@ def test_the_home_says_what_the_app_is_without_any_request(frontend: Frontend, p
 
 
 def test_back_returns_home_from_the_public_screens(frontend: Frontend, phone: Page) -> None:
-    """선택 홈 -> Demo -> 뒤로 -> 선택 홈, 선택 홈 -> 가나 -> 뒤로 -> 선택 홈. 모르는 hash는 `#/`다."""
+    """뒤로 가기가 2단 홈을 한 단씩 거슬러 간다. 모르는 hash는 `#/`, 옛 경로는 `#/ja/...`다."""
     traffic = flow.watch_traffic(
         phone, frontend_url=frontend.url, api_url=frontend.api_url, block=True
     )
     phone.goto(frontend.url)
     _home(phone)
 
-    phone.locator(".home-card", has_text=CARDS[0][0]).click()
+    # `#/` -> `#/ja` -> demo -> 뒤로 -> `#/ja` -> 뒤로 -> `#/`.
+    flow.press_home_card(phone, HOME_CARDS[0][0])
+    expect(phone).to_have_url(re.compile(f"{re.escape(JA_HOME_ROUTE)}$"))
+    flow.press_home_card(phone, DEMO_CARD[0])
     phone.locator(".screen.demo .sentence").wait_for(state="visible")
     assert phone.url.endswith(DEMO_ROUTE), phone.url
     phone.go_back()
     _home(phone)
+    expect(phone).to_have_url(re.compile(f"{re.escape(JA_HOME_ROUTE)}$"))
     assert phone.locator(".screen.demo").count() == 0
 
-    phone.locator(".home-card", has_text=CARDS[1][0]).click()
+    # `#/ja` -> 가나 -> 뒤로 -> `#/ja` -> 뒤로 -> `#/`.
+    flow.press_home_card(phone, KANA_CARD[0])
     _kana(phone)
     expect(phone).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
     assert _topbar_right(phone) == [flow.LOGIN_LABEL]
     phone.go_back()
     _home(phone)
     assert phone.locator(".screen.kana").count() == 0
+    phone.go_back()
+    _home(phone)
+    # 처음 열 때 hash가 없었으므로 거슬러 간 끝은 hash 없는 URL이다. 둘 다 언어 선택 홈이다(route 표).
+    expect(phone).to_have_url(_HOME_URL)
+
+    # `#/` -> `#/en` -> 영어 demo -> 뒤로 -> `#/en`.
+    flow.press_home_card(phone, HOME_CARDS[1][0])
+    expect(phone).to_have_url(re.compile(f"{re.escape(EN_HOME_ROUTE)}$"))
+    flow.press_home_card(phone, DEMO_CARD[0])
+    phone.locator(".screen.demo .sentence").wait_for(state="visible")
+    phone.go_back()
+    _home(phone)
+    expect(phone).to_have_url(re.compile(f"{re.escape(EN_HOME_ROUTE)}$"))
 
     phone.goto(f"{frontend.url}/#/unknown")
     expect(phone).to_have_url(re.compile(f"{re.escape(HOME_HASH)}$"))
@@ -132,6 +226,11 @@ def test_back_returns_home_from_the_public_screens(frontend: Frontend, phone: Pa
     _kana(phone)
     expect(phone).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
     assert phone.locator(".screen.home").count() == 0
+
+    # 옛 평면 경로는 중첩 경로로 바뀐다(ADR-025 결정 1). 북마크·PWA 바로가기가 남아 있을 수 있다.
+    phone.goto(f"{frontend.url}/{LEGACY_DEMO_ROUTE}")
+    phone.locator(".screen.demo .sentence").wait_for(state="visible")
+    expect(phone).to_have_url(re.compile(f"{re.escape(DEMO_ROUTE)}$"))
 
     traffic.assert_none_outside()
     assert traffic.api_calls == []
@@ -146,7 +245,12 @@ def test_back_returns_home_from_the_public_screens(frontend: Frontend, phone: Pa
 def test_login_is_checked_only_from_the_topbar_and_the_login_area_has_no_hash(
     e2e_stack: E2EStack, phone: Page
 ) -> None:
-    """`로그인` -> 401 Login -> 로그인 -> Study, 새로고침 -> 선택 홈, `로그인` -> 곧바로 Study, 로그아웃 -> 선택 홈."""
+    """`로그인` -> 401 Login -> 로그인 -> 언어 선택 -> Study, 새로고침 -> 홈, `로그인` -> 곧바로 Study, 로그아웃 -> 홈.
+
+    MVP-03: 열린 study session이 없는 첫 로그인은 **언어 선택 화면**을 지난다(ADR-025 결정 2).
+    그 화면에도 hash가 없다. 두 번째 `로그인`은 열린 session이 있으므로 언어를 다시 묻지 않는다
+    --- 그것이 "선택 결과를 저장해 두지 않아도 다시 묻지 않는다"의 e2e 쪽 증거다(합격 기준 11).
+    """
     stack = e2e_stack
     learner = flow.seed_and_create_user(stack)
     traffic = flow.watch_traffic(
@@ -171,6 +275,15 @@ def test_login_is_checked_only_from_the_topbar_and_the_login_area_has_no_hash(
     phone.locator("#login-id").fill(learner.login_id)
     phone.locator("#password").fill(flow.PASSWORD)
     phone.locator(".login-form button[type=submit]").click()
+
+    # 열린 session이 없으므로 언어 선택 화면이다. 고른 언어로 Study Screen에 들어간다.
+    select = phone.locator(".screen.language-select")
+    select.wait_for(state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000)
+    expect(select.locator("h1")).to_have_text(LANGUAGE_SELECT_TITLE)
+    expect(select.locator(".home-card")).to_have_text(LANGUAGE_LABELS)
+    assert "#" not in phone.url, f"언어 선택 화면에 hash가 생겼다: {phone.url}"
+    select.locator(".home-card", has_text=re.compile(f"^{re.escape(LANGUAGE_LABELS[0])}$")).click()
+
     flow.wait_for_sentence(phone)
     assert "#" not in phone.url, f"로그인 영역에 hash가 생겼다: {phone.url}"
 

@@ -211,9 +211,10 @@ def _table_screen(page: Page) -> Locator:
 
 
 def _enter_from_home(page: Page, frontend: Frontend) -> Locator:
+    """언어 선택 홈 -> 일본어 홈 -> 글자 카드. MVP-03에서 홈이 2단이 되었다(ADR-025 결정 2)."""
     page.goto(frontend.url)
-    page.locator(".screen.home").wait_for(state="visible")
-    page.locator(".home-card", has_text=KANA_CARD_TITLE).click()
+    flow.enter_language_home(page)
+    flow.press_home_card(page, KANA_CARD_TITLE)
     screen = _table_screen(page)
     expect(page).to_have_url(re.compile(f"{re.escape(KANA_ROUTE)}$"))
     return screen
