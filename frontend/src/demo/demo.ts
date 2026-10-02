@@ -1,5 +1,5 @@
 /**
- * Public Demo 화면(`03_UI_UX_SPEC.md`의 `Demo`). **`api.ts`도 `endpoints.ts`도 import하지 않는다.**
+ * Public Demo 화면 엔진(`03_UI_UX_SPEC.md`의 `Demo`). **`api.ts`도 `endpoints.ts`도 import하지 않는다.**
  *
  * demo는 static frontend fixture이고 demo 전용 endpoint·DB·provider가 없다(`04_SECURITY_AND_DATA.md`). 그래서
  * backend/LLM 장애와 구조적으로 독립이다. import 한 줄이 들어오면 `tests/unit/demo-isolation.test.ts`가
@@ -9,7 +9,11 @@
  * `InteractionOps` 자리에 fixture와 진행 규칙(`progress.ts`)을 꽂는다 --- 탭, 설명 시트, 번역 펼침, probe,
  * 신고가 실제 화면과 같은 코드로 돈다. 후리가나 토글도 Study Screen과 같은 모듈이다.
  *
- * -   진도는 `progress.ts`가 `nc.demo.ja.v1`에 저장한다. 다시 열면 이어서 보여주고, 없거나 맞지 않으면 조용히
+ * **언어마다 복제하지 않는다**(ADR-025 결정 3). 이 모듈은 fixture·저장소·후리가나 토글 유무·완료 화면의
+ * `글자 배우기` 버튼 유무를 `options`로 받는다. 언어별 entry(`ja/demo.ts`, `en/demo.ts`)가 각자의
+ * fixture와 `nc.demo.ja.v1` / `nc.demo.en.v1` 저장소를 엮어 이 모듈을 부른다.
+ *
+ * -   진도는 `options.store`가 저장한다. 다시 열면 이어서 보여주고, 없거나 맞지 않으면 조용히
  *     처음부터다. 서버로 보내지 않고 학습 신호가 아니다.
  * -   진행 표시는 `본 문장 수 / 전체 문장 수` 하나다. 12분 진행바, `오늘 학습 완료 / 더 학습하기`, 연장이 없다.
  * -   타이머도 주기 호출도 없다. 진행은 `다음 문장`을 누를 때만 움직인다.
@@ -26,20 +30,8 @@ import { showScreen } from '../ui/screen'
 import { renderSentence } from '../ui/segments'
 import { renderTopBar } from '../ui/topbar'
 import './demo.css'
-import type { DemoProbePick, DemoProgress, DemoView } from './progress'
-import {
-  DEMO_FIXTURE,
-  advance,
-  initialProgress,
-  isComplete,
-  nextView,
-  pickProbe,
-  readDemoProgress,
-  recordProbeAnswer,
-  recordSelfReport,
-  resetDemoProgress,
-  writeDemoProgress,
-} from './progress'
+import type { DemoFixture, DemoProbePick, DemoProgress, DemoView } from './progress'
+import { advance, initialProgress, isComplete, nextView, pickProbe, recordProbeAnswer, recordSelfReport } from './progress'
 
 /** demo 전용 문구(`03_UI_UX_SPEC.md`의 `화면 문구 표` > `Demo`). 실제 화면 문구(`MESSAGES`)와 섞지 않는다. */
 const DEMO_MESSAGES = {
@@ -65,24 +57,38 @@ const DEMO_MESSAGES = {
 const PROBE_PROMPT = '이 표현을 알고 계세요?'
 const PROBE_OPTIONS: readonly ProbeResponseValue[] = ['known', 'uncertain', 'unknown', 'skip']
 
-const KANA_HASH = '#/ja/kana'
+/** 언어별 `progress.ts`가 주는 진도 저장소. */
+export type DemoStore = {
+  read: () => DemoProgress | undefined
+  write: (progress: DemoProgress) => void
+  reset: () => void
+}
+
+export type DemoScreenOptions = {
+  fixture: DemoFixture
+  store: DemoStore
+  /** 후리가나 토글을 그릴지. 영어 demo는 `false`다(ruby가 없다, ADR-025 결정 3). */
+  withFuriganaToggle: boolean
+  /** 완료 화면의 `글자 배우기` 버튼. 없으면 그리지 않는다(영어는 대응하는 화면이 없다, ADR-025 결정 2). */
+  kana?: { hash: string }
+}
 
 /**
- * `#/ja/demo` route의 화면(`routes.ts`). 나가는 길은 상단바다 --- 앱 이름은 선택 홈, `로그인`은 main.ts가
- * 주입한 로그인 진입을 **넘기기만** 한다.
+ * 언어별 route(`#/ja/demo`, `#/en/demo`)의 화면. 나가는 길은 상단바다 --- 앱 이름은 선택 홈, `로그인`은
+ * main.ts가 주입한 로그인 진입을 **넘기기만** 한다.
  */
-export function mount(ctx: PublicScreenContext): void {
-  const fixture = DEMO_FIXTURE
+export function mountDemo(ctx: PublicScreenContext, options: DemoScreenOptions): void {
+  const { fixture, store } = options
   const total = fixture.sentences.length
-  let progress: DemoProgress = readDemoProgress() ?? initialProgress(fixture)
+  let progress: DemoProgress = store.read() ?? initialProgress(fixture)
 
   function save(next: DemoProgress): void {
     progress = next
-    writeDemoProgress(next)
+    store.write(next)
   }
 
   function startOver(): void {
-    resetDemoProgress()
+    store.reset()
     progress = initialProgress(fixture)
   }
 
@@ -135,7 +141,7 @@ export function mount(ctx: PublicScreenContext): void {
     foot.className = 'study-foot'
     foot.append(nextButton)
 
-    screen.append(topBar(true), title, banner, progressText, sentenceSlot, interactionSlot, foot)
+    screen.append(topBar(options.withFuriganaToggle), title, banner, progressText, sentenceSlot, interactionSlot, foot)
     showScreen(ctx.root, screen, ctx.signal)
 
     /** 지금 문장의 수명. 문장을 바꾸거나 화면을 떠나면 abort되어 열린 설명 시트가 닫힌다. */
@@ -327,14 +333,6 @@ export function mount(ctx: PublicScreenContext): void {
     body.className = 'demo-complete-body'
     body.append(title, thanks)
 
-    const kana = document.createElement('button')
-    kana.type = 'button'
-    kana.className = 'primary demo-learn-kana'
-    kana.textContent = DEMO_MESSAGES.learnKana
-    kana.addEventListener('click', () => {
-      ctx.navigate(KANA_HASH)
-    })
-
     const restart = document.createElement('button')
     restart.type = 'button'
     restart.className = 'secondary demo-restart'
@@ -350,7 +348,20 @@ export function mount(ctx: PublicScreenContext): void {
 
     const foot = document.createElement('footer')
     foot.className = 'demo-complete-foot'
-    foot.append(kana, restart, note)
+
+    // 일본어만 대응하는 보조 화면(가나 학습)이 있다. 영어는 두지 않는다(ADR-025 결정 2, 12_TEST_PLAN.md).
+    if (options.kana !== undefined) {
+      const kana = document.createElement('button')
+      kana.type = 'button'
+      kana.className = 'primary demo-learn-kana'
+      kana.textContent = DEMO_MESSAGES.learnKana
+      kana.addEventListener('click', () => {
+        ctx.navigate(options.kana!.hash)
+      })
+      foot.append(kana)
+    }
+
+    foot.append(restart, note)
 
     screen.append(topBar(false), body, foot)
     showScreen(ctx.root, screen, ctx.signal)

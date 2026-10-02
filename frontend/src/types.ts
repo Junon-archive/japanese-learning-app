@@ -163,12 +163,12 @@ export type CompletePresentationResponse = {
 // interaction
 // --------------------------------------------------------------------------
 
-/** precomputed `sentence_item_explanations` 그대로. reading은 여기에만 있다. */
+/** precomputed `sentence_item_explanations` 그대로. reading은 여기에만 있다. 영어는 null이다(ADR-023 결정 6). */
 export type Explanation = {
   sentence_item_id: number
   learning_item_id: number
   canonical_form: string
-  reading: string
+  reading: string | null
   item_type: LearningItemType
   core_meaning: string
   meaning_in_context: string

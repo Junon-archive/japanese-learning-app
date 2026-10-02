@@ -1,5 +1,6 @@
 /**
- * demo 진행 규칙(`03_UI_UX_SPEC.md`의 `Demo` > `진행 규칙`)과 진도 저장. **진행 규칙은 순수 함수다.**
+ * demo 진행 규칙(`03_UI_UX_SPEC.md`의 `Demo` > `진행 규칙`)과 저장값 검증. **순수 함수이고 언어와
+ * 무관하게 공유한다**(ADR-025 결정 3) --- 일본어 demo와 영어 demo가 같은 규칙으로 돈다.
  *
  * 프론트엔드의 단순 규칙이다. Learning Engine, FSRS, mastery, context stage를 복제하지 않는다(불변식 20).
  * 쓰는 것은 `constants.ts`의 두 상수와 순번(본 문장 수)뿐이다. 값은 바꾸지 않고 새 값을 돌려준다.
@@ -7,14 +8,14 @@
  * -   "표현"은 learning item이다. 자기평가의 key는 `learning_item_id`다.
  * -   문장은 fixture 안의 순번(index)으로 가리킨다. 값 안의 fixture 식별자가 같을 때만 그 순번이 뜻을 가진다.
  *
- * 진도 저장(`nc.demo.ja.v1`)도 이 모듈이 맡는다(`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위`). 서버로
- * 보내지 않고 로그인 여부·계정 값을 넣지 않는다. 형식·값 범위·소속이 맞지 않는 저장값은 조용히 없는 것으로 본다.
+ * **이 모듈은 `localSlot`을 부르지 않는다.** 진도 저장(`nc.demo.ja.v1` / `nc.demo.en.v1`)은 언어별
+ * `ja/progress.ts` · `en/progress.ts`가 각자의 fixture와 key로 `isProgressOf`를 감싸 맡는다
+ * (`spec/04_SECURITY_AND_DATA.md`의 `localStorage 사용 범위`, ADR-025 결정 3). 서버로 보내지 않고
+ * 로그인 여부·계정 값을 넣지 않는다. 형식·값 범위·소속이 맞지 않는 저장값은 조용히 없는 것으로 본다.
  */
-import { localSlot } from '../local-store'
 import type { ExplicitSignal } from '../types'
 import { DEMO_PROBE_EVERY_SENTENCES, DEMO_REVIEW_AFTER_SENTENCES } from './constants'
 import type { DemoSentence } from './fixture'
-import { DEMO_FIXTURE_ID, DEMO_SENTENCES } from './fixture'
 
 export type DemoFixture = {
   readonly id: string
@@ -181,11 +182,8 @@ function hasItem(sentence: DemoSentence, learningItemId: number): boolean {
 }
 
 // ----------------------------------------------------------------------
-// 저장 (`nc.demo.ja.v1`)
+// 저장값 검증 (언어별 `progress.ts`의 `isValid`가 부른다)
 // ----------------------------------------------------------------------
-
-/** 지금 번들에 들어 있는 fixture. */
-export const DEMO_FIXTURE: DemoFixture = { id: DEMO_FIXTURE_ID, sentences: DEMO_SENTENCES }
 
 const PROGRESS_KEYS = ['fixtureId', 'position', 'seen', 'selfReports', 'probed', 'queue', 'reviewed']
 const SELF_REPORT_VALUES: readonly string[] = ['known', 'uncertain', 'unknown']
@@ -210,8 +208,10 @@ function isDistinct(values: readonly unknown[]): boolean {
 /**
  * 형식, 값 범위, 소속을 본다: fixture 식별자가 같고, 위치·본 문장 수가 문장 수 안이며 서로 맞고, 자기평가·probe가
  * 가리키는 표현이 fixture에 있고, 대기열·다시 본 문장이 본 문장이며 중복이 없다. 다른 키는 없다.
+ *
+ * 언어별 `progress.ts`가 자기 fixture로 감싸 `localSlot`의 `isValid`로 쓴다.
  */
-function isProgressOf(fixture: DemoFixture, value: unknown): value is DemoProgress {
+export function isProgressOf(fixture: DemoFixture, value: unknown): value is DemoProgress {
   if (!isRecord(value) || !hasExactKeys(value, PROGRESS_KEYS)) return false
   if (value.fixtureId !== fixture.id) return false
 
@@ -264,26 +264,4 @@ function isProgressOf(fixture: DemoFixture, value: unknown): value is DemoProgre
 
   const reviewedSet = new Set<unknown>(reviewed)
   return !queue.some((entry: { index: unknown }) => reviewedSet.has(entry.index))
-}
-
-/** 지금 fixture의 진도인가(`localSlot`의 isValid). */
-export function isDemoProgress(value: unknown): value is DemoProgress {
-  return isProgressOf(DEMO_FIXTURE, value)
-}
-
-const slot = localSlot('nc.demo.ja.v1', isDemoProgress)
-
-/** 저장된 진도. 없거나, 읽을 수 없거나, 다른 fixture의 값이거나, 형식이 맞지 않으면 undefined. */
-export function readDemoProgress(): DemoProgress | undefined {
-  return slot.read()
-}
-
-/** 저장을 시도한다. 저장할 수 없어도 이 페이지 안에서는 이어진다. 던지지 않는다. */
-export function writeDemoProgress(progress: DemoProgress): void {
-  slot.write(progress)
-}
-
-/** 진도 초기화. demo 진도만 지운다. */
-export function resetDemoProgress(): void {
-  slot.remove()
 }

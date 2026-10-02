@@ -15,8 +15,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { DEMO_SENTENCES } from '../../src/demo/fixture'
-import { DEMO_FIXTURE, advance, initialProgress } from '../../src/demo/progress'
+import { DEMO_SENTENCES } from '../../src/demo/ja/fixture'
+import { DEMO_FIXTURE } from '../../src/demo/ja/progress'
+import { advance, initialProgress } from '../../src/demo/progress'
 import { memoryStorage } from './demo-harness'
 import type { FakeElement } from './fake-dom'
 import { buttons, byClass, createFakeElement, fakeBrowser, fakeDocument } from './fake-dom'

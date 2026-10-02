@@ -98,11 +98,6 @@ export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLEl
   word.lang = 'ja'
   word.textContent = options.surface
 
-  const reading = document.createElement('div')
-  reading.className = 'reading'
-  reading.lang = 'ja'
-  reading.textContent = explanation.reading
-
   const canonical = document.createElement('div')
   canonical.className = 'canonical-form'
   canonical.lang = 'ja'
@@ -113,7 +108,16 @@ export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLEl
   tag.textContent = itemTypeLabel(explanation.item_type)
 
   const words = document.createElement('div')
-  words.append(word, reading, canonical)
+  // 영어는 reading이 없다(ADR-023 결정 6) --- 줄 자체를 두지 않는다(빈 줄이나 `-`가 아니다).
+  if (explanation.reading !== null) {
+    const reading = document.createElement('div')
+    reading.className = 'reading'
+    reading.lang = 'ja'
+    reading.textContent = explanation.reading
+    words.append(word, reading, canonical)
+  } else {
+    words.append(word, canonical)
+  }
   head.append(words, tag)
   panel.append(head)
 

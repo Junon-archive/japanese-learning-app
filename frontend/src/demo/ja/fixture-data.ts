@@ -1,5 +1,5 @@
 // 생성 파일. 손으로 고치지 않는다. scripts/build_demo_fixture.py
-import type { DemoSentence } from './fixture'
+import type { DemoSentence } from '../fixture'
 
 export const DEMO_FIXTURE_ID = '1ff150c24d3fd646'
 

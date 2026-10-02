@@ -261,12 +261,16 @@ class CompletePresentationResponse(BaseModel):
 
 
 class ExplanationResponse(BaseModel):
-    """precomputed `sentence_item_explanations` 그대로다. live LLM fallback은 없다."""
+    """precomputed `sentence_item_explanations` 그대로다. live LLM fallback은 없다.
+
+    `reading`은 영어에서 `null`이다(01_ENGLISH_CONTENT.md, ADR-023 결정 6) --- 필드는 생략하지
+    않는다.
+    """
 
     sentence_item_id: int
     learning_item_id: int
     canonical_form: str
-    reading: str
+    reading: str | None
     item_type: LearningItemType
     core_meaning: str
     meaning_in_context: str

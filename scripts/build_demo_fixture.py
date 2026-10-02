@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-"""Public Demo fixture 생성 CLI (`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`).
+"""Public Demo fixture 생성 CLI (`03_UI_UX_SPEC.md`의 `Demo`의 `fixture`, ADR-025 결정 3).
 
-    uv run python scripts/build_demo_fixture.py           # frontend/src/demo/fixture-data.ts를 쓴다
-    uv run python scripts/build_demo_fixture.py --check   # 쓰지 않고 커밋된 파일과 비교한다
+    uv run python scripts/build_demo_fixture.py                    # frontend/src/demo/ja/fixture-data.ts를 쓴다
+    uv run python scripts/build_demo_fixture.py --language en      # frontend/src/demo/en/fixture-data.ts를 쓴다
+    uv run python scripts/build_demo_fixture.py --check            # 쓰지 않고 커밋된 파일과 비교한다
 
-`seed/`의 YAML만 읽는다. DB·LLM에 닿지 않는다. 같은 `seed/`(와 같은 분석기·config)에서는 같은 파일이 나온다.
+`seed/<language>/`의 YAML만 읽는다. DB·LLM에 닿지 않는다. 같은 `seed/`(와 같은 분석기·config)에서는 같은
+파일이 나온다.
 
 ``` text
 검사      span_mismatch        tappable span 문자열이 원문 [start, end)와 다르다 / item 사이 span 겹침
@@ -15,15 +17,19 @@
           많이 덮는 문장(동률은 문장 seed_id 순)을 고른다. 상한 DEMO_SENTENCE_CAP. 문장 순서 = 선택 순서
 id        sentence_id = presentation_id = 순번(1..N), sentence_item_id = sentence_id * 10 + 문장 안
           tappable 순번(1부터), learning_item_id = items.yaml 순서(1부터)
-ruby      seed 적재와 같은 compute_ruby + API와 같은 build_render_segments. 문장 하나의 계산 실패는 그
-          문장을 ruby [] 로 넣고 `ruby_failed` 줄과 요약의 failed로 보고한다(exit 0)
+ruby      `--language ja`만. seed 적재와 같은 compute_ruby + API와 같은 build_render_segments. 문장 하나의
+          계산 실패는 그 문장을 ruby [] 로 넣고 `ruby_failed` 줄과 요약의 failed로 보고한다(exit 0).
+          `--language en`은 건너뛴다(ADR-023 결정 6과 같은 분기) --- 모든 문장이 ruby []다
 식별자    fixture 데이터의 canonical JSON sha256 앞 16자 (진도 저장의 fixture 식별자)
 ```
 
 -   seed 파일 구조가 틀리면(목록이 아님, seed_id 누락·중복, 모르는 item 참조, 타입이 틀린 필드 등) exit 2다.
     검사 3종에 걸린 문장은 제외 목록에 남기고 계속한다. 덮지 못한 item이 있어도 exit 0이다.
--   분석기를 적재하지 못하면 예외로 끝난다(fail-closed).
+-   `--language ja`에서 분석기를 적재하지 못하면 예외로 끝난다(fail-closed). `--language en`은 분석기를
+    적재하지 않는다.
 -   문장당 tappable 상한은 저장소의 `config/default.yaml`에서 읽는다. 운영 override 파일은 읽지 않는다.
+-   영어 설명에는 `reading`이 없다(01_ENGLISH_CONTENT.md). 생성 payload의 `reading`은 `null`이고
+    필드 자체는 생략하지 않는다(05_API_SPEC.md).
 """
 
 from __future__ import annotations
@@ -73,8 +79,11 @@ from app.schemas.study import (  # noqa: E402
 EXIT_OK = 0
 EXIT_FAILED = 2
 
-DEFAULT_SEED_DIR = REPO_ROOT / "seed" / "ja"
-DEFAULT_OUTPUT = REPO_ROOT / "frontend" / "src" / "demo" / "fixture-data.ts"
+DEFAULT_SEED_DIRS = {"ja": REPO_ROOT / "seed" / "ja", "en": REPO_ROOT / "seed" / "en"}
+DEFAULT_OUTPUTS = {
+    "ja": REPO_ROOT / "frontend" / "src" / "demo" / "ja" / "fixture-data.ts",
+    "en": REPO_ROOT / "frontend" / "src" / "demo" / "en" / "fixture-data.ts",
+}
 ITEMS_FILE = "items.yaml"
 SENTENCES_FILE = "sentences.yaml"
 
@@ -120,7 +129,8 @@ class SeedItem:
 
 @dataclass(frozen=True)
 class SeedExplanation:
-    reading: str
+    # 영어는 발음 표기를 하지 않는다(01_ENGLISH_CONTENT.md) --- `reading`이 None일 수 있다.
+    reading: str | None
     core_meaning: str
     meaning_in_context: str
     nuance: str
@@ -245,17 +255,24 @@ def parse_items(path: Path) -> list[SeedItem]:
     return items
 
 
-def _parse_explanation(value: object) -> SeedExplanation | None:
+def _parse_explanation(value: object, language: str) -> SeedExplanation | None:
     if not isinstance(value, dict):
         return None
-    required = ("reading", "core_meaning", "meaning_in_context", "nuance", "example_sentence")
+    required = ("core_meaning", "meaning_in_context", "nuance", "example_sentence")
     if not all(_is_text(value.get(key)) for key in required):
+        return None
+    # ja는 reading이 필수다. en은 reading 키를 쓰지 않는다(01_ENGLISH_CONTENT.md) --- None으로 둔다.
+    reading = value.get("reading")
+    if language == "ja":
+        if not _is_text(reading):
+            return None
+    elif reading is not None:
         return None
     translation = value.get("example_translation")
     if translation is not None and not _is_text(translation):
         return None
     return SeedExplanation(
-        reading=value["reading"],
+        reading=reading,
         core_meaning=value["core_meaning"],
         meaning_in_context=value["meaning_in_context"],
         nuance=value["nuance"],
@@ -282,7 +299,7 @@ def _parse_spans(value: object, where: str) -> tuple[ItemSpan, ...]:
     return tuple(spans)
 
 
-def parse_sentences(path: Path, item_seed_ids: set[str]) -> list[SeedSentence]:
+def parse_sentences(path: Path, item_seed_ids: set[str], language: str) -> list[SeedSentence]:
     sentences: list[SeedSentence] = []
     seen: set[str] = set()
     for index, entry in enumerate(_entries(path)):
@@ -308,7 +325,7 @@ def parse_sentences(path: Path, item_seed_ids: set[str]) -> list[SeedSentence]:
                     surface_form=_text(item_mapping, "surface_form", item_where),
                     is_tappable=is_tappable,
                     spans=_parse_spans(item_mapping.get("spans"), item_where),
-                    explanation=_parse_explanation(item_mapping.get("explanation")),
+                    explanation=_parse_explanation(item_mapping.get("explanation"), language),
                 )
             )
         sentences.append(
@@ -419,6 +436,7 @@ def _sentence_entry(
     items_by_seed_id: dict[str, SeedItem],
     summary: RubySummary,
     ruby_failed: list[tuple[str, str]],
+    language: str,
 ) -> dict[str, Any]:
     tappable = sentence.tappable_items
     ids = [
@@ -426,24 +444,29 @@ def _sentence_entry(
         for order, item in enumerate(tappable, start=1)
     ]
     refs = _span_refs(tappable, ids)
-    ruby_items = [
-        RubyItem(
-            sentence_item_id=item.item_seed_id,
-            spans=item.spans,
-            explanation_reading=item.explanation.reading if item.explanation else None,
-        )
-        for item in tappable
-    ]
-    try:
-        computation = compute_ruby(sentence.text, ruby_items, now=RUBY_COMPUTED_AT)
-        segments = build_render_segments(sentence.text, refs, ruby=computation.spans)
-    except Exception as exc:
-        # 표시 보조의 실패는 문장을 막지 않는다(ADR-021). 예외 메시지는 싣지 않는다.
-        summary.add_failure()
-        ruby_failed.append((sentence.seed_id, type(exc).__name__))
-        segments = build_render_segments(sentence.text, refs)
+
+    if language == "ja":
+        ruby_items = [
+            RubyItem(
+                sentence_item_id=item.item_seed_id,
+                spans=item.spans,
+                explanation_reading=item.explanation.reading if item.explanation else None,
+            )
+            for item in tappable
+        ]
+        try:
+            computation = compute_ruby(sentence.text, ruby_items, now=RUBY_COMPUTED_AT)
+            segments = build_render_segments(sentence.text, refs, ruby=computation.spans)
+        except Exception as exc:
+            # 표시 보조의 실패는 문장을 막지 않는다(ADR-021). 예외 메시지는 싣지 않는다.
+            summary.add_failure()
+            ruby_failed.append((sentence.seed_id, type(exc).__name__))
+            segments = build_render_segments(sentence.text, refs)
+        else:
+            summary.add(sentence.seed_id, computation)
     else:
-        summary.add(sentence.seed_id, computation)
+        # 영어는 ruby 계산을 건너뛴다(ADR-023 결정 6, ADR-025 결정 3) --- 모든 segment가 ruby []다.
+        segments = build_render_segments(sentence.text, refs)
 
     presentation = PresentationPayload(
         presentation_id=sentence_id,
@@ -490,9 +513,9 @@ def fixture_id(data: Sequence[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
-def build(seed_dir: Path, max_tappable: int) -> BuildResult:
+def build(seed_dir: Path, max_tappable: int, language: str) -> BuildResult:
     items = parse_items(seed_dir / ITEMS_FILE)
-    sentences = parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items})
+    sentences = parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items}, language)
 
     excluded: list[tuple[str, str]] = []
     passing: list[SeedSentence] = []
@@ -508,7 +531,7 @@ def build(seed_dir: Path, max_tappable: int) -> BuildResult:
     summary = RubySummary()
     ruby_failed: list[tuple[str, str]] = []
     data = [
-        _sentence_entry(sentence_id, sentence, items_by_seed_id, summary, ruby_failed)
+        _sentence_entry(sentence_id, sentence, items_by_seed_id, summary, ruby_failed, language)
         for sentence_id, sentence in enumerate(selected, start=1)
     ]
     return BuildResult(
@@ -533,7 +556,8 @@ def render_ts(identifier: str, data: Sequence[dict[str, Any]]) -> str:
     body = ",\n".join(lines)
     return (
         f"{HEADER}"
-        "import type { DemoSentence } from './fixture'\n"
+        # 출력은 항상 demo/<language>/fixture-data.ts다. `DemoSentence`는 한 단계 위의 공유 모듈에 있다.
+        "import type { DemoSentence } from '../fixture'\n"
         "\n"
         f"{_ID_PREFIX}'{identifier}'\n"
         "\n"
@@ -575,16 +599,23 @@ def _out(message: str) -> None:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build the Public Demo fixture from seed/.")
     parser.add_argument(
+        "--language",
+        choices=sorted(DEFAULT_SEED_DIRS),
+        default="ja",
+        help="대상 언어. seed-dir/output 기본값이 이 값에 따라 seed/<language>, "
+        "frontend/src/demo/<language>/fixture-data.ts가 된다(기본값 ja).",
+    )
+    parser.add_argument(
         "--seed-dir",
         type=Path,
-        default=DEFAULT_SEED_DIR,
-        help=f"items.yaml / sentences.yaml이 있는 디렉터리 (기본값 {DEFAULT_SEED_DIR}).",
+        default=None,
+        help="items.yaml / sentences.yaml이 있는 디렉터리 (기본값은 --language에 따라 seed/ja 또는 seed/en).",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT,
-        help=f"생성 파일 경로 (기본값 {DEFAULT_OUTPUT}).",
+        default=None,
+        help="생성 파일 경로 (기본값은 --language에 따라 frontend/src/demo/ja 또는 demo/en 아래 fixture-data.ts).",
     )
     parser.add_argument(
         "--check",
@@ -596,8 +627,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    # 분석기 부재는 배포 결함이다. 문장별 실패로 흡수하지 않는다.
-    load_analyzer()
+    seed_dir = args.seed_dir if args.seed_dir is not None else DEFAULT_SEED_DIRS[args.language]
+    output = args.output if args.output is not None else DEFAULT_OUTPUTS[args.language]
+
+    if args.language == "ja":
+        # 분석기 부재는 배포 결함이다. 문장별 실패로 흡수하지 않는다. 영어는 분석기를 쓰지 않는다.
+        load_analyzer()
 
     try:
         max_tappable = load_config(DEFAULT_CONFIG_PATH).learning.max_new_items_per_sentence
@@ -610,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     try:
-        result = build(args.seed_dir, max_tappable)
+        result = build(seed_dir, max_tappable, args.language)
     except FixtureError as exc:
         return _fail(str(exc))
 
@@ -630,15 +665,15 @@ def main(argv: list[str] | None = None) -> int:
 
     content = render_ts(result.fixture_id, result.data).encode("utf-8")
     if args.check:
-        current = args.output.read_bytes() if args.output.is_file() else None
+        current = output.read_bytes() if output.is_file() else None
         if current != content:
-            _out(f"check: differs {args.output}\n")
+            _out(f"check: differs {output}\n")
             return EXIT_FAILED
         _out("check: ok\n")
         return EXIT_OK
 
-    args.output.write_bytes(content)
-    _out(f"wrote {args.output}\n")
+    output.write_bytes(content)
+    _out(f"wrote {output}\n")
     return EXIT_OK
 
 

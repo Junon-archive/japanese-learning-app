@@ -12,9 +12,9 @@ import type { FakeElement } from './fake-dom'
 import { buttons, byClass, createFakeElement } from './fake-dom'
 
 export type DemoModules = {
-  demo: typeof import('../../src/demo/demo')
-  progress: typeof import('../../src/demo/progress')
-  fixture: typeof import('../../src/demo/fixture')
+  demo: typeof import('../../src/demo/ja/demo')
+  progress: typeof import('../../src/demo/ja/progress')
+  fixture: typeof import('../../src/demo/ja/fixture')
   furigana: typeof import('../../src/ui/furigana')
 }
 
@@ -22,9 +22,9 @@ export type DemoModules = {
 export async function freshDemo(): Promise<DemoModules> {
   vi.resetModules()
   const [demo, progress, fixture, furigana] = await Promise.all([
-    import('../../src/demo/demo'),
-    import('../../src/demo/progress'),
-    import('../../src/demo/fixture'),
+    import('../../src/demo/ja/demo'),
+    import('../../src/demo/ja/progress'),
+    import('../../src/demo/ja/fixture'),
     import('../../src/ui/furigana'),
   ])
   return { demo, progress, fixture, furigana }

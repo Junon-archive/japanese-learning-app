@@ -13,8 +13,9 @@
  *     `문장 뜻 보기`를 누른 뒤에야 `korean_translation`을 건넨다.
  * -   설명은 `sentence_item_id`별이다. 같은 `learning_item_id`가 두 문장에 나오면 문맥
  *     뜻이 서로 다른 두 설명이 된다 --- 서버가 그렇게 저장한다.
- * -   문장 데이터는 seed에서 생성한 `fixture-data.ts`에 있다(`scripts/build_demo_fixture.py`).
- *     이 파일은 타입과 re-export만 둔다.
+ * -   문장 데이터는 언어별로 갈린다(ADR-025 결정 3): `demo/ja/fixture-data.ts`,
+ *     `demo/en/fixture-data.ts`(둘 다 `scripts/build_demo_fixture.py --language <ja|en>`로 생성).
+ *     이 파일은 **타입만** 두고 데이터를 re-export하지 않는다 --- 언어별 `fixture.ts`가 re-export한다.
  */
 
 import type { Explanation, Presentation } from '../types'
@@ -27,5 +28,3 @@ export type DemoSentence = {
   /** `sentence_item_id` -> `POST /click`의 응답. */
   explanations: Record<number, Explanation>
 }
-
-export { DEMO_FIXTURE_ID, DEMO_SENTENCES } from './fixture-data'

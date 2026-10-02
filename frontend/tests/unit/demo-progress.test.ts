@@ -17,14 +17,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DEMO_PROBE_EVERY_SENTENCES as P, DEMO_REVIEW_AFTER_SENTENCES as R } from '../../src/demo/constants'
 import type { DemoSentence } from '../../src/demo/fixture'
-import { DEMO_FIXTURE_ID, DEMO_SENTENCES } from '../../src/demo/fixture'
+import { DEMO_FIXTURE_ID, DEMO_SENTENCES } from '../../src/demo/ja/fixture'
+import { DEMO_FIXTURE, isDemoProgress } from '../../src/demo/ja/progress'
 import type { DemoFixture, DemoProgress } from '../../src/demo/progress'
 import {
-  DEMO_FIXTURE,
   advance,
   initialProgress,
   isComplete,
-  isDemoProgress,
   nextView,
   pickProbe,
   recordProbeAnswer,

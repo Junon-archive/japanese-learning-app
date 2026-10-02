@@ -27,7 +27,7 @@ import { join } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
-import { DEMO_FIXTURE_ID } from '../../src/demo/fixture'
+import { DEMO_FIXTURE_ID } from '../../src/demo/ja/fixture'
 import { buildOutput, walk } from './build-output'
 import type { Finding, Project } from './import-graph'
 import { createProject, fullGraph, lineOf, SRC, staticGraph } from './import-graph'
@@ -344,10 +344,19 @@ describe('demo source', () => {
     .map((name) => ({ name, source: readFileSync(join(SRC, name), 'utf8') }))
 
   it('reaches browser storage only through local-store.ts', () => {
-    // demo 진도는 localStorage의 nc.demo.ja.v1에만 남고, 그 접근은 local-store.ts의 localSlot 경유뿐이다
-    // (04_SECURITY_AND_DATA.md의 `localStorage 사용 범위`). 주석에서 이름을 언급하는 것은 막지 않는다 ---
-    // 접근 형태만 찾는다. 계산된 속성 접근은 local-storage-scope.test.ts가 본다.
-    expect(files.map((file) => file.name)).toEqual(expect.arrayContaining(['demo/demo.ts', 'demo/progress.ts']))
+    // demo 진도는 localStorage의 nc.demo.ja.v1 / nc.demo.en.v1에만 남고, 그 접근은 local-store.ts의
+    // localSlot 경유뿐이다(04_SECURITY_AND_DATA.md의 `localStorage 사용 범위`, ADR-025 결정 3). 주석에서
+    // 이름을 언급하는 것은 막지 않는다 --- 접근 형태만 찾는다. 계산된 속성 접근은 local-storage-scope.test.ts가 본다.
+    expect(files.map((file) => file.name)).toEqual(
+      expect.arrayContaining([
+        'demo/demo.ts',
+        'demo/progress.ts',
+        'demo/ja/demo.ts',
+        'demo/ja/progress.ts',
+        'demo/en/demo.ts',
+        'demo/en/progress.ts',
+      ]),
+    )
     const patterns = [
       /localStorage\s*[.[]/,
       /sessionStorage\s*[.[]/,
@@ -358,7 +367,9 @@ describe('demo source', () => {
     for (const pattern of patterns) {
       expect(files.filter((file) => pattern.test(file.source)).map((f) => f.name)).toEqual([])
     }
-    expect(fullGraph(project, 'demo/demo.ts')).toContain('local-store.ts')
+    // 공유 engine(`demo/demo.ts`)은 저장소를 모른다 --- 저장은 언어별 entry가 엮는다.
+    expect(fullGraph(project, 'demo/ja/demo.ts')).toContain('local-store.ts')
+    expect(fullGraph(project, 'demo/en/demo.ts')).toContain('local-store.ts')
   })
 
   it('reaches the renderers it reuses', () => {

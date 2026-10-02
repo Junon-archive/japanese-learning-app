@@ -53,9 +53,9 @@ afterEach(() => {
 })
 
 describe('LOCAL_STORE_KEYS', () => {
-  it('is exactly the three keys', async () => {
+  it('is exactly the four keys', async () => {
     const { LOCAL_STORE_KEYS } = await freshModule()
-    expect([...LOCAL_STORE_KEYS]).toEqual(['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1'])
+    expect([...LOCAL_STORE_KEYS]).toEqual(['nc.furigana.v1', 'nc.kana.v1', 'nc.demo.ja.v1', 'nc.demo.en.v1'])
   })
 })
 
