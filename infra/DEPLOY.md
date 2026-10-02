@@ -425,11 +425,18 @@ printf '%s\n' "$DATABASE_URL"
 make seed
 ```
 
-확인: `loaded seed from <REPO>/seed: <N> items, ... sentences, ... spans, ... explanations`.
-`<N>`은 `seed/items.yaml`의 item 수와 같다.
+확인: `loaded seed from <REPO>/seed/ja: <N> items, ... sentences, ... spans, ... explanations`.
+`<N>`은 `seed/ja/items.yaml`의 item 수와 같다. `make seed`는 인자가 없으면 일본어(`seed/ja/`)를 적재한다.
 
-**seed는 추가 적재가 되지 않는다.** 이미 seed를 적재한 DB에 다른 seed를 넣으려면 12절 절차로 DB를
-**한 번 초기화하고 다시 적재한다.** 그때 계정과 학습 기록은 모두 사라진다.
+**기본 모드는 빈 DB 전용이다.** `origin = seed` 행이 이미 있으면 거부한다. 같은 언어의 seed를 고쳐서 다시
+넣으려면 12절 절차로 DB를 **한 번 초기화하고 다시 적재한다**(계정과 학습 기록이 모두 사라진다).
+
+**다른 언어를 더하는 것은 초기화가 필요 없다**(MVP-03). `--incremental`이 파일의 `seed_id` 중 DB에 없는
+것만 넣고 기존 행을 고치지 않는다. 영어를 운영에 넣는 절차는 18절이다.
+
+``` sh
+uv run python scripts/load_seed.py --language en --incremental
+```
 
 ### 4.5 prompt 등록 --- worker보다 반드시 먼저
 
@@ -986,7 +993,8 @@ export DATABASE_URL="$(make -s db-up-local ARGS='--database nc_seedcheck')" \
   && make seed
 ```
 
-확인: `loaded seed from <REPO>/seed: <N> items, ...`에서 `<N>`이 확장한 seed 파일의 item 수와 같다. 오류가 나면 여기서 멈추고 seed를 고친다.
+확인: `loaded seed from <REPO>/seed/ja: <N> items, ...`에서 `<N>`이 확장한 seed 파일의 item 수와 같다. 오류가 나면 여기서 멈추고 seed를 고친다.
+영어까지 확인하려면 이어서 `uv run python scripts/load_seed.py --language en --incremental`을 친다.
 이 터미널은 닫는다.
 
 ### 12.1 운영 초기화
@@ -1612,4 +1620,403 @@ SQL
 ls -l data/backups/pre-mvp02/
 rm -r data/backups/pre-mvp02
 docker image rm <BACKEND_IMAGE>:pre-mvp02 <WORKER_IMAGE>:pre-mvp02    # 이름만 지운다 (확인 필요)
+```
+
+## 18. MVP-03 업데이트 (영어 학습 추가, 1회)
+
+MVP-02가 돌고 있는 운영에 MVP-03을 올리는 업데이트다. **11절 대신 이 절을 따른다.** 모든 명령은 2.3의
+운영 셸에서 친다.
+
+**이 절은 아직 운영에 적용하지 않았다.** 기대 출력은 저장소의 테스트(일회용 pgserver DB, seed만 적재)에서
+확인한 값이고, docker·운영 호스트가 끼는 단계(18.2, 18.3, 18.11)는 **확인 필요**다. 17절과 달리 운영 리허설
+기록이 없으므로, 각 단계의 기대 출력이 다르면 다음 단계로 넘어가지 않는다.
+
+> **17절과 가장 다른 점: 되돌리기에 "이미지만" 경로가 없다.** migration 0005는 `sentences.japanese`를
+> `sentences.text`로 **리네임**한다. 옛 코드는 없어진 컬럼을 조회하므로 0005 DB에서 아예 돌지 않는다.
+> DB를 되돌리려면 18.4 백업 복원뿐이다(18.14 B). 17.11의 A(이미지만)에 해당하는 것이 없다.
+
+### 18.0 무엇이 바뀌나
+
+``` text
+DB          migration 0004 -> 0005. 여섯 단계이고 전부 데이터를 잃지 않는다. DROP TABLE·DROP COLUMN이 없다
+            1 RENAME   sentences.japanese -> sentences.text
+            2 ADD      language 컬럼 5개 테이블 (learning_items, sentences, study_sessions,
+                       prompt_versions, generation_jobs). NULL 추가 -> 기존 행 전부 'ja' -> NOT NULL + CHECK
+                       server_default를 두지 않는다 (언어를 빠뜨린 INSERT가 조용히 일본어가 되지 않게)
+            3 ADD      seed_id 컬럼 2개 (learning_items, sentences) + seed_id IS NOT NULL 부분 unique index
+            4 RELAX    reading NOT NULL 해제 2개 (learning_items, sentence_item_explanations) --- 영어는 NULL
+            5 ADD      CHECK ck_sentences_ruby_json_ja_only (language='ja' OR ruby_json IS NULL)
+            6 REPLACE  prompt_versions 제약을 (task_type, language, version) / active는 (task_type, language)
+            사용자별 학습 테이블 여덤 개에는 language를 더하지 않는다 (불변식 21)
+seed        seed/items.yaml -> seed/ja/items.yaml 로 옮겼다. seed/en/ 이 새로 생겼다 (표현 300, 문장 876)
+            기존 일본어 행의 seed_id는 migration이 아니라 backfill(18.7)이 채운다
+prompt      ja 3종이 _v2로 올라가고(요청 context 키 이름 변경) en 3종이 새로 생긴다. 등록은 18.8
+config      content.max_sentence_length_chars 가 스칼라 -> {ja, en} 맵이 되었다
+            **운영 override 사본을 다시 쓰지 않으면 새 코드가 기동하지 않는다** (18.10)
+backend     의존성 그대로. POST /api/study/session 이 language 를 필수 body로 받는다 (없으면 422)
+worker      의존성 그대로. 영어 job은 형태소 분석기를 부르지 않는다. 부팅 검사는 task 3종 기준이라
+            영어 prompt active 행이 없어도 기동은 된다 --- 대신 영어 job만 dead_letter가 된다
+frontend    언어 선택 홈, 중첩 route(#/ja/..., #/en/...), 영어 demo, 영어 문장 재생 버튼 -> 6.2로 다시 배포
+그대로      .env, infra/docker-compose.yml, 일본어 seed 내용, 일본어 학습 기록
+```
+
+-   **운영 DB를 초기화하지 않는다.** 계정과 학습 기록은 그대로 남는다. 12절은 하지 않는다.
+-   **옛 프론트와 새 API는 함께 돌지 않는다.** 옛 프론트는 `POST /session`에 `language`를 싣지 않으므로 422다.
+    그래서 18.11(재기동)과 18.12(프론트) 사이에는 **학습 시작이 되지 않는 구간이 있다.** 두 단계를 붙여서 한다.
+-   순서: 사전 확인 → 이미지 보존 → 재빌드 → 정지·백업 → migration → seed_id backfill(dry-run → 적용) →
+    prompt 등록 → 영어 seed 적재 → config 사본 → 재기동 → 프론트 → 확인.
+    **18.4부터 18.12까지 API와 worker가 멈춰 있다.**
+
+### 18.1 사전 확인
+
+``` sh
+cd <REPO>
+git status --short                 # 출력 없음
+git rev-parse --short HEAD         # <PREV_COMMIT>로 적어 둔다
+C images backend worker            # REPOSITORY 열을 <BACKEND_IMAGE>, <WORKER_IMAGE>로 적어 둔다
+```
+
+`git status`에 무엇이든 나오면 멈춘다. 적어 둔 세 값은 되돌리기(18.14)에 쓴다. 그다음 코드를 받는다.
+
+``` sh
+git pull
+diff config/default.yaml /etc/nihongo-context/config.yaml    # 이번에는 max_sentence_length_chars 모양이 다르다(18.10)
+uv sync
+df -h .
+```
+
+-   `diff`에 `max_sentence_length_chars`가 스칼라 대 맵으로 나와야 한다. 나오지 않으면 override 파일 경로를
+    잘못 본 것이다(2.4).
+-   `df`의 Avail을 본다. 보존하는 옛 이미지(18.2)와 백업 두 개(18.4, 18.7)가 더 필요하다.
+
+### 18.2 이전 이미지 보존
+
+재빌드(18.3)는 `latest` 이름을 새 이미지로 옮긴다. 그 전에 지금 이미지에 이름을 하나 더 붙여 둔다.
+
+``` sh
+docker tag <BACKEND_IMAGE>:latest <BACKEND_IMAGE>:pre-mvp03
+docker tag <WORKER_IMAGE>:latest <WORKER_IMAGE>:pre-mvp03
+docker image ls <BACKEND_IMAGE>; docker image ls <WORKER_IMAGE>   # 각각 latest와 pre-mvp03의 IMAGE ID가 같다
+```
+
+-   **확인 필요** (17.2와 같은 명령이고 운영에서 한 번 확인된 절차다).
+-   0005 DB에서는 이 이미지로 되돌려도 서비스가 돌지 않는다(위 경고). 그래도 태그는 남긴다 --- 18.14 B의
+    백업 복원 뒤에 함께 되돌릴 대상이다.
+
+### 18.3 이미지 재빌드
+
+``` sh
+C build backend worker
+```
+
+-   **실행 중인 컨테이너는 옛 이미지로 계속 돈다.** 새 이미지는 18.11에서 띄운다.
+-   **build가 실패하면 여기서 멈춘다.** 의존성이 그대로이므로 17.3과 달리 추가 확인 명령은 없다. 운영은 옛
+    이미지로 그대로 돌고 있다.
+
+### 18.4 정지와 백업 (rotation 밖)
+
+`B`는 이번 업데이트 전용 백업 디렉터리다. 출력된 `pre-mvp03 backup dir:` 줄을 적어 둔다.
+17.4와 같은 방식이고 디렉터리 이름만 다르다.
+
+``` sh
+C stop backend worker
+C ps                               # backend, worker가 보이지 않는다. postgres는 돈다
+B=data/backups/pre-mvp03
+make db-backup ARGS="--pg-bin <PG_BIN> --backup-dir $B --keep 1"
+ls -l $B/                          # backup-*.dump 하나
+echo "pre-mvp03 backup dir: $B"
+```
+
+-   **이 백업이 유일한 0004 사본이다.** 18.14 B가 이것을 복원한다. rotation(9.2)이 세지 않는다.
+-   백업이 실패하면 migration을 하지 않는다. 서비스를 다시 올리고(18.11의 `C up` 두 줄) 원인을 본다.
+
+### 18.5 migration (0004 -> 0005)
+
+``` sh
+make db-migrate ARGS="--pg-bin <PG_BIN>"
+```
+
+-   `db_migrate.py`가 **자기 백업을 한 번 더 만든다**(생략 옵션 없음). 그 백업이 실패하면 upgrade를 하지 않고
+    revision이 `0004` 그대로다.
+-   기대: 대상 DSN 출력 → 백업 → `alembic upgrade head` → `now at head (0005)`.
+-   끝난 뒤 DB를 직접 본다.
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT version_num FROM alembic_version;
+SELECT count(*) AS sentences, count(*) FILTER (WHERE language = 'ja') AS ja FROM sentences;
+SELECT count(*) AS items, count(*) FILTER (WHERE language = 'ja') AS ja FROM learning_items;
+SELECT count(*) AS review_states FROM review_states;
+SELECT count(*) AS exposures FROM item_exposures;
+SELECT count(*) AS events FROM learning_events;
+SQL
+```
+
+-   기대: `version_num` = `0005`. `sentences`와 `items`는 전량이 `ja`다. 뒤의 세 수는 **18.4 백업 직전과 같아야
+    한다**(학습 기록 보존. 합격 기준 1번). 다르면 멈추고 18.14 B를 검토한다.
+-   `sentences.text` 컬럼이 있고 `japanese`가 없다. 옛 코드는 이 DB에서 돌지 않는다(위 경고).
+
+### 18.6 seed_id backfill dry-run (쓰기 없음)
+
+기존 일본어 seed 행에 `seed_id`를 채운다. **이것이 18.9보다 먼저여야 한다** --- `seed_id`가 비어 있으면 증분
+적재가 기존 일본어 행을 "이미 있다"고 알아보지 못하고 중복으로 넣으려 한다.
+
+``` sh
+uv run python scripts/backfill_seed_id.py --seed-dir seed/ja
+```
+
+-   기본이 dry-run이다. **쓰기가 없다.**
+-   기대: 대조 결과와 채울 행 수. 저장소 테스트 기준으로 일본어 문장은 765, item 수는 `seed/ja/items.yaml`의
+    행 수와 같다.
+-   **대조가 어긋나면 exit 2이고 아무것도 쓰지 않는다.** 그 경우 멈춘다. 운영 DB의 일본어 seed 행이 파일과
+    다르다는 뜻이고, 원인을 모른 채 `--apply`를 하면 틀린 `seed_id`가 박힌다.
+
+### 18.7 seed_id backfill 적용
+
+``` sh
+uv run python scripts/backfill_seed_id.py --seed-dir seed/ja --apply --pg-bin <PG_BIN>
+```
+
+-   `--apply`는 쓸 행이 있으면 **먼저 검증된 백업을 만든다**(생략 옵션 없음). 그래서 이 단계에서 백업이 하나 더
+    생긴다(rotation 안).
+-   끝난 뒤 확인한다.
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT count(*) AS items_null FROM learning_items WHERE origin = 'seed' AND seed_id IS NULL;
+SELECT count(*) AS sentences_null FROM sentences WHERE source_type = 'seed' AND seed_id IS NULL;
+SQL
+```
+
+-   기대: 두 수 모두 `0`. 하나라도 남으면 18.9를 하지 않는다.
+
+### 18.8 prompt_versions 등록 (ja _v2 3종 + en _v1 3종)
+
+`<MODEL>`은 운영자가 정한다(코드에 기본값이 없다 --- 08_LLM_SPEC.md). 지금 돌고 있는 모델을 쓰려면 먼저 본다.
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT task_type, language, version, provider, model, active FROM prompt_versions ORDER BY task_type, language, version;
+SQL
+```
+
+그다음 여섯 줄을 등록한다. `--language`를 생략하면 `ja`다(하위 호환).
+
+``` sh
+make prompts ARGS="--provider openai --model <MODEL>"
+make prompts ARGS="--provider openai --model <MODEL> --language en"
+```
+
+-   첫 줄이 ja 3종(`sentence_gen_v2`, `review_context_v2`, `explain_item_v2`)을 등록하고 active로 바꾼다.
+    둘째 줄이 en 3종(`sentence_gen_en_v1`, `review_context_en_v1`, `explain_item_en_v1`)을 등록한다.
+-   active 유일성이 `(task_type, language)`이므로 **두 언어가 동시에 active다.** 한 언어의 active 행이 없으면
+    그 언어 job만 `dead_letter`가 된다(기동 실패가 아니다).
+-   위 SELECT를 다시 쳐서 여섯 행이 `active = t`인지 본다. ja의 옛 `_v1` 행은 `active = f`로 남는다(지우지 않는다).
+
+### 18.9 영어 seed 증분 적재
+
+``` sh
+uv run python scripts/load_seed.py --language en --incremental
+```
+
+-   `--incremental`은 파일의 `seed_id` 중 DB에 없는 것만 넣고 **기존 행을 UPDATE하지 않는다.** 한 항목이라도
+    실패하면 전부 롤백된다. 두 번 쳐도 결과가 같다(멱등).
+-   기대: items `300` inserted / sentences `876` inserted, skipped `0`. ruby 요약의 계산 건수는 `0`이다
+    (영어는 형태소 분석기를 부르지 않는다).
+-   확인한다.
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT language, count(*) FROM learning_items GROUP BY language ORDER BY language;
+SELECT language, count(*) FROM sentences GROUP BY language ORDER BY language;
+SELECT count(*) AS en_with_ruby FROM sentences WHERE language = 'en' AND ruby_json IS NOT NULL;
+SELECT count(*) AS en_with_reading FROM learning_items WHERE language = 'en' AND reading IS NOT NULL;
+SQL
+```
+
+-   기대: `en` item `300`, `en` 문장 `876`, `ja` 수는 18.5와 같다. 뒤의 두 수는 `0`이다
+    (영어에 ruby도 발음 표기도 없다 --- 합격 기준 6·13번).
+
+### 18.10 config override 사본 재작성
+
+**이 단계를 빠뜨리면 새 코드가 기동하지 않는다.** `content.max_sentence_length_chars`가 스칼라에서
+`{ja, en}` 맵이 되었고, 로더는 옛 모양을 받지 않는다(시끄러운 실패를 택했다).
+
+``` sh
+diff config/default.yaml /etc/nihongo-context/config.yaml     # 지금 사본과의 차이를 눈으로 본다
+sudo cp /etc/nihongo-context/config.yaml /etc/nihongo-context/config.yaml.pre-mvp03
+```
+
+2.4에서 사본을 만든 방식 그대로, **운영 override 값을 유지하면서** 새 모양으로 다시 쓴다.
+
+``` text
+옛 사본   content:
+            max_sentence_length_chars: 60
+새 사본   content:
+            max_sentence_length_chars:
+              ja: 60
+              en: 120
+```
+
+-   운영에서 60이 아닌 값을 쓰고 있었다면 그 값을 `ja:`에 넣는다. `en:`은 저장소 기본값(120)으로 시작한다.
+-   다시 쓴 뒤 **호스트에서 먼저 읽혀 보고** 기동 전에 실패를 잡는다.
+
+``` sh
+NC_CONFIG_PATH=/etc/nihongo-context/config.yaml uv run python -c 'from app.config import load_config; import os; c = load_config(os.environ["NC_CONFIG_PATH"]); print("config ok", c.content.max_sentence_length_chars)'
+```
+
+-   기대: `config ok` 와 `ja`/`en` 두 값. `ConfigError`가 나오면 그 메시지대로 사본을 고친다. **여기서 고치지
+    못하면 18.11을 하지 않는다** --- 컨테이너가 재기동 루프에 빠진다.
+-   환경변수 이름이 2.4와 다르면 2.4를 따른다(그 절이 canonical이다).
+
+### 18.11 재기동 (worker 먼저)
+
+``` sh
+C up -d --no-deps --no-build worker
+C logs --tail 50 worker            # WorkerStartupError·ConfigError가 없다
+C up -d --no-deps --no-build backend
+curl -s http://127.0.0.1:8000/api/health; echo
+```
+
+-   **확인 필요** (17.8과 같은 절차다).
+-   worker를 먼저 올려 config·prompt 조건을 먼저 드러낸다. `no active prompt_versions row for task_type:`이
+    나오면 18.8이 덜 끝난 것이다.
+-   `/api/health`가 `ok`여야 한다. 여기부터 18.12가 끝날 때까지 **옛 프론트는 학습을 시작할 수 없다**(422).
+    바로 다음 단계로 넘어간다.
+
+### 18.12 프론트
+
+6.2 체인을 그대로 실행한다. 배포 뒤 대시보드에서 `workers.dev`와 Preview URLs를 다시 끈다(ADR-020 결정 6).
+
+### 18.13 확인
+
+데스크톱 브라우저로 `https://<FRONTEND_HOST>`를 열고 개발자 도구의 Network 탭을 켠다.
+
+-   [ ] **언어 선택 홈:** `#/`에 카드가 둘(일본어·영어)이다. 카드에 숫자가 없다. 앱 이름은 `Nihongo Context`다.
+-   [ ] **서버 요청 0건:** 언어 선택 홈 → `#/ja` → 체험 → 글자 → `#/en` → 영어 체험을 오가는 동안 `<API_HOST>`로
+    가는 요청이 없다. 상단바 `로그인`을 누를 때 처음으로 `/api/auth/me`가 한 번 나간다.
+-   [ ] **옛 북마크:** `https://<FRONTEND_HOST>/#/demo`를 직접 열면 주소가 `#/ja/demo`로 바뀌고 체험이 열린다.
+    뒤로 가기에 `#/demo`가 남지 않는다. `#/kana`도 같다. 모르는 hash(`#/zzz`)는 `#/`다.
+-   [ ] **일본어가 그대로:** 후리가나 토글(처음 꺼짐, 켜면 한자 위 읽기, 새로고침 뒤 유지), 가나 학습, 일본어
+    체험 진행(`0 / 171`에서 시작, 새로고침하면 이어짐, 진도 초기화)이 MVP-02와 같다.
+-   [ ] **영어 체험:** 진행 표시가 `0 / 200`에서 시작한다(영어 fixture 문장 수. 일본어는 `0 / 171`이다).
+    탭하면 설명 시트가 열리고 **reading 줄이 없다**(빈 줄이나 `-`가 아니라 없다). 상단바에 후리가나 토글이 없다.
+    일본어 체험과 진도가 섞이지 않는다(저장 key가 다르다).
+-   [ ] **재생:** 영어 문장 옆과 설명 시트 예문 옆에 재생 버튼이 있다(이 기기에 로컬 영어 음성이 있을 때만).
+    눌러서 소리가 나고, 다시 누르면 멈추고, 다른 화면으로 가면 멈춘다. **버튼을 눌러도 Network에 요청이 늘지
+    않는다.** 일본어 화면과 상단바에는 버튼이 없다. 음성이 없는 기기에서는 버튼이 아예 없다(비활성 버튼이 아니다).
+-   [ ] **로그인 흐름:** `로그인` → 로그인 → **언어 선택 화면**(열린 세션이 없을 때) → 고른 언어로 학습 화면.
+    학습 중 새로고침 뒤 다시 `로그인`을 누르면 **언어를 묻지 않고** 그 세션으로 이어진다.
+-   [ ] **영어 학습:** 영어를 골라 몇 문장 학습한다. 탭·설명·번역·자기평가가 일본어와 같게 돈다. 설명에 reading
+    줄이 없다.
+-   [ ] **409:** (시간이 있으면) 다른 탭에서 다른 언어로 시작해 본다. 오류 화면이 아니라 `이어서 하기` /
+    `마치고 바꾸기` 두 선택지가 나온다.
+-   [ ] **health:** 18.11의 `curl`이 `ok`.
+-   [ ] **DB:** 18.9의 수가 그대로다.
+-   [ ] **로그:** 영어 쪽에서 ruby 로그가 늘지 않는다.
+
+    ``` sh
+    C logs --since 24h worker 2>&1 | grep -c -E 'ruby\.(failed|log_failed)'
+    ```
+
+-   [ ] **휴대폰:** 7절 전체. iOS에서 로컬 영어 음성이 있어 재생 버튼이 보이는지도 함께 본다.
+
+### 18.14 되돌리기
+
+``` text
+화면만 문제                 -> 프론트만: <PREV_COMMIT>으로 6.2
+DB까지 되돌려야 한다        -> B pre-mvp03 백업 복원 (18.4 백업 이후의 모든 쓰기가 사라진다)
+영어 콘텐츠만 문제          -> C 영어 seed만 비운다
+```
+
+**17.11의 A(이미지만)에 해당하는 경로가 없다.** 0005는 `sentences.japanese`를 리네임했고 옛 코드는 그 컬럼을
+조회한다. 이미지만 되돌리면 backend·worker가 쿼리 단계에서 실패한다.
+
+#### 프론트만
+
+``` sh
+cd <REPO> && git switch --detach <PREV_COMMIT>
+```
+
+그 상태에서 6.2 체인을 실행하고, 끝나면 돌아온다.
+
+``` sh
+cd <REPO> && git switch -
+```
+
+-   **옛 프론트는 새 API로 학습을 시작할 수 없다**(`language` 없는 `POST /session` → 422). 즉 이 경로는
+    "공개 화면만 급히 옛 모양으로 돌린다"에만 쓸모가 있고 학습은 멈춘다. 학습을 살려야 하면 B다.
+-   **detach한 동안 `make db-migrate`를 치지 않는다.** 옛 코드는 0005를 모른다.
+
+#### B. DB까지 (pre-mvp03 백업 복원)
+
+downgrade 명령은 운영 경로에 없다(`0005`의 `downgrade()`는 빈 DB 왕복 테스트용이다). 18.4의 백업을 10.2
+절차로 복원한다.
+
+> **18.4 백업 이후의 모든 쓰기가 사라진다.** 학습 기록, 생성된 문장·job과 그 LLM 비용, 로그인 세션, 계정·비밀번호
+> 변경이 전부다. 10.2 체인이 복원 직전에 만드는 안전 백업 `$R`이 **그 쓰기들의 유일한 사본**이므로, 운영이
+> 정상임을 확인하기 전에는 지우지 않는다.
+
+-   **10.1(`make db-restore-check`)은 하지 않는다**(17.11 B와 같은 이유 --- 그 검증은 백업을 지금 DB와 비교한다).
+
+1.  백업을 만든 시점의 코드로 먼저 돌아간다.
+
+    ``` sh
+    cd <REPO> && git switch --detach <PREV_COMMIT> && uv sync
+    ls -l data/backups/pre-mvp03/
+    sudo cp /etc/nihongo-context/config.yaml.pre-mvp03 /etc/nihongo-context/config.yaml   # 18.10의 사본
+    ```
+
+2.  **프론트를 먼저 되돌린다:** 6.2 체인을 실행한다(이미 `<PREV_COMMIT>`에 있다).
+3.  10.2를 한다. `F=`에 위 디렉터리의 `backup-*.dump`를 넣는다.
+4.  이미지를 되돌린다.
+
+    ``` sh
+    docker tag <BACKEND_IMAGE>:pre-mvp03 <BACKEND_IMAGE>:latest
+    docker tag <WORKER_IMAGE>:pre-mvp03 <WORKER_IMAGE>:latest
+    C up -d --no-deps --no-build backend worker
+    curl -s http://127.0.0.1:8000/api/health; echo
+    ```
+
+5.  10.2의 "복원 뒤"를 한다. `make db-migrate`는 옛 코드라 `already at head (0004)`다.
+    18.4 이후 비밀번호를 바꿨거나 세션을 끊었다면 복원으로 옛 값이 되살아나므로 복원 뒤 다시 한다.
+
+MVP-03을 다시 시도할 때는 `git switch -`로 돌아와 18.1부터 한다. **config 사본도 18.10을 다시 한다.**
+
+#### C. 영어 콘텐츠만 비우기
+
+영어 학습만 문제이고 일본어는 괜찮을 때. 영어 seed 행만 지운다.
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+BEGIN;
+-- 영어 문장에 딸린 것부터. 참조 순서를 지킨다.
+DELETE FROM sentence_item_explanations WHERE sentence_item_id IN (
+  SELECT si.id FROM sentence_items si JOIN sentences s ON s.id = si.sentence_id WHERE s.language = 'en');
+DELETE FROM sentence_item_spans WHERE sentence_item_id IN (
+  SELECT si.id FROM sentence_items si JOIN sentences s ON s.id = si.sentence_id WHERE s.language = 'en');
+DELETE FROM sentence_items WHERE sentence_id IN (SELECT id FROM sentences WHERE language = 'en');
+DELETE FROM sentences WHERE language = 'en';
+DELETE FROM learning_items WHERE language = 'en';
+COMMIT;
+SQL
+```
+
+-   **영어로 학습한 기록이 있으면 이 SQL은 외래키에서 실패한다.** 그때는 지우지 않는다 --- 학습 기록을 지우는
+    것은 C의 범위가 아니다. 영어 세션이 돌기 전에만 쓸 수 있는 경로다.
+-   **C는 백업을 만들지 않는다.** 18.4 백업이 있는 동안에만 쓴다.
+-   영어 홈·영어 demo(정적 fixture)는 그대로 보인다. 로그인 후 영어를 고르면 Ready Pool이 비어 세션이 바로
+    끝난다. 화면에서 영어를 숨기려면 프론트를 되돌린다(위 "프론트만").
+-   다시 넣을 때는 18.9만 다시 한다(18.6·18.7은 이미 끝났다).
+
+#### pre-mvp03 백업과 이미지 정리
+
+**18.13 통과 후 최소 7일 보존한다**(cron rotation이 한 바퀴 돌면 이것이 유일한 0004 백업이다). 그 전에는
+18.14 B의 기준이다. 그 뒤에 이상이 없으면 지운다. rotation이 세지 않으므로 직접 지운다(password hash가 들어 있다).
+
+``` sh
+ls -l data/backups/pre-mvp03/
+rm -r data/backups/pre-mvp03
+sudo rm /etc/nihongo-context/config.yaml.pre-mvp03
+docker image rm <BACKEND_IMAGE>:pre-mvp03 <WORKER_IMAGE>:pre-mvp03    # 이름만 지운다 (확인 필요)
 ```
