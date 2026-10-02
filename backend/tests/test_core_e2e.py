@@ -178,7 +178,7 @@ def test_core_e2e_from_seed_cold_start_to_repeated_contextual_review(
     # ----------------------------------------------------------------- 1
     # 신규 사용자 / seed 기반 cold start. 세션 시작이 Ready Pool을 만든다.
     # Wave 3 worker 없이 성립해야 한다.
-    load_seed(db_session, SEED_DIR, now=clock.now())
+    load_seed(db_session, SEED_DIR, now=clock.now(), cfg=get_config())
     assert db_session.execute(sa.select(sa.func.count(UserSentenceCandidate.id))).scalar_one() == 0
 
     with no_outbound_network():

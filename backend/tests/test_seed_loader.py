@@ -26,6 +26,7 @@ import sqlalchemy as sa
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import get_config
 from app.db import get_engine
 from app.furigana import CORRECTION_RULES, RubyComputation, RubyItem, compute_ruby
 from app.models.content import (
@@ -60,7 +61,7 @@ def _count(session: Session, model: type) -> int:
 
 @pytest.mark.integration
 def test_loads_min_fixture_with_seed_origin_and_metadata(db_session: Session) -> None:
-    summary = load_seed(db_session, SEED_MIN, now=NOW)
+    summary = load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     assert (summary.items, summary.sentences, summary.spans, summary.explanations) == (3, 2, 4, 3)
 
@@ -78,7 +79,7 @@ def test_loads_min_fixture_with_seed_origin_and_metadata(db_session: Session) ->
 @pytest.mark.integration
 def test_seed_order_starts_at_one_and_follows_file_row_order(db_session: Session) -> None:
     """값은 1부터 1씩, 순서는 파일 내 행 순서다(06_LEARNING_ENGINE.md)."""
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     items = _items_by_lemma(db_session)
     orders = [items[lemma].metadata_json["seed_order"] for lemma in ("任せる", "仕事", "気が乗る")]
@@ -88,7 +89,7 @@ def test_seed_order_starts_at_one_and_follows_file_row_order(db_session: Session
 @pytest.mark.integration
 def test_missing_frequency_rank_is_not_promoted_from_seed_order(db_session: Session) -> None:
     """seed_order를 frequency_rank로 승격시키지 않는다. 둘은 다른 척도다."""
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     metadata = _items_by_lemma(db_session)["仕事"].metadata_json
     assert metadata == {"seed_order": 2}
@@ -96,7 +97,7 @@ def test_missing_frequency_rank_is_not_promoted_from_seed_order(db_session: Sess
 
 @pytest.mark.integration
 def test_discontinuous_spans_are_stored_in_order(db_session: Session) -> None:
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     sentence = db_session.scalars(
         sa.select(Sentence).where(Sentence.source_id == "sn_min_0002")
@@ -117,7 +118,7 @@ def test_discontinuous_spans_are_stored_in_order(db_session: Session) -> None:
 @pytest.mark.integration
 def test_span_offset_mismatch_fails_and_leaves_nothing_behind(db_session: Session) -> None:
     with pytest.raises(SeedError, match="surface_form"):
-        load_seed(db_session, DATA_DIR / "seed_bad_span", now=NOW)
+        load_seed(db_session, DATA_DIR / "seed_bad_span", now=NOW, cfg=get_config())
 
     assert _count(db_session, LearningItem) == 0
     assert _count(db_session, Sentence) == 0
@@ -130,7 +131,7 @@ def test_span_offset_mismatch_fails_and_leaves_nothing_behind(db_session: Sessio
 def test_item_without_explanation_is_rejected(db_session: Session) -> None:
     """explanation이 없으면 tap 시 보여줄 데이터가 없다(불변식 6)."""
     with pytest.raises(SeedError, match="explanation"):
-        load_seed(db_session, DATA_DIR / "seed_no_explanation", now=NOW)
+        load_seed(db_session, DATA_DIR / "seed_no_explanation", now=NOW, cfg=get_config())
 
     assert _count(db_session, LearningItem) == 0
     assert _count(db_session, Sentence) == 0
@@ -138,10 +139,10 @@ def test_item_without_explanation_is_rejected(db_session: Session) -> None:
 
 @pytest.mark.integration
 def test_reloading_into_a_seeded_database_is_rejected(db_session: Session) -> None:
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     with pytest.raises(SeedError, match="db-reset"):
-        load_seed(db_session, SEED_MIN, now=NOW)
+        load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     assert _count(db_session, LearningItem) == 3
 
@@ -149,13 +150,13 @@ def test_reloading_into_a_seeded_database_is_rejected(db_session: Session) -> No
 @pytest.mark.integration
 def test_missing_seed_directory_is_reported(db_session: Session, tmp_path: Path) -> None:
     with pytest.raises(SeedError, match="seed file not found"):
-        load_seed(db_session, tmp_path, now=NOW)
+        load_seed(db_session, tmp_path, now=NOW, cfg=get_config())
 
 
 @pytest.mark.integration
 def test_real_seed_directory_loads(db_session: Session) -> None:
     """`seed/`의 포맷 오류를 여기서 잡는다. 건수는 단정하지 않는다."""
-    summary = load_seed(db_session, REAL_SEED_DIR, now=NOW)
+    summary = load_seed(db_session, REAL_SEED_DIR, now=NOW, cfg=get_config())
 
     assert summary.items > 0
     assert summary.sentences > 0
@@ -177,7 +178,7 @@ def test_tappable_spans_of_different_items_may_not_overlap(db_session: Session) 
     같은 code point가 두 tap 대상에 속하면 사용자가 무엇을 tap했는지 정해지지 않는다.
     """
     with pytest.raises(SeedError, match="overlap"):
-        load_seed(db_session, DATA_DIR / "seed_cross_item_overlap", now=NOW)
+        load_seed(db_session, DATA_DIR / "seed_cross_item_overlap", now=NOW, cfg=get_config())
 
     assert _count(db_session, LearningItem) == 0
     assert _count(db_session, Sentence) == 0
@@ -190,7 +191,7 @@ def test_disjoint_spans_of_different_items_still_load(db_session: Session) -> No
     `sn_min_0001`은 서로 다른 두 item이 `[0,2)`와 `[3,6)`을 차지하고 사이가 비어
     있다. 이것은 정상 데이터다.
     """
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     sentence = db_session.scalars(
         sa.select(Sentence).where(Sentence.source_id == "sn_min_0001")
@@ -208,7 +209,7 @@ def test_stored_normalized_hash_matches_the_shared_function(db_session: Session)
     seed loader가 자기만의 정규화로 돌아가면 빨개진다. 두 경로의 해시가 갈리면
     duplicate 검출은 예외 없이 조용히 실패한다.
     """
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     rows = db_session.scalars(sa.select(Sentence)).all()
     assert rows
@@ -238,7 +239,7 @@ def _ruby_by_seed_id(session: Session) -> dict[str | None, object]:
 
 @pytest.mark.integration
 def test_every_seed_sentence_gets_ruby_in_the_same_load(db_session: Session) -> None:
-    summary = load_seed(db_session, SEED_MIN, now=NOW)
+    summary = load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     ruby = _ruby_by_seed_id(db_session)
     assert set(ruby) == {"sn_min_0001", "sn_min_0002"}
@@ -263,7 +264,7 @@ def test_every_seed_sentence_gets_ruby_in_the_same_load(db_session: Session) -> 
 @pytest.mark.integration
 def test_seed_ruby_is_the_shared_computation(db_session: Session) -> None:
     """seed 적재가 자기만의 계산을 하지 않는다: 같은 입력의 `compute_ruby`와 같은 값이다."""
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     sentence = db_session.scalars(
         sa.select(Sentence).where(Sentence.source_id == "sn_min_0002")
@@ -287,7 +288,7 @@ def test_a_failed_ruby_computation_leaves_null_and_the_load_continues(
 
     monkeypatch.setattr(seed_loader, "compute_ruby", flaky)
 
-    summary = load_seed(db_session, SEED_MIN, now=NOW)
+    summary = load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     ruby = _ruby_by_seed_id(db_session)
     assert ruby["sn_min_0001"] is None
@@ -305,7 +306,7 @@ def test_a_failed_ruby_computation_leaves_null_and_the_load_continues(
 
 @pytest.mark.integration
 def test_seed_ruby_does_not_change_the_text_or_spans(db_session: Session) -> None:
-    load_seed(db_session, SEED_MIN, now=NOW)
+    load_seed(db_session, SEED_MIN, now=NOW, cfg=get_config())
 
     sentence = db_session.scalars(
         sa.select(Sentence).where(Sentence.source_id == "sn_min_0001")

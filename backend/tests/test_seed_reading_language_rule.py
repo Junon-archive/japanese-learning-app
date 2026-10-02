@@ -14,6 +14,7 @@ import pytest
 import yaml
 from sqlalchemy.orm import Session
 
+from app.config import get_config
 from app.models.enums import Language
 from app.services.seed_loader import SeedError, load_seed
 from tests.factories import NOW
@@ -71,14 +72,14 @@ def _write_seed_dir(path: Path, *, reading: str | None) -> Path:
 @pytest.mark.integration
 def test_en_without_reading_loads_successfully(tmp_path: Path, db_session: Session) -> None:
     seed_dir = _write_seed_dir(tmp_path / "en", reading=None)
-    summary = load_seed(db_session, seed_dir, now=NOW, language=Language.EN)
+    summary = load_seed(db_session, seed_dir, now=NOW, cfg=get_config(), language=Language.EN)
     assert summary.items_inserted == 1
 
 
 @pytest.mark.integration
 def test_ja_with_reading_loads_successfully(tmp_path: Path, db_session: Session) -> None:
     seed_dir = _write_seed_dir(tmp_path / "ja", reading="よみ")
-    summary = load_seed(db_session, seed_dir, now=NOW, language=Language.JA)
+    summary = load_seed(db_session, seed_dir, now=NOW, cfg=get_config(), language=Language.JA)
     assert summary.items_inserted == 1
 
 
@@ -86,11 +87,11 @@ def test_ja_with_reading_loads_successfully(tmp_path: Path, db_session: Session)
 def test_en_with_reading_is_rejected(tmp_path: Path, db_session: Session) -> None:
     seed_dir = _write_seed_dir(tmp_path / "en_bad", reading="よみ")
     with pytest.raises(SeedError, match="must not have 'reading'"):
-        load_seed(db_session, seed_dir, now=NOW, language=Language.EN)
+        load_seed(db_session, seed_dir, now=NOW, cfg=get_config(), language=Language.EN)
 
 
 @pytest.mark.integration
 def test_ja_without_reading_is_rejected(tmp_path: Path, db_session: Session) -> None:
     seed_dir = _write_seed_dir(tmp_path / "ja_bad", reading=None)
     with pytest.raises(SeedError, match="missing 'reading'"):
-        load_seed(db_session, seed_dir, now=NOW, language=Language.JA)
+        load_seed(db_session, seed_dir, now=NOW, cfg=get_config(), language=Language.JA)

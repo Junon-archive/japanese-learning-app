@@ -25,6 +25,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
+from app.config import get_config
 from app.models.content import LearningItem, Sentence
 from app.services.seed_loader import load_seed
 from app.settings import get_settings
@@ -73,7 +74,7 @@ def target_db(postgres_admin_dsn: URL, monkeypatch: pytest.MonkeyPatch) -> Itera
         engine = sa.create_engine(dsn, poolclass=NullPool)
         try:
             with Session(engine) as session:
-                load_seed(session, SEED_MIN, now=datetime.now(UTC))
+                load_seed(session, SEED_MIN, now=datetime.now(UTC), cfg=get_config())
                 session.execute(sa.update(LearningItem).values(seed_id=None))
                 session.execute(sa.update(Sentence).values(seed_id=None))
                 session.commit()

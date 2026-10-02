@@ -33,6 +33,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
+from app.config import get_config
 from app.services.seed_loader import load_seed
 from app.settings import get_settings
 from tests import db_support, factories
@@ -185,7 +186,7 @@ def database_at_0002(postgres_admin_dsn: URL) -> Iterator[URL]:
         engine = sa.create_engine(dsn, poolclass=NullPool)
         try:
             with Session(engine) as session:
-                load_seed(session, SEED_DIR, now=datetime.now(UTC))
+                load_seed(session, SEED_DIR, now=datetime.now(UTC), cfg=get_config())
                 factories.make_user(session)
                 session.commit()
         finally:
