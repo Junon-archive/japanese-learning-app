@@ -17,6 +17,9 @@
 // enum (app/models/enums.py)
 // --------------------------------------------------------------------------
 
+/** 학습 대상 언어(`backend/app/models/enums.py`의 `Language`, ADR-023 결정 1). */
+export type Language = 'ja' | 'en'
+
 export type StartingLevel = 'beginner' | 'intermediate' | 'advanced'
 export type LearningItemType = 'word' | 'grammar' | 'expression'
 export type ContextStage = 'anchor' | 'near_original' | 'varied' | 'new_context'
@@ -60,6 +63,7 @@ export type User = {
 
 export type StudySession = {
   session_id: number
+  language: Language
   /** UTC ISO-8601 문자열. */
   started_at: string
   last_activity_at: string

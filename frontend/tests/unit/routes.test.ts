@@ -89,6 +89,7 @@ describe('resolveHash', () => {
     load: () => Promise.reject(new Error('not loaded in this test')),
     loadFailure: '',
     acceptsSubpath: true,
+    language: 'ja',
   }
   const ROUTES = [KANA, ...PUBLIC_ROUTES]
 
@@ -134,6 +135,26 @@ describe('resolveHash', () => {
     expect(resolveHash('#/ja/kanax')).toEqual({ kind: 'unknown' })
     expect(resolveHash('#/unknown')).toEqual({ kind: 'unknown' })
   })
+
+  it('finds the ja and en home routes, each with its own language and no subpath', () => {
+    const ja = resolveHash('#/ja')
+    expect(ja.kind === 'route' && ja.route.prefix).toBe('#/ja')
+    expect(ja.kind === 'route' && ja.route.language).toBe('ja')
+    expect(ja.kind === 'route' && ja.subpath).toBe('')
+
+    const en = resolveHash('#/en')
+    expect(en.kind === 'route' && en.route.prefix).toBe('#/en')
+    expect(en.kind === 'route' && en.route.language).toBe('en')
+
+    // '#/ja'는 하위 경로를 받지 않는다. '#/ja/demo'는 그 자리의 route와 따로 매칭된다.
+    expect(resolveHash('#/ja/demo').kind === 'route' && resolveHash('#/ja/demo').route.language).toBe('ja')
+    expect(resolveHash('#/en/demo').kind === 'route' && resolveHash('#/en/demo').route.language).toBe('en')
+  })
+
+  it('treats a subpath on the ja or en home as unknown', () => {
+    expect(resolveHash('#/ja/anything')).toEqual({ kind: 'unknown' })
+    expect(resolveHash('#/en/anything')).toEqual({ kind: 'unknown' })
+  })
 })
 
 describe('router', () => {
@@ -155,8 +176,24 @@ describe('router', () => {
     expect(browser.entries()).toEqual(['#/'])
   })
 
-  it('shows the demo for #/demo', async () => {
+  it('shows the demo for #/ja/demo', async () => {
     await boot('#/ja/demo')
+
+    expect(screen().className).toContain('demo')
+  })
+
+  it('shows the ja home for #/ja and the en home for #/en, each statically (no dynamic import)', async () => {
+    await boot('#/ja')
+    expect(screen().className).toContain('home')
+    expect(screen().className).toContain('ja-home')
+
+    await boot('#/en')
+    expect(screen().className).toContain('home')
+    expect(screen().className).toContain('en-home')
+  })
+
+  it('shows the en demo for #/en/demo', async () => {
+    await boot('#/en/demo')
 
     expect(screen().className).toContain('demo')
   })
@@ -177,6 +214,13 @@ describe('router', () => {
   it('goes back and forth between public screens with the browser history', async () => {
     await boot('')
 
+    // 언어 선택 홈 카드 1(일본어) -> #/ja.
+    byClass(root, 'home-card')[0]!.click()
+    await settle()
+    expect(location.hash).toBe('#/ja')
+    expect(screen().className).toContain('home')
+
+    // 일본어 홈 카드 1(체험) -> #/ja/demo.
     byClass(root, 'home-card')[0]!.click()
     await settle()
     expect(location.hash).toBe('#/ja/demo')
@@ -184,11 +228,17 @@ describe('router', () => {
 
     history.back()
     await settle()
+    expect(location.hash).toBe('#/ja')
+    expect(screen().className).toContain('home')
+
+    history.back()
+    await settle()
+    expect(location.hash).toBe('')
     expect(screen().className).toContain('home')
   })
 
   it('does not let a late route load cover the screen the user went back to', async () => {
-    await boot('')
+    await boot('#/ja')
 
     location.hash = '#/ja/demo'
     await Promise.resolve()
@@ -196,6 +246,23 @@ describe('router', () => {
     await settle()
 
     expect(screen().className).toContain('home')
+  })
+
+  it('redirects the legacy #/demo and #/kana hashes to the ja routes in one step', async () => {
+    await boot('#/demo')
+    expect(browser.replaceStateCalls).toEqual([[null, '', '#/ja/demo']])
+    expect(location.hash).toBe('#/ja/demo')
+    expect(screen().className).toContain('demo')
+
+    await boot('#/kana')
+    expect(browser.replaceStateCalls).toEqual([[null, '', '#/ja/kana']])
+    expect(location.hash).toBe('#/ja/kana')
+    expect(screen().className).toContain('kana')
+
+    await boot('#/kana/hiragana')
+    expect(browser.replaceStateCalls).toEqual([[null, '', '#/ja/kana/hiragana']])
+    expect(location.hash).toBe('#/ja/kana/hiragana')
+    expect(screen().className).toContain('kana')
   })
 
   it('shows the route failure message inline when the route fails to load', async () => {

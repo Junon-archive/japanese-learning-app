@@ -53,6 +53,13 @@ export const MESSAGES = {
   demoLoadFailed: '체험용 문장을 불러오지 못했어요. 새로고침해 주세요.',
   /** 가나 학습 route의 동적 import 실패. */
   kanaLoadFailed: '글자 배우기를 불러오지 못했어요. 새로고침해 주세요.',
+  /** 언어 선택 화면(MVP-03)의 `h1`. */
+  languageSelectTitle: '무엇을 공부할까요?',
+  languageJa: '일본어',
+  languageEn: '영어',
+  /** 409(`SessionLanguageMismatch`)의 두 버튼(05_API_SPEC.md의 `세션 언어와 409`). */
+  continueOtherSession: '이어서 하기',
+  finishAndSwitch: '마치고 바꾸기',
 } as const
 
 export type NoticeTone = 'info' | 'error'
@@ -62,11 +69,15 @@ export type NoticeAction = {
   onClick: () => void
 }
 
-/** 한 줄 안내. `action`이 있으면 **수동** 재시도 버튼이 붙는다(자동 폴링을 하지 않는다). */
+/**
+ * 한 줄 안내. `action`이 있으면 **수동** 재시도 버튼이 붙는다(자동 폴링을 하지 않는다).
+ * 배열을 주면 버튼을 그 순서대로 여러 개 붙인다(409 `세션 언어와 409`의 `이어서 하기`/
+ * `마치고 바꾸기`처럼 둘 중 하나를 고르는 자리).
+ */
 export function renderNotice(
   message: string,
   tone: NoticeTone = 'info',
-  action?: NoticeAction,
+  action?: NoticeAction | NoticeAction[],
 ): HTMLElement {
   const box = document.createElement('div')
   box.className = `notice notice-${tone}`
@@ -77,12 +88,13 @@ export function renderNotice(
   text.textContent = message
   box.append(text)
 
-  if (action !== undefined) {
+  const actions = action === undefined ? [] : Array.isArray(action) ? action : [action]
+  for (const one of actions) {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'notice-action'
-    button.textContent = action.label
-    button.addEventListener('click', action.onClick)
+    button.textContent = one.label
+    button.addEventListener('click', one.onClick)
     box.append(button)
   }
 

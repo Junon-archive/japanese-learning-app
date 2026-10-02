@@ -21,8 +21,10 @@
  */
 
 import { ApiError } from './api'
-import { fetchMe } from './endpoints'
+import { fetchMe, fetchOpenSession } from './endpoints'
+import type { Language, User } from './types'
 import { mountHistory } from './ui/history'
+import { mountLanguageSelect } from './ui/language-select'
 import { mountLogin } from './ui/login'
 import { MESSAGES, renderNotice, showToast } from './ui/notice'
 import { showScreen } from './ui/screen'
@@ -72,23 +74,37 @@ export function enterPrivate(ctx: PrivateContext): void {
     showToast(MESSAGES.loggedOut)
   }
 
-  function showStudy(timezone: string): void {
-    mountStudy(root, nextScreenSignal(), {
+  function showStudy(timezone: string, language: Language): void {
+    mountStudy(root, nextScreenSignal(), language, {
       onHome: goHome,
       onUnauthenticated: showLogin,
       onOpenHistory: () => {
-        showHistory(timezone)
+        showHistory(timezone, language)
       },
       onLoggedOut: loggedOut,
     })
   }
 
-  function showHistory(timezone: string): void {
+  /**
+   * 열린 study session이 없을 때만 들어온다(`afterLogin`). 고른 언어는 `showStudy`로 넘기기만
+   * 한다 --- `POST /api/study/session`은 그 화면의 `begin()`이 부른다(ADR-025 결정 2).
+   */
+  function showLanguageSelect(timezone: string): void {
+    mountLanguageSelect(root, nextScreenSignal(), {
+      onHome: goHome,
+      onSelect: (language) => {
+        showStudy(timezone, language)
+      },
+      onLoggedOut: loggedOut,
+    })
+  }
+
+  function showHistory(timezone: string, language: Language): void {
     mountHistory(root, nextScreenSignal(), {
       timezone,
       onHome: goHome,
       onBack: () => {
-        showStudy(timezone)
+        showStudy(timezone, language)
       },
       onUnauthenticated: showLogin,
       onLoggedOut: loggedOut,
@@ -99,11 +115,46 @@ export function enterPrivate(ctx: PrivateContext): void {
     mountLogin(root, nextScreenSignal(), {
       onHome: goHome,
       onAuthenticated: (user) => {
-        // 로그인 응답이 `timezone`을 들고 온다. `GET /me`를 다시 부르지 않는다. 그사이 떠났으면
-        // mountStudy가 그리지도 study session을 시작하지도 않는다.
-        showStudy(user.timezone)
+        // 로그인 응답이 `timezone`을 들고 온다. `GET /me`를 다시 부르지 않는다.
+        void afterLogin(user)
       },
     })
+  }
+
+  /**
+   * `GET /api/auth/me`(또는 로그인 성공) 뒤 공통 분기(`03_UI_UX_SPEC.md`의 `언어 선택 화면`,
+   * ADR-025 결정 2). 열린 session이 있으면 그 language로 바로 Study Screen이고(언어를 묻지
+   * 않는다), 없으면 언어 선택 화면이다.
+   */
+  async function afterLogin(user: User): Promise<void> {
+    if (signal.aborted) return
+    try {
+      const open = await fetchOpenSession()
+      if (signal.aborted) return
+      if (open.session !== null) {
+        showStudy(user.timezone, open.session.language)
+      } else {
+        showLanguageSelect(user.timezone)
+      }
+    } catch (error) {
+      if (signal.aborted) return
+      if (error instanceof ApiError && error.kind === 'Unauthenticated') {
+        showLogin()
+        return
+      }
+      if (error instanceof ApiError && error.kind === 'OriginRejected') {
+        showFailure(renderNotice(MESSAGES.originRejected, 'error'))
+        return
+      }
+      showFailure(
+        renderNotice(MESSAGES.loginCheckFailed, 'error', {
+          label: MESSAGES.retry,
+          onClick: () => {
+            void afterLogin(user)
+          },
+        }),
+      )
+    }
   }
 
   function showFailure(notice: HTMLElement): void {
@@ -121,7 +172,7 @@ export function enterPrivate(ctx: PrivateContext): void {
     try {
       const user = await fetchMe()
       if (signal.aborted) return
-      showStudy(user.timezone)
+      await afterLogin(user)
     } catch (error) {
       if (signal.aborted) return
       if (error instanceof ApiError && error.kind === 'Unauthenticated') {
