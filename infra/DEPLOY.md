@@ -1652,7 +1652,7 @@ seed        seed/items.yaml -> seed/ja/items.yaml 로 옮겼다. seed/en/ 이 �
             기존 일본어 행의 seed_id는 migration이 아니라 backfill(18.7)이 채운다
 prompt      ja 3종이 _v2로 올라가고(요청 context 키 이름 변경) en 3종이 새로 생긴다. 등록은 18.8
 config      content.max_sentence_length_chars 가 스칼라 -> {ja, en} 맵이 되었다
-            **운영 override 사본을 다시 쓰지 않으면 새 코드가 기동하지 않는다** (18.10)
+            **운영 override 사본을 다시 쓰지 않으면 새 코드가 기동하지 않는다** (18.9)
 backend     의존성 그대로. POST /api/study/session 이 language 를 필수 body로 받는다 (없으면 422)
 worker      의존성 그대로. 영어 job은 형태소 분석기를 부르지 않는다. 부팅 검사는 task 3종 기준이라
             영어 prompt active 행이 없어도 기동은 된다 --- 대신 영어 job만 dead_letter가 된다
@@ -1680,7 +1680,7 @@ C images backend worker            # REPOSITORY 열을 <BACKEND_IMAGE>, <WORKER_
 
 ``` sh
 git pull
-diff config/default.yaml /etc/nihongo-context/config.yaml    # 이번에는 max_sentence_length_chars 모양이 다르다(18.10)
+diff config/default.yaml /etc/nihongo-context/config.yaml    # 이번에는 max_sentence_length_chars 모양이 다르다(18.9)
 uv sync
 df -h .
 ```
@@ -1758,7 +1758,7 @@ SQL
 
 ### 18.6 seed_id backfill dry-run (쓰기 없음)
 
-기존 일본어 seed 행에 `seed_id`를 채운다. **이것이 18.9보다 먼저여야 한다** --- `seed_id`가 비어 있으면 증분
+기존 일본어 seed 행에 `seed_id`를 채운다. **이것이 18.10보다 먼저여야 한다** --- `seed_id`가 비어 있으면 증분
 적재가 기존 일본어 행을 "이미 있다"고 알아보지 못하고 중복으로 넣으려 한다.
 
 ``` sh
@@ -1788,7 +1788,7 @@ SELECT count(*) AS sentences_null FROM sentences WHERE source_type = 'seed' AND 
 SQL
 ```
 
--   기대: 두 수 모두 `0`. 하나라도 남으면 18.9를 하지 않는다.
+-   기대: 두 수 모두 `0`. 하나라도 남으면 18.10을 하지 않는다.
 
 ### 18.8 prompt_versions 등록 (ja _v2 3종 + en _v1 3종)
 
@@ -1813,31 +1813,7 @@ make prompts ARGS="--provider openai --model <MODEL> --language en"
     그 언어 job만 `dead_letter`가 된다(기동 실패가 아니다).
 -   위 SELECT를 다시 쳐서 여섯 행이 `active = t`인지 본다. ja의 옛 `_v1` 행은 `active = f`로 남는다(지우지 않는다).
 
-### 18.9 영어 seed 증분 적재
-
-``` sh
-uv run python scripts/load_seed.py --language en --incremental
-```
-
--   `--incremental`은 파일의 `seed_id` 중 DB에 없는 것만 넣고 **기존 행을 UPDATE하지 않는다.** 한 항목이라도
-    실패하면 전부 롤백된다. 두 번 쳐도 결과가 같다(멱등).
--   기대: items `300` inserted / sentences `876` inserted, skipped `0`. ruby 요약의 계산 건수는 `0`이다
-    (영어는 형태소 분석기를 부르지 않는다).
--   확인한다.
-
-``` sh
-prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
-SELECT language, count(*) FROM learning_items GROUP BY language ORDER BY language;
-SELECT language, count(*) FROM sentences GROUP BY language ORDER BY language;
-SELECT count(*) AS en_with_ruby FROM sentences WHERE language = 'en' AND ruby_json IS NOT NULL;
-SELECT count(*) AS en_with_reading FROM learning_items WHERE language = 'en' AND reading IS NOT NULL;
-SQL
-```
-
--   기대: `en` item `300`, `en` 문장 `876`, `ja` 수는 18.5와 같다. 뒤의 두 수는 `0`이다
-    (영어에 ruby도 발음 표기도 없다 --- 합격 기준 6·13번).
-
-### 18.10 config override 사본 재작성
+### 18.9 config override 사본 재작성
 
 **이 단계를 빠뜨리면 새 코드가 기동하지 않는다.** `content.max_sentence_length_chars`가 스칼라에서
 `{ja, en}` 맵이 되었고, 로더는 옛 모양을 받지 않는다(시끄러운 실패를 택했다).
@@ -1862,12 +1838,40 @@ sudo cp /etc/nihongo-context/config.yaml /etc/nihongo-context/config.yaml.pre-mv
 -   다시 쓴 뒤 **호스트에서 먼저 읽혀 보고** 기동 전에 실패를 잡는다.
 
 ``` sh
-NC_CONFIG_PATH=/etc/nihongo-context/config.yaml uv run python -c 'from app.config import load_config; import os; c = load_config(os.environ["NC_CONFIG_PATH"]); print("config ok", c.content.max_sentence_length_chars)'
+NC_CONFIG_PATH=/etc/nihongo-context/config.yaml uv run python -c 'import os; from pathlib import Path; from app.config import load_config; c = load_config(Path(os.environ["NC_CONFIG_PATH"])); print("config ok", c.content.max_sentence_length_chars, "| 한도", c.llm.daily_request_limit, c.llm.daily_token_limit)'
 ```
 
--   기대: `config ok` 와 `ja`/`en` 두 값. `ConfigError`가 나오면 그 메시지대로 사본을 고친다. **여기서 고치지
-    못하면 18.11을 하지 않는다** --- 컨테이너가 재기동 루프에 빠진다.
+-   기대: `config ok` 와 `ja`/`en` 두 값, 그리고 **보존된 비용 한도 두 값**. 한도가 `None`으로 나오면
+    저장소 파일을 통째로 복사해 override를 잃은 것이다 --- 3.1의 값을 다시 넣는다. `ConfigError`가 나오면 그
+    메시지대로 사본을 고친다. **여기서 고치지 못하면 18.10·18.11을 하지 않는다** --- 18.10이 같은 config를
+    읽고 멈추고, 컨테이너는 재기동 루프에 빠진다.
 -   환경변수 이름이 2.4와 다르면 2.4를 따른다(그 절이 canonical이다).
+
+### 18.10 영어 seed 증분 적재
+
+``` sh
+uv run python scripts/load_seed.py --language en --incremental
+```
+
+-   **18.9가 끝난 뒤에 한다.** 이 스크립트는 `get_config()`로 운영 config를 읽는다. 옛 모양이 남아 있으면
+    적재가 아니라 `ConfigError`로 멈춘다(쓰기는 없다).
+-   `--incremental`은 파일의 `seed_id` 중 DB에 없는 것만 넣고 **기존 행을 UPDATE하지 않는다.** 한 항목이라도
+    실패하면 전부 롤백된다. 두 번 쳐도 결과가 같다(멱등).
+-   기대: items `300` inserted / sentences `876` inserted, skipped `0`. ruby 요약의 계산 건수는 `0`이다
+    (영어는 형태소 분석기를 부르지 않는다).
+-   확인한다.
+
+``` sh
+prod_db && C exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT language, count(*) FROM learning_items GROUP BY language ORDER BY language;
+SELECT language, count(*) FROM sentences GROUP BY language ORDER BY language;
+SELECT count(*) AS en_with_ruby FROM sentences WHERE language = 'en' AND ruby_json IS NOT NULL;
+SELECT count(*) AS en_with_reading FROM learning_items WHERE language = 'en' AND reading IS NOT NULL;
+SQL
+```
+
+-   기대: `en` item `300`, `en` 문장 `876`, `ja` 수는 18.5와 같다. 뒤의 두 수는 `0`이다
+    (영어에 ruby도 발음 표기도 없다 --- 합격 기준 6·13번).
 
 ### 18.11 재기동 (worker 먼저)
 
@@ -1912,7 +1916,7 @@ curl -s http://127.0.0.1:8000/api/health; echo
 -   [ ] **409:** (시간이 있으면) 다른 탭에서 다른 언어로 시작해 본다. 오류 화면이 아니라 `이어서 하기` /
     `마치고 바꾸기` 두 선택지가 나온다.
 -   [ ] **health:** 18.11의 `curl`이 `ok`.
--   [ ] **DB:** 18.9의 수가 그대로다.
+-   [ ] **DB:** 18.10의 수가 그대로다.
 -   [ ] **로그:** 영어 쪽에서 ruby 로그가 늘지 않는다.
 
     ``` sh
@@ -1964,7 +1968,7 @@ downgrade 명령은 운영 경로에 없다(`0005`의 `downgrade()`는 빈 DB �
     ``` sh
     cd <REPO> && git switch --detach <PREV_COMMIT> && uv sync
     ls -l data/backups/pre-mvp03/
-    sudo cp /etc/nihongo-context/config.yaml.pre-mvp03 /etc/nihongo-context/config.yaml   # 18.10의 사본
+    sudo cp /etc/nihongo-context/config.yaml.pre-mvp03 /etc/nihongo-context/config.yaml   # 18.9의 사본
     ```
 
 2.  **프론트를 먼저 되돌린다:** 6.2 체인을 실행한다(이미 `<PREV_COMMIT>`에 있다).
@@ -1981,7 +1985,7 @@ downgrade 명령은 운영 경로에 없다(`0005`의 `downgrade()`는 빈 DB �
 5.  10.2의 "복원 뒤"를 한다. `make db-migrate`는 옛 코드라 `already at head (0004)`다.
     18.4 이후 비밀번호를 바꿨거나 세션을 끊었다면 복원으로 옛 값이 되살아나므로 복원 뒤 다시 한다.
 
-MVP-03을 다시 시도할 때는 `git switch -`로 돌아와 18.1부터 한다. **config 사본도 18.10을 다시 한다.**
+MVP-03을 다시 시도할 때는 `git switch -`로 돌아와 18.1부터 한다. **config 사본도 18.9를 다시 한다.**
 
 #### C. 영어 콘텐츠만 비우기
 
@@ -2007,7 +2011,7 @@ SQL
 -   **C는 백업을 만들지 않는다.** 18.4 백업이 있는 동안에만 쓴다.
 -   영어 홈·영어 demo(정적 fixture)는 그대로 보인다. 로그인 후 영어를 고르면 Ready Pool이 비어 세션이 바로
     끝난다. 화면에서 영어를 숨기려면 프론트를 되돌린다(위 "프론트만").
--   다시 넣을 때는 18.9만 다시 한다(18.6·18.7은 이미 끝났다).
+-   다시 넣을 때는 18.10만 다시 한다(18.6·18.7은 이미 끝났다).
 
 #### pre-mvp03 백업과 이미지 정리
 
