@@ -194,6 +194,20 @@ def test_committed_fixture_matches_regeneration(
     assert out.endswith("check: ok\n")
 
 
+def test_committed_english_fixture_matches_regeneration(
+    fixture_script: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """영어 fixture도 같은 검사를 받는다.
+
+    이 검사가 없던 동안 `seed/en/sentences.yaml`을 고치고 fixture를 다시 만들지 않은 커밋이
+    통과했고, 생성물에 **외부 자료 원문 3건이 그대로 남았다**(불변식 27). 전체 테스트가
+    초록이어서 아무도 보지 못했다 --- 위의 ja 검사만 있고 `--language en`이 없었기 때문이다.
+    """
+    code, out = _run(fixture_script, capsys, "--check", "--language", "en")
+    assert code == EXIT_OK, out
+    assert out.endswith("check: ok\n")
+
+
 def test_check_fails_when_one_character_changes(
     fixture_script: ModuleType, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
