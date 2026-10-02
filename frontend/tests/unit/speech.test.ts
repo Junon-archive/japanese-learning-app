@@ -338,6 +338,83 @@ describe('playing', () => {
   })
 })
 
+/**
+ * 접근성 이름과 상태(`03_UI_UX_SPEC.md`의 화면 문구 표 `소리 재생 버튼`과 `소리 재생` > `버튼`).
+ * **아이콘 버튼 하나**이고 보이는 글자가 없으므로 이름은 `aria-label`로만 간다. 토글 상태는
+ * `aria-pressed`다. 이 단언이 없으면 구현이 텍스트 라벨로 돌아가도 아무도 잡지 못한다 ---
+ * 실제로 한 번 그렇게 어긋났다.
+ */
+describe('the button is an icon button with an accessible name', () => {
+  it('names the button 소리 듣기 and starts unpressed', async () => {
+    install([LOCAL_US])
+    const speech = await freshSpeech()
+    const button = buttons(slot(SENTENCE, new AbortController().signal, speech))[0]!
+
+    expect(button.getAttribute('aria-label')).toBe('소리 듣기')
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('shows an icon that the screen reader does not read, and no visible label', async () => {
+    install([LOCAL_US])
+    const speech = await freshSpeech()
+    const button = buttons(slot(SENTENCE, new AbortController().signal, speech))[0]!
+    const icon = byClass(button, 'speak-icon')[0]!
+
+    expect(icon.getAttribute('aria-hidden')).toBe('true')
+    // 버튼 자신에는 글자가 없다(아이콘은 aria-hidden인 자식이다).
+    expect(button.textContent ?? '').toBe('')
+  })
+
+  it('becomes 멈추기 and pressed while it is reading', async () => {
+    install([LOCAL_US])
+    const speech = await freshSpeech()
+    const button = buttons(slot(SENTENCE, new AbortController().signal, speech))[0]!
+
+    button.click()
+
+    expect(button.getAttribute('aria-label')).toBe('멈추기')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('goes back to 소리 듣기 when it is pressed again', async () => {
+    install([LOCAL_US])
+    const speech = await freshSpeech()
+    const button = buttons(slot(SENTENCE, new AbortController().signal, speech))[0]!
+
+    button.click()
+    button.click()
+
+    expect(button.getAttribute('aria-label')).toBe('소리 듣기')
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('goes back to 소리 듣기 when the screen is left', async () => {
+    install([LOCAL_US])
+    const speech = await freshSpeech()
+    const area = new AbortController()
+    const button = buttons(slot(SENTENCE, area.signal, speech))[0]!
+
+    button.click()
+    area.abort()
+
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('releases the first button when a second one takes over', async () => {
+    install([LOCAL_US])
+    const speech = await freshSpeech()
+    const area = new AbortController()
+    const first = buttons(slot(SENTENCE, area.signal, speech))[0]!
+    const second = buttons(slot('Another one.', area.signal, speech))[0]!
+
+    first.click()
+    second.click()
+
+    expect(first.getAttribute('aria-pressed')).toBe('false')
+    expect(second.getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 버튼 자리: 영어 demo
 // ---------------------------------------------------------------------------
