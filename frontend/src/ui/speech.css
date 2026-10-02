@@ -1,0 +1,20 @@
+/*
+ * 재생 버튼(ADR-025 결정 4). 문장 옆과 설명 시트의 예문 옆에 놓인다 --- 상단바에는 없다.
+ * 쓸 음성이 없으면 .speak-slot만 남고 버튼이 없다(비활성 버튼을 두지 않는다).
+ * 한 손 조작이라 글자보다 누를 면적을 먼저 맞춘다(button 기본 min-height가 --tap-target이다).
+ */
+
+.speak-slot {
+  display: inline-flex;
+  align-items: center;
+}
+
+button.speak {
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
