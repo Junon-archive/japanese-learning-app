@@ -66,10 +66,15 @@ SENTENCES_FILE = "sentences.yaml"
 # 늘릴 때마다 migration이 필요하다. 집합을 늘리는 것은 이 상수와 그 문서를 같은
 # 커밋에서 고치는 일이다.
 #
-# 같은 절이 **"태그는 두 언어가 공유하지 않는다"**고 적고(소비처가 "최근 topic 반복
-# 회피"뿐이며 그 비교는 세션 언어 안에서만 일어난다) 영어는 `grammar`를 쓰지 않는다.
-# 그래서 허용 집합을 언어별로 나눈다.
-_EN_TOPIC_TAGS: frozenset[str] = frozenset(
+# **이 검사는 영어 전용이다.** 그 절은 영어 콘텐츠 기준 문서(`01_ENGLISH_CONTENT.md`)의
+# 것이고 고정 집합 표도 영어 것뿐이며, 같은 절이 **"태그는 두 언어가 공유하지 않는다"**고
+# 적는다(소비처가 "최근 topic 반복 회피"뿐이고 그 비교는 세션 언어 안에서만 일어난다).
+# **일본어의 고정 집합은 어느 명세에도 없다.** 그래서 일본어 적재에는 이 검사를 걸지
+# 않는다 --- 걸려면 `seed/ja/items.yaml`에 실제로 쓰인 태그에서 집합을 뽑아 코드에 박아야
+# 하고, 그러면 명세 근거 없는 정책값이 생겨 앞으로 일본어 seed에 새 태그를 쓸 때 거부된다
+# (`updates/backlog.md`에 "일본어 고정 집합이 필요하면 명세 결정이 먼저다"로 남겼다).
+# 검사 7(문장당 tappable 수)을 영어로 한정한 것과 같은 이유다.
+EN_TOPIC_TAGS: frozenset[str] = frozenset(
     {
         # 언어 성격
         "phrasal-verb",
@@ -91,15 +96,6 @@ _EN_TOPIC_TAGS: frozenset[str] = frozenset(
         "smalltalk",
     }
 )
-# 일본어 집합의 canonical 목록은 어느 명세에도 없다. `seed/ja/items.yaml`에 **실제로
-# 쓰인** 네 태그에서 뽑은 값이다(`grammar`는 일본어에만 있다). 일본어 seed에 새 태그를
-# 쓰려면 이 상수를 같은 커밋에서 늘린다.
-_JA_TOPIC_TAGS: frozenset[str] = frozenset({"daily", "work", "grammar", "emotion"})
-
-ALLOWED_TOPIC_TAGS: dict[Language, frozenset[str]] = {
-    Language.JA: _JA_TOPIC_TAGS,
-    Language.EN: _EN_TOPIC_TAGS,
-}
 
 
 class SeedError(Exception):
@@ -437,14 +433,19 @@ def _validate_reading_by_language(
 
 
 def _validate_topic_tags(items: list[_Item], *, language: Language) -> None:
-    """검사 4: `topic_tags`의 모든 원소가 그 언어의 고정 집합 안에 있다."""
-    allowed = ALLOWED_TOPIC_TAGS[language]
+    """검사 4: `topic_tags`의 모든 원소가 고정 집합 안에 있다. **영어 전용이다.**
+
+    일본어에 걸지 않는 이유는 `EN_TOPIC_TAGS` 위 주석에 있다 --- 일본어의 고정 집합이
+    어느 명세에도 없어서, 걸면 명세 근거 없는 정책값이 코드에 박힌다.
+    """
+    if language is not Language.EN:
+        return
     for item in items:
         for tag in item.topic_tags or ():
-            if tag not in allowed:
+            if tag not in EN_TOPIC_TAGS:
                 raise SeedError(
                     f"{ITEMS_FILE}: seed_id '{item.seed_id}' has unknown topic_tag '{tag}' "
-                    f"(language={language.value}, allowed: {', '.join(sorted(allowed))})"
+                    f"(language={language.value}, allowed: {', '.join(sorted(EN_TOPIC_TAGS))})"
                 )
 
 

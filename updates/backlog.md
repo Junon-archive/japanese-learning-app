@@ -99,7 +99,7 @@ MVP-02 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 �
 | 부하가 걸린 상태에서 PWA e2e의 `.login-form` 15초 대기가 시간 초과로 1회 실패했다(단독 재실행은 통과) | MVP-02 Wave 3 구현에서 제기. `backend/tests/e2e/test_pwa_installable.py`가 쓰는 로그인 도우미 `backend/tests/e2e/study_flow.py` | 대기 |
 | wrangler 설정 파일로 `workers_dev`·`preview_urls` 끄기 고정(설정 파일 없는 `deploy`가 배포마다 두 설정을 다시 켜서 지금은 대시보드에서 손으로 끈다) | MVP-02 운영 배포(2026-09-14)에서 확인. `docs/decisions/ADR-020-production-topology.md`의 결정 5 `설정 파일로 옮기는 조건`, `infra/DEPLOY.md` 6.3 | 대기 |
 
-## 6. MVP-03에서 제기된 항목 (6건)
+## 6. MVP-03에서 제기된 항목 (7건)
 
 MVP-03(영어 학습 추가) 진행 중 제기되었으나 이번 범위에서 하지 않기로 한 항목이다.
 
@@ -111,3 +111,4 @@ MVP-03(영어 학습 추가) 진행 중 제기되었으나 이번 범위에서 �
 | 영어 demo fixture가 표현 300개 중 200개만 덮는다(`DEMO_SENTENCE_CAP`이 200이라 문장 수가 먼저 차고 끝난다). 일본어는 171문장으로 200개를 덮는다 --- 영어는 문장당 target이 1개뿐이어서 커버가 느리다 | MVP-03 Wave 5 `demo-en` 레인 결과. `scripts/build_demo_fixture.py`의 선택 규칙 | 대기 |
 | 음성 선택이 대소문자를 구분한다(ADR-025 결정 4의 규칙 그대로). Android의 `en_US`처럼 구분자가 다른 `lang` 값은 `startsWith('en')`에는 걸리지만 `en-US` 우선 조건에는 걸리지 않아 목록 순서 첫 번째가 선택된다 | MVP-03 Wave 5 `speech` 레인에서 제기. `frontend/src/ui/speech.ts`의 `pickVoice` | 대기 |
 | `PublicScreenContext.language`가 `Language \| null`이라 공유 렌더러(`createInteractions`, `renderExplanationPanel`, `renderSentence`)가 null을 받을 수 있다. null이면 `lang`을 적지 않고 재생 버튼도 없다 --- "demo route는 언어가 있다"는 것이 route 표로만 암시되어 타입이 그 사실을 들고 있지 않다 | MVP-03 Wave 5 `speech` 레인에서 제기. `frontend/src/routes.ts` | 대기 |
+| 일본어 `topic_tags`의 고정 집합이 어느 명세에도 없다. 영어는 `01_ENGLISH_CONTENT.md`의 표가 canonical이고 loader가 강제하지만, 일본어는 강제할 근거가 없어 검사를 걸지 않았다(걸려면 `seed/ja/items.yaml`에 쓰인 태그에서 집합을 뽑아 코드에 박아야 하고, 그러면 명세 근거 없는 정책값이 된다). 일본어용 집합이 필요하면 **명세 결정이 먼저다** | MVP-03 Wave 5·6 scope-guard 게이트의 판단 요청. `backend/app/services/seed_loader.py`의 `EN_TOPIC_TAGS` 주석 | 대기 |

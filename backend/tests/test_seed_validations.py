@@ -127,7 +127,7 @@ def _load_en(session: Session, seed_dir: Path, *, incremental: bool = False) -> 
 
 
 # --------------------------------------------------------------------------
-# 검사 4: topic_tags 고정 집합. 허용 집합은 언어별이다.
+# 검사 4: topic_tags 고정 집합. **영어 전용이다**(일본어 고정 집합은 명세에 없다).
 # --------------------------------------------------------------------------
 
 
@@ -148,28 +148,35 @@ def test_en_tag_outside_the_fixed_set_is_rejected(tmp_path: Path, db_session: Se
 
 
 @pytest.mark.integration
-def test_ja_keeps_its_own_tag_set(tmp_path: Path, db_session: Session) -> None:
-    """일본어 seed의 `grammar`는 통과하고, 영어 전용 태그는 거부된다(집합을 공유하지 않는다)."""
+def test_the_fixed_set_is_not_enforced_on_japanese(tmp_path: Path, db_session: Session) -> None:
+    """**검사 4는 영어 전용이다.** 일본어는 어떤 태그든 통과한다.
+
+    고정 집합 표는 `01_ENGLISH_CONTENT.md`(영어 콘텐츠 기준 문서)의 것이고 같은 절이 "태그는
+    두 언어가 공유하지 않는다"고 적는다. 일본어의 고정 집합은 **어느 명세에도 없으므로**,
+    일본어에 집합을 강제하면 명세 근거 없는 정책값이 코드에 박히고 앞으로 일본어 seed에 새
+    태그를 쓸 때 거부된다. 그래서 걸지 않는다(scope-guard 게이트의 판단 요청으로 정리했다).
+
+    일본어용 고정 집합이 필요해지면 명세 결정이 먼저다(`updates/backlog.md`).
+    """
     ja_sentences = [
         _sentence("sn_a", text="猫が好きです。", targets=[("it_a", "猫", True)], reading="ねこ")
     ]
-    good = _write_seed_dir(
+    # 일본어 seed에 실제로 있는 태그(`grammar`)와 영어 고정 집합의 태그(`friends`)와
+    # 어느 쪽에도 없는 새 태그를 한꺼번에 넣어도 적재된다.
+    seed_dir = _write_seed_dir(
         tmp_path / "ja",
-        items=[_item("it_a", lemma="猫", reading="ねこ", topic_tags=["grammar", "emotion"])],
+        items=[
+            _item(
+                "it_a",
+                lemma="猫",
+                reading="ねこ",
+                topic_tags=["grammar", "friends", "brand-new-tag"],
+            )
+        ],
         sentences=ja_sentences,
     )
-    summary = load_seed(db_session, good, now=NOW, cfg=get_config(), language=Language.JA)
+    summary = load_seed(db_session, seed_dir, now=NOW, cfg=get_config(), language=Language.JA)
     assert summary.items_inserted == 1
-
-    bad = _write_seed_dir(
-        tmp_path / "ja_bad",
-        items=[_item("it_a", lemma="猫", reading="ねこ", topic_tags=["friends"])],
-        sentences=ja_sentences,
-    )
-    with pytest.raises(SeedError, match=r"it_a.*unknown topic_tag 'friends'"):
-        load_seed(
-            db_session, bad, now=NOW, cfg=get_config(), language=Language.JA, incremental=True
-        )
 
 
 # --------------------------------------------------------------------------
