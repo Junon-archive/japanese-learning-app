@@ -83,7 +83,7 @@ class SeedSummary:
 
 @dataclass(frozen=True)
 class _Explanation:
-    reading: str
+    reading: str | None
     core_meaning: str
     meaning_in_context: str
     nuance: str
@@ -105,7 +105,7 @@ class _Item:
     seed_id: str
     type: LearningItemType
     lemma: str
-    reading: str
+    reading: str | None
     default_meaning: str
     difficulty_label: str | None
     topic_tags: list[str] | None
@@ -221,7 +221,7 @@ def _parse_items(path: Path) -> list[_Item]:
                 seed_id=seed_id,
                 type=item_type,
                 lemma=_text(mapping, "lemma", where),
-                reading=_text(mapping, "reading", where),
+                reading=_optional_text(mapping, "reading", where),
                 default_meaning=_text(mapping, "default_meaning", where),
                 difficulty_label=_optional_text(mapping, "difficulty_label", where),
                 topic_tags=_tags(mapping, where),
@@ -239,7 +239,7 @@ def _parse_explanation(entry: dict[str, object], where: str) -> _Explanation:
     mapping = _mapping(raw, f"{where}.explanation")
     inner = f"{where}.explanation"
     return _Explanation(
-        reading=_text(mapping, "reading", inner),
+        reading=_optional_text(mapping, "reading", inner),
         core_meaning=_text(mapping, "core_meaning", inner),
         meaning_in_context=_text(mapping, "meaning_in_context", inner),
         nuance=_text(mapping, "nuance", inner),
@@ -354,6 +354,47 @@ def _reject_cross_item_overlap(text: str, items: list[_SentenceItem], where: str
 # --------------------------------------------------------------------------
 
 
+def _validate_reading_by_language(
+    items: list[_Item], sentences: list[_Sentence], *, language: Language
+) -> None:
+    """`reading`이 언어 규칙을 지키는지 검증한다(ADR-023 결정 3, `01_ENGLISH_CONTENT.md`).
+
+    일본어(`ja`)는 `learning_items.reading`과 explanation의 `reading`이 모두 필수다.
+    영어(`en`)는 둘 다 금지다(YAML에 키가 있으면 안 된다). DB 레벨 NOT NULL 제약은
+    migration 0005에서 이미 없앴으므로 이 파서 레벨에서 언어별 규약을 강제한다.
+    """
+    if language is Language.JA:
+        for item in items:
+            if item.reading is None:
+                raise SeedError(
+                    f"{ITEMS_FILE}: seed_id '{item.seed_id}' is missing 'reading' "
+                    "(required for language=ja)"
+                )
+        for sentence in sentences:
+            for sentence_item in sentence.items:
+                if sentence_item.explanation.reading is None:
+                    raise SeedError(
+                        f"{SENTENCES_FILE}: seed_id '{sentence.seed_id}' "
+                        f"item_seed_id '{sentence_item.item_seed_id}' explanation is "
+                        "missing 'reading' (required for language=ja)"
+                    )
+    elif language is Language.EN:
+        for item in items:
+            if item.reading is not None:
+                raise SeedError(
+                    f"{ITEMS_FILE}: seed_id '{item.seed_id}' must not have 'reading' "
+                    "(forbidden for language=en)"
+                )
+        for sentence in sentences:
+            for sentence_item in sentence.items:
+                if sentence_item.explanation.reading is not None:
+                    raise SeedError(
+                        f"{SENTENCES_FILE}: seed_id '{sentence.seed_id}' "
+                        f"item_seed_id '{sentence_item.item_seed_id}' explanation must "
+                        "not have 'reading' (forbidden for language=en)"
+                    )
+
+
 def _reject_if_already_seeded(session: Session) -> None:
     item_count = session.scalar(
         sa.select(sa.func.count())
@@ -425,6 +466,7 @@ def load_seed(
     """
     items = _parse_items(seed_dir / ITEMS_FILE)
     sentences = _parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items})
+    _validate_reading_by_language(items, sentences, language=language)
 
     if incremental:
         existing_item_ids = _existing_item_seed_ids(session)

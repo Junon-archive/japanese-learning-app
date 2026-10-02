@@ -21,29 +21,33 @@ from app.services.seed_loader import load_seed
 from tests.factories import NOW
 
 
-def _explanation(reading: str, *, meaning: str = "뜻") -> dict[str, Any]:
-    return {
-        "reading": reading,
+def _explanation(reading: str | None, *, meaning: str = "뜻") -> dict[str, Any]:
+    result: dict[str, Any] = {
         "core_meaning": meaning,
         "meaning_in_context": f"{meaning} (문맥)",
         "nuance": "뉘앙스",
         "example_sentence": "例文です。",
         "example_translation": "예문입니다.",
     }
+    if reading is not None:
+        result["reading"] = reading
+    return result
 
 
-def _item(seed_id: str, *, lemma: str, reading: str) -> dict[str, Any]:
-    return {
+def _item(seed_id: str, *, lemma: str, reading: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "seed_id": seed_id,
         "type": "word",
         "lemma": lemma,
-        "reading": reading,
         "default_meaning": "뜻",
     }
+    if reading is not None:
+        result["reading"] = reading
+    return result
 
 
 def _sentence(
-    seed_id: str, *, text: str, item_seed_id: str, surface_form: str, reading: str
+    seed_id: str, *, text: str, item_seed_id: str, surface_form: str, reading: str | None = None
 ) -> dict[str, Any]:
     return {
         "seed_id": seed_id,
@@ -233,21 +237,20 @@ def test_seed_order_is_not_the_new_items_position_in_the_file(
 def test_seed_order_is_scoped_per_language(tmp_path: Path, db_session: Session) -> None:
     """다른 언어의 기존 최대값은 이 언어의 이어 붙이기에 영향을 주지 않는다.
 
-    영어 item의 `reading`을 nullable로 받는 것은 prompt-lang 레인의 일이다(ADR-023
-    결정 3). 여기서는 언어별 `seed_order` 분리만 확인하면 되므로 파싱을 통과시키는
-    placeholder 값을 그대로 넣는다.
+    영어 item의 `reading`은 nullable이고(ADR-023 결정 3), `en`은 아예 `reading`
+    키가 없어야 한다. 여기서는 언어별 `seed_order` 분리만 확인하면 되므로 `reading`을
+    생략한다.
     """
     ja_dir = _write_seed_dir(tmp_path / "ja", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
     load_seed(db_session, ja_dir, now=NOW, language=Language.JA, incremental=True)
 
-    en_items = [_item("en_it_a", lemma="cat", reading="N/A")]
+    en_items = [_item("en_it_a", lemma="cat")]
     en_sentences = [
         _sentence(
             "en_sn_a",
             text="I like cats.",
             item_seed_id="en_it_a",
             surface_form="cats",
-            reading="N/A",
         )
     ]
     en_dir = _write_seed_dir(tmp_path / "en", items=en_items, sentences=en_sentences)
