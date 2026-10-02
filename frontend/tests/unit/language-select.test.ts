@@ -199,6 +199,32 @@ describe('열린 세션이 있을 때', () => {
     // 영어 Study Screen에는 후리가나 토글도 없다(합격 기준 24).
     expect(topBarRight()).toEqual(['학습 기록', '로그아웃'])
   })
+
+  it('has no language switch button on the finished screen top bar either', async () => {
+    // `12_TEST_PLAN.md`의 `언어 선택 화면`이 Study Screen과 **완료 화면** 둘 다를 요구한다.
+    // ADR-025 결정 2가 완료 화면의 `다른 언어로`를 명시적으로 철회했다 --- `03_UI_UX_SPEC.md`의
+    // `완료 화면`이 "새 세션 시작 버튼을 두지 않는다"를 이미 금지하고, 언어 전환 버튼이 정확히
+    // 그 버튼이기 때문이다.
+    // 목표 시간에 도달한 세션이어야 `오늘 학습 완료` 선택지가 붙는다(`ui/progress.ts`의 reached).
+    const reached = { ...session('en'), active_seconds: 720 }
+    const finished = { ...reached, ended_at: '2026-10-01T09:12:00Z' }
+    table = {
+      [OPEN_SESSION]: async () => json(200, { session: reached }),
+      [START]: async () => json(200, { session: reached, resumed: false, timed_out_session_id: null }),
+      [NEXT]: async () => json(200, { presentation: PRESENTATION }),
+      [FINISH]: async () => json(200, { session: finished }),
+    }
+    await enter()
+
+    press('오늘 학습 완료')
+    await settle()
+
+    // 완료 화면이 떴다(이 단언이 없으면 학습 화면을 보고 통과할 수 있다).
+    expect(byClass(root, 'session-finished')).toHaveLength(1)
+    expect(topBarRight()).not.toContain(MESSAGES.languageJa)
+    expect(topBarRight()).not.toContain(MESSAGES.languageEn)
+    expect(topBarRight()).toEqual(['학습 기록', '로그아웃'])
+  })
 })
 
 describe('열린 세션이 없을 때', () => {
