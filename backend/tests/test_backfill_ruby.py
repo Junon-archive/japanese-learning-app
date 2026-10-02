@@ -91,7 +91,7 @@ def target_db(postgres_admin_dsn: URL, monkeypatch: pytest.MonkeyPatch) -> Itera
         engine = sa.create_engine(dsn, poolclass=NullPool)
         try:
             with Session(engine) as session:
-                load_seed(session, SEED_MIN, now=datetime.now(UTC))
+                load_seed(session, SEED_MIN, now=datetime.now(UTC), cfg=get_config())
                 sentence = session.scalars(sa.select(Sentence).order_by(Sentence.id)).first()
                 assert sentence is not None
                 user = factories.make_user(session)
@@ -629,7 +629,7 @@ def test_seed_worker_and_backfill_produce_the_same_spans(
         seed_engine = sa.create_engine(seed_dsn, poolclass=NullPool)
         try:
             with Session(seed_engine) as session:
-                load_seed(session, SEED_MIN, now=datetime.now(UTC))
+                load_seed(session, SEED_MIN, now=datetime.now(UTC), cfg=get_config())
                 seed_spans = {
                     row.text: row.ruby_json["spans"]
                     for row in session.scalars(sa.select(Sentence)).all()

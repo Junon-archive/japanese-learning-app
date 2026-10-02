@@ -32,6 +32,7 @@ import sqlalchemy as sa
 import yaml
 from sqlalchemy.orm import Session
 
+from app.config import AppConfig
 from app.furigana import RubyItem, RubySummary, compute_ruby
 from app.models.content import (
     LearningItem,
@@ -59,6 +60,46 @@ from app.render import (
 
 ITEMS_FILE = "items.yaml"
 SENTENCES_FILE = "sentences.yaml"
+
+# `mvp-03-english/01_ENGLISH_CONTENT.md`의 `topic_tags 고정 집합`. 그 절이 **"고정 집합
+# 강제는 seed loader가 한다"**고 못박았다 --- DB CHECK로 배열 원소를 제약하면 집합을
+# 늘릴 때마다 migration이 필요하다. 집합을 늘리는 것은 이 상수와 그 문서를 같은
+# 커밋에서 고치는 일이다.
+#
+# 같은 절이 **"태그는 두 언어가 공유하지 않는다"**고 적고(소비처가 "최근 topic 반복
+# 회피"뿐이며 그 비교는 세션 언어 안에서만 일어난다) 영어는 `grammar`를 쓰지 않는다.
+# 그래서 허용 집합을 언어별로 나눈다.
+_EN_TOPIC_TAGS: frozenset[str] = frozenset(
+    {
+        # 언어 성격
+        "phrasal-verb",
+        "idiom",
+        "discourse-marker",
+        "formulaic",
+        "contraction",
+        "colloquial",
+        "slang",
+        # 상황
+        "daily",
+        "friends",
+        "work",
+        "travel",
+        "food",
+        "shopping",
+        "health",
+        "phone",
+        "smalltalk",
+    }
+)
+# 일본어 집합의 canonical 목록은 어느 명세에도 없다. `seed/ja/items.yaml`에 **실제로
+# 쓰인** 네 태그에서 뽑은 값이다(`grammar`는 일본어에만 있다). 일본어 seed에 새 태그를
+# 쓰려면 이 상수를 같은 커밋에서 늘린다.
+_JA_TOPIC_TAGS: frozenset[str] = frozenset({"daily", "work", "grammar", "emotion"})
+
+ALLOWED_TOPIC_TAGS: dict[Language, frozenset[str]] = {
+    Language.JA: _JA_TOPIC_TAGS,
+    Language.EN: _EN_TOPIC_TAGS,
+}
 
 
 class SeedError(Exception):
@@ -395,6 +436,138 @@ def _validate_reading_by_language(
                     )
 
 
+def _validate_topic_tags(items: list[_Item], *, language: Language) -> None:
+    """검사 4: `topic_tags`의 모든 원소가 그 언어의 고정 집합 안에 있다."""
+    allowed = ALLOWED_TOPIC_TAGS[language]
+    for item in items:
+        for tag in item.topic_tags or ():
+            if tag not in allowed:
+                raise SeedError(
+                    f"{ITEMS_FILE}: seed_id '{item.seed_id}' has unknown topic_tag '{tag}' "
+                    f"(language={language.value}, allowed: {', '.join(sorted(allowed))})"
+                )
+
+
+def _validate_frequency_rank(items: list[_Item]) -> None:
+    """검사 5: `frequency_rank`가 1 이상이고 파일 안에서 유일하다.
+
+    없는 것(`None`)은 허용한다 --- 일본어 seed에 빈도 정보가 없는 item이 있고,
+    `seed_order`를 `frequency_rank`로 승격시키지 않는다는 규칙(이 모듈 docstring)이
+    "빈 값"을 정상 상태로 둔다.
+    """
+    seen: dict[int, str] = {}
+    for item in items:
+        rank = item.frequency_rank
+        if rank is None:
+            continue
+        if rank < 1:
+            raise SeedError(
+                f"{ITEMS_FILE}: seed_id '{item.seed_id}' has 'frequency_rank' {rank}; "
+                "must be an integer >= 1"
+            )
+        previous = seen.get(rank)
+        if previous is not None:
+            raise SeedError(
+                f"{ITEMS_FILE}: seed_id '{item.seed_id}' repeats 'frequency_rank' {rank} "
+                f"(already used by seed_id '{previous}')"
+            )
+        seen[rank] = item.seed_id
+
+
+def _validate_sentence_length(
+    sentences: list[_Sentence], *, cfg: AppConfig, language: Language
+) -> None:
+    """검사 6: 문장 길이가 `content.max_sentence_length_chars[language]` 이하다.
+
+    단위는 code point다(`str`의 길이). 상한은 언어별 맵에서 읽는다 ---
+    `jobs/generate_sentence_batch.py`가 LLM 산출물에 쓰는 것과 같은 값이다.
+    """
+    limit: int = getattr(cfg.content.max_sentence_length_chars, language.value)
+    for sentence in sentences:
+        if len(sentence.text) > limit:
+            raise SeedError(
+                f"{SENTENCES_FILE}: seed_id '{sentence.seed_id}' text is {len(sentence.text)} "
+                f"code points; exceeds content.max_sentence_length_chars.{language.value}={limit}"
+            )
+
+
+def _validate_tappable_count(
+    sentences: list[_Sentence], *, cfg: AppConfig, language: Language
+) -> None:
+    """검사 7: 문장당 tappable item이 1개 이상 `learning.max_new_items_per_sentence` 이하다.
+
+    상한의 출처는 `08_LLM_SPEC.md`의 deterministic validation 5번과 같은 config 키다.
+    하한 1은 "target이 없는 문장은 가르칠 것이 없다"는 구조적 조건이다.
+
+    **영어 전용이다.** 이 검사를 적는 문서가 `01_ENGLISH_CONTENT.md`의 `검증` 7번이고,
+    거기서 "target"과 `is_tappable`을 같은 것으로 쓴다. 일본어는 둘이 갈린다 ---
+    `08_LLM_SPEC.md`의 `Ready invariant와 같은 범위`와 `12_TEST_PLAN.md`가 **target이
+    아닌 tappable item**을 정식으로 허용하고, Core E2E fixture
+    (`backend/tests/data/seed_core_e2e/`)의 첫 문장은 그 전제 위에서 tappable을 셋
+    담는다. 일본어에 같은 상한을 걸면 그 전제가 깨진다.
+    """
+    if language is not Language.EN:
+        return
+    maximum = cfg.learning.max_new_items_per_sentence
+    for sentence in sentences:
+        count = sum(1 for item in sentence.items if item.is_tappable)
+        if count < 1 or count > maximum:
+            raise SeedError(
+                f"{SENTENCES_FILE}: seed_id '{sentence.seed_id}' has {count} tappable items; "
+                f"must be between 1 and learning.max_new_items_per_sentence={maximum}"
+            )
+
+
+def _validate_normalized_hashes(
+    session: Session,
+    sentences: list[_Sentence],
+    *,
+    existing_sentence_seed_ids: set[str],
+    language: Language,
+) -> dict[str, str]:
+    """검사 11: `normalized_hash`가 파일 안에서, 그리고 DB의 기존 문장과 겹치지 않는다.
+
+    해시를 **적재 전에** 계산하고 그 값을 그대로 돌려준다 --- 적재 루프가 다시 계산하면
+    검사한 값과 적재되는 값이 갈릴 수 있다. 정규화 규칙이 언어별이므로(ADR-024 결정 6)
+    DB 대조도 같은 언어 안에서만 한다.
+
+    이미 그 `seed_id`로 들어가 있는 문장은 대조 대상이 아니다. 아니면 같은 파일의 두 번째
+    증분 실행이 자기 자신과 충돌해 멱등이 깨진다.
+    """
+    hashes: dict[str, str] = {}
+    by_hash: dict[str, str] = {}
+    for sentence in sentences:
+        digest = normalized_sentence_hash(sentence.text, language.value)
+        previous = by_hash.get(digest)
+        if previous is not None:
+            raise SeedError(
+                f"{SENTENCES_FILE}: seed_id '{sentence.seed_id}' has the same normalized_hash "
+                f"as seed_id '{previous}' (duplicate sentence)"
+            )
+        by_hash[digest] = sentence.seed_id
+        hashes[sentence.seed_id] = digest
+
+    pending = {
+        digest: seed_id
+        for digest, seed_id in by_hash.items()
+        if seed_id not in existing_sentence_seed_ids
+    }
+    if pending:
+        rows = session.execute(
+            sa.select(Sentence.normalized_hash, Sentence.seed_id).where(
+                Sentence.language == language,
+                Sentence.normalized_hash.in_(list(pending)),
+            )
+        ).all()
+        for digest, db_seed_id in rows:
+            raise SeedError(
+                f"{SENTENCES_FILE}: seed_id '{pending[str(digest)]}' duplicates the "
+                f"normalized_hash of a sentence already in the database "
+                f"(language={language.value}, seed_id={db_seed_id!r})"
+            )
+    return hashes
+
+
 def _reject_if_already_seeded(session: Session) -> None:
     item_count = session.scalar(
         sa.select(sa.func.count())
@@ -452,6 +625,7 @@ def load_seed(
     seed_dir: Path,
     *,
     now: datetime,
+    cfg: AppConfig,
     language: Language = Language.JA,
     incremental: bool = False,
 ) -> SeedSummary:
@@ -460,6 +634,10 @@ def load_seed(
     `now`는 호출자(CLI 진입점)가 읽은 값이다. 여기서 시계를 읽지 않고, 이 적재로
     생기는 모든 `created_at` / `generated_at`이 **같은 순간**을 갖는다 (ADR-007).
 
+    `cfg`는 필수다. 길이 상한과 문장당 target 상한이 정책값이며(`14_CONFIGURATION.md`)
+    코드 기본값을 두지 않는다. 선택 인자로 두면 넘기지 않은 호출에서 검사가 조용히
+    꺼진다.
+
     `incremental=False`(기본)는 빈 DB 전용이다 --- `origin = seed` 행이 하나라도 있으면
     거부한다. `incremental=True`는 파일의 `seed_id` 중 DB에 없는 것만 INSERT하고 이미
     있는 것은 건너뛴다. 기존 행은 고치지 않는다(`04_DB_SPEC.md`의 `증분 적재`).
@@ -467,6 +645,10 @@ def load_seed(
     items = _parse_items(seed_dir / ITEMS_FILE)
     sentences = _parse_sentences(seed_dir / SENTENCES_FILE, {item.seed_id for item in items})
     _validate_reading_by_language(items, sentences, language=language)
+    _validate_topic_tags(items, language=language)
+    _validate_frequency_rank(items)
+    _validate_sentence_length(sentences, cfg=cfg, language=language)
+    _validate_tappable_count(sentences, cfg=cfg, language=language)
 
     if incremental:
         existing_item_ids = _existing_item_seed_ids(session)
@@ -477,6 +659,14 @@ def load_seed(
         existing_item_ids = {}
         existing_sentence_ids = set()
         seed_order = 0
+
+    # 해시는 적재 전 검증 단계에서 계산하고 그 값을 적재가 그대로 쓴다.
+    normalized_hashes = _validate_normalized_hashes(
+        session,
+        sentences,
+        existing_sentence_seed_ids=existing_sentence_ids,
+        language=language,
+    )
 
     spans = 0
     explanations = 0
@@ -528,7 +718,7 @@ def load_seed(
                 source_type=SentenceSourceType.SEED,
                 source_id=sentence.seed_id,
                 seed_id=sentence.seed_id,
-                normalized_hash=normalized_sentence_hash(sentence.text, language.value),
+                normalized_hash=normalized_hashes[sentence.seed_id],
                 status=SentenceStatus.VALIDATED,
                 ruby_json=_compute_ruby_json(sentence, ruby, now=now, language=language),
                 created_at=now,

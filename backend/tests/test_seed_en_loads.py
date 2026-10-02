@@ -15,6 +15,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from app.config import get_config
 from app.models.content import LearningItem, Sentence, SentenceItem, SentenceItemExplanation
 from app.models.enums import Language
 from app.services.seed_loader import load_seed
@@ -26,7 +27,9 @@ SEED_EN_DIR = REPO_ROOT / "seed" / "en"
 
 
 def test_seed_en_loads_cleanly(db_session: Session) -> None:
-    summary = load_seed(db_session, SEED_EN_DIR, now=datetime.now(UTC), language=Language.EN)
+    summary = load_seed(
+        db_session, SEED_EN_DIR, now=datetime.now(UTC), cfg=get_config(), language=Language.EN
+    )
 
     assert summary.items == 300
     assert summary.items_inserted == 300
@@ -38,7 +41,9 @@ def test_seed_en_loads_cleanly(db_session: Session) -> None:
 
 
 def test_seed_en_items_have_no_reading_and_sentences_have_no_ruby(db_session: Session) -> None:
-    load_seed(db_session, SEED_EN_DIR, now=datetime.now(UTC), language=Language.EN)
+    load_seed(
+        db_session, SEED_EN_DIR, now=datetime.now(UTC), cfg=get_config(), language=Language.EN
+    )
 
     items = (
         db_session.execute(sa.select(LearningItem).where(LearningItem.language == Language.EN))
@@ -75,7 +80,9 @@ def test_seed_en_items_have_no_reading_and_sentences_have_no_ruby(db_session: Se
 
 
 def test_seed_en_frequency_rank_is_1_to_300(db_session: Session) -> None:
-    load_seed(db_session, SEED_EN_DIR, now=datetime.now(UTC), language=Language.EN)
+    load_seed(
+        db_session, SEED_EN_DIR, now=datetime.now(UTC), cfg=get_config(), language=Language.EN
+    )
 
     items = (
         db_session.execute(sa.select(LearningItem).where(LearningItem.language == Language.EN))

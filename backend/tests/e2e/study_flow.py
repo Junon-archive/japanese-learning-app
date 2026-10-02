@@ -32,6 +32,7 @@ from playwright.sync_api import Locator, Page, Request, Route
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from sqlalchemy.orm import Session
 
+from app.config import get_config
 from app.models import (
     ItemExposure,
     LearningEvent,
@@ -100,7 +101,7 @@ def seed_and_create_user(stack: E2EStack) -> Learner:
     커넥션에서 이것을 보아야 한다.
     """
     with stack.sessions() as db:
-        load_seed(db, SEED_DIR, now=stack.clock.now())
+        load_seed(db, SEED_DIR, now=stack.clock.now(), cfg=get_config())
         user = factories.make_user(db)
         user.password_hash = hash_password(PASSWORD)
         db.commit()

@@ -9,12 +9,26 @@
   align-items: center;
 }
 
+/* 아이콘 버튼 하나다(03_UI_UX_SPEC.md의 `소리 재생` > `버튼`). 보이는 글자가 없고 이름은
+ * aria-label이 준다. 정사각에 가깝게 두어 아이콘이 가운데 오게 한다. */
 button.speak {
-  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-target);
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--panel);
   color: var(--text);
-  font-size: 14px;
-  font-weight: 600;
+}
+
+.speak-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* 재생 중에는 같은 버튼이 멈춤이다. 눌린 상태를 색으로도 보인다(상태는 aria-pressed가 말한다). */
+button.speak[aria-pressed='true'] {
+  border-color: var(--accent, var(--text));
 }

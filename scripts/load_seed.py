@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.clock import utc_now  # noqa: E402
+from app.config import get_config  # noqa: E402
 from app.db import new_session  # noqa: E402
 from app.furigana import format_summary_lines, load_analyzer  # noqa: E402
 from app.models.enums import Language  # noqa: E402
@@ -71,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     language = Language(args.language)
     seed_dir = args.seed_dir if args.seed_dir is not None else SEED_ROOT / language.value
+    # 문장 길이 상한과 문장당 target 상한은 정책값이다(14_CONFIGURATION.md). 설정을
+    # 읽지 못하면 DB에 닿기 전에 끝난다.
+    cfg = get_config()
 
     # 일본어만 분석기가 필요하다(ADR-024 결정 6). 분석기 부재는 배포 결함이고 문장별
     # NULL로 흡수하지 않고 여기서 그대로 던진다.
@@ -89,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                 session,
                 seed_dir,
                 now=utc_now(),
+                cfg=cfg,
                 language=language,
                 incremental=args.incremental,
             )

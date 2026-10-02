@@ -15,6 +15,7 @@ import sqlalchemy as sa
 import yaml
 from sqlalchemy.orm import Session
 
+from app.config import get_config
 from app.models.content import LearningItem, Sentence
 from app.models.enums import Language, LearningItemOrigin
 from app.services.seed_loader import load_seed
@@ -130,10 +131,10 @@ def _count(session: Session, model: type) -> int:
 @pytest.mark.integration
 def test_default_mode_still_rejects_a_reload(tmp_path: Path, db_session: Session) -> None:
     seed_dir = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, seed_dir, now=NOW)
+    load_seed(db_session, seed_dir, now=NOW, cfg=get_config())
 
     with pytest.raises(Exception, match="db-reset"):
-        load_seed(db_session, seed_dir, now=NOW)
+        load_seed(db_session, seed_dir, now=NOW, cfg=get_config())
 
 
 # --------------------------------------------------------------------------
@@ -146,10 +147,10 @@ def test_incremental_inserts_only_new_seed_ids_and_does_not_touch_existing_rows(
     tmp_path: Path, db_session: Session
 ) -> None:
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
     round2 = _write_seed_dir(tmp_path / "round2", items=ROUND2_ITEMS, sentences=ROUND2_SENTENCES)
-    summary = load_seed(db_session, round2, now=NOW, incremental=True)
+    summary = load_seed(db_session, round2, now=NOW, cfg=get_config(), incremental=True)
 
     assert summary.items_inserted == 1
     assert summary.items_skipped == 2
@@ -173,10 +174,10 @@ def test_a_sentence_can_reference_an_item_inserted_in_the_same_incremental_run(
 ) -> None:
     """item -> sentence 순서: 문장이 같은 실행에서 방금 넣은 item을 참조할 수 있다."""
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
     round2 = _write_seed_dir(tmp_path / "round2", items=ROUND2_ITEMS, sentences=ROUND2_SENTENCES)
-    load_seed(db_session, round2, now=NOW, incremental=True)
+    load_seed(db_session, round2, now=NOW, cfg=get_config(), incremental=True)
 
     new_item = _item_by_seed_id(db_session, "it_c")
     new_sentence = _sentence_by_seed_id(db_session, "sn_c")
@@ -197,12 +198,12 @@ def test_seed_order_continues_from_the_existing_maximum_and_is_not_reused(
     tmp_path: Path, db_session: Session
 ) -> None:
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
     assert _item_by_seed_id(db_session, "it_a").metadata_json["seed_order"] == 1
     assert _item_by_seed_id(db_session, "it_b").metadata_json["seed_order"] == 2
 
     round2 = _write_seed_dir(tmp_path / "round2", items=ROUND2_ITEMS, sentences=ROUND2_SENTENCES)
-    load_seed(db_session, round2, now=NOW, incremental=True)
+    load_seed(db_session, round2, now=NOW, cfg=get_config(), incremental=True)
 
     # it_a/it_b는 그대로 1, 2다(고치지 않는다). 새 it_c는 3을 이어받는다(round2 파일 안에서의
     # 위치인 3이 아니라 "기존 최대값 다음"이라는 규칙과 우연히 같은 값이지만, 아래
@@ -218,7 +219,7 @@ def test_seed_order_is_not_the_new_items_position_in_the_file(
 ) -> None:
     """새 item이 파일 맨 앞에 있어도 seed_order는 "기존 최대값 다음"이다. 파일 내 위치가 아니다."""
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
     # it_c를 파일 맨 앞에 둔다. 파일 내 위치(1번째)를 그대로 쓰면 seed_order=1이 되어
     # 기존 it_a(seed_order=1)와 충돌한다.
@@ -228,7 +229,7 @@ def test_seed_order_is_not_the_new_items_position_in_the_file(
         _item("it_b", lemma="犬", reading="いぬ"),
     ]
     round2 = _write_seed_dir(tmp_path / "round2", items=reordered_items, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round2, now=NOW, incremental=True)
+    load_seed(db_session, round2, now=NOW, cfg=get_config(), incremental=True)
 
     assert _item_by_seed_id(db_session, "it_c").metadata_json["seed_order"] == 3
 
@@ -242,7 +243,7 @@ def test_seed_order_is_scoped_per_language(tmp_path: Path, db_session: Session) 
     생략한다.
     """
     ja_dir = _write_seed_dir(tmp_path / "ja", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, ja_dir, now=NOW, language=Language.JA, incremental=True)
+    load_seed(db_session, ja_dir, now=NOW, cfg=get_config(), language=Language.JA, incremental=True)
 
     en_items = [_item("en_it_a", lemma="cat")]
     en_sentences = [
@@ -254,7 +255,7 @@ def test_seed_order_is_scoped_per_language(tmp_path: Path, db_session: Session) 
         )
     ]
     en_dir = _write_seed_dir(tmp_path / "en", items=en_items, sentences=en_sentences)
-    load_seed(db_session, en_dir, now=NOW, language=Language.EN, incremental=True)
+    load_seed(db_session, en_dir, now=NOW, cfg=get_config(), language=Language.EN, incremental=True)
 
     assert _item_by_seed_id(db_session, "en_it_a").metadata_json["seed_order"] == 1
     # ja 쪽 item의 번호는 영어 적재로 바뀌지 않는다.
@@ -278,7 +279,7 @@ def test_a_failure_rolls_back_the_entire_incremental_batch(
     검증한 뒤에야 쓰기 시작한다(한 트랜잭션, 부분 적재 없음).
     """
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
     broken_sentence = _sentence(
         "sn_broken", text="鳥が好きです。", item_seed_id="it_c", surface_form="鳥", reading="とり"
@@ -291,7 +292,7 @@ def test_a_failure_rolls_back_the_entire_incremental_batch(
     )
 
     with pytest.raises(Exception, match="explanation"):
-        load_seed(db_session, broken_dir, now=NOW, incremental=True)
+        load_seed(db_session, broken_dir, now=NOW, cfg=get_config(), incremental=True)
 
     # it_c는 이 실패한 호출 안에서만 새로 생기려던 것이었다. 전혀 남지 않아야 한다.
     assert _count(db_session, LearningItem) == 2
@@ -315,9 +316,9 @@ def test_the_second_incremental_run_with_the_same_file_inserts_nothing(
     tmp_path: Path, db_session: Session
 ) -> None:
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
-    summary = load_seed(db_session, round1, now=NOW, incremental=True)
+    summary = load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
     assert (summary.items_inserted, summary.sentences_inserted) == (0, 0)
     assert (summary.items_skipped, summary.sentences_skipped) == (2, 2)
@@ -331,7 +332,7 @@ def test_the_second_incremental_run_with_the_same_file_inserts_nothing(
 @pytest.mark.integration
 def test_incremental_does_not_create_candidates(tmp_path: Path, db_session: Session) -> None:
     round1 = _write_seed_dir(tmp_path / "round1", items=ROUND1_ITEMS, sentences=ROUND1_SENTENCES)
-    load_seed(db_session, round1, now=NOW, incremental=True)
+    load_seed(db_session, round1, now=NOW, cfg=get_config(), incremental=True)
 
     count = db_session.execute(
         sa.text("SELECT count(*) FROM user_sentence_candidates")

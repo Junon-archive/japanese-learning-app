@@ -31,7 +31,15 @@
 
 import './speech.css'
 
-const SPEAK_LABEL = '재생'
+/**
+ * 접근성 이름(`03_UI_UX_SPEC.md`의 화면 문구 표 `소리 재생 버튼`). 버튼은 **아이콘**이고 보이는
+ * 글자가 없으므로 이름은 `aria-label`로만 간다. 재생 중에는 같은 버튼이 멈춤이라 이름도 바뀐다.
+ */
+const SPEAK_LABEL = '소리 듣기'
+const STOP_LABEL = '멈추기'
+
+/** 아이콘 글리프. 글자가 아니라 그림이므로 스크린 리더가 읽지 않게 한다(`aria-hidden`). */
+const SPEAK_ICON = '🔊'
 
 /** 지금 재생을 시작한 버튼. 같은 버튼을 다시 눌렀는지 판단하는 데만 쓴다. */
 let playing: HTMLElement | null = null
@@ -58,11 +66,21 @@ export function isSpeechAvailable(): boolean {
   return pickVoice() !== null
 }
 
+/**
+ * 버튼의 접근성 이름과 `aria-pressed`를 지금 상태에 맞춘다(`03_UI_UX_SPEC.md`의 `버튼`).
+ * 토글 버튼이므로 상태는 `aria-pressed`가, 무엇을 하는 버튼인지는 이름이 말한다.
+ */
+function markButton(button: HTMLElement, pressed: boolean): void {
+  button.setAttribute('aria-label', pressed ? STOP_LABEL : SPEAK_LABEL)
+  button.setAttribute('aria-pressed', pressed ? 'true' : 'false')
+}
+
 /** 진행 중인 재생을 멈춘다. 음성이 없거나 재생 중이 아니어도 안전하다. */
 function stop(): void {
+  if (playing !== null) markButton(playing, false)
+  playing = null
   if (!hasApi()) return
   speechSynthesis.cancel()
-  playing = null
 }
 
 /** 읽는다. 쓸 음성이 없으면 아무것도 하지 않는다(실패를 알리지 않는다). */
@@ -80,7 +98,13 @@ function speakButton(text: string): HTMLElement {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'speak'
-  button.textContent = SPEAK_LABEL
+  // 아이콘 하나뿐이고 이름은 `aria-label`이 준다. 아이콘 글리프는 스크린 리더가 읽지 않는다.
+  const icon = document.createElement('span')
+  icon.className = 'speak-icon'
+  icon.textContent = SPEAK_ICON
+  icon.setAttribute('aria-hidden', 'true')
+  button.append(icon)
+  markButton(button, false)
   button.addEventListener('click', () => {
     // 같은 버튼을 다시 누르면 멈춘다. 다 읽은 뒤의 누름은 다시 재생이다 --- 그래서 "이 버튼이
     // 시작했다"만 보지 않고 아직 읽고 있는지(speaking/pending)도 본다.
@@ -88,7 +112,10 @@ function speakButton(text: string): HTMLElement {
       stop()
       return
     }
+    // 다른 버튼이 읽고 있었으면 그 버튼의 상태도 되돌린다(`speak`가 cancel해 소리는 끊긴다).
+    if (playing !== null && playing !== button) markButton(playing, false)
     playing = button
+    markButton(button, true)
     // `speak`가 먼저 `cancel()`한다. 다른 버튼이 읽고 있었으면 거기서 끊긴다(겹치지 않는다).
     speak(text)
   })

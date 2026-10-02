@@ -391,7 +391,7 @@ class BeforeRestart:
 def prepare(sessions: sessionmaker[Session]) -> Learner:
     """seed + 사용자 + active prompt 행(worker 기동 조건). **커밋한다.**"""
     with sessions() as db:
-        load_seed(db, SEED_DIR, now=datetime.now(UTC))
+        load_seed(db, SEED_DIR, now=datetime.now(UTC), cfg=get_config())
         for task_type, version in (
             (LlmTaskType.GENERATE_SENTENCE_BATCH, sentence_gen.VERSION),
             (LlmTaskType.GENERATE_REVIEW_CONTEXT, review_context.VERSION),

@@ -28,6 +28,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
+from app.config import get_config
 from app.llm.duplicates import CorpusSentence, find_duplicate
 from app.models.content import Sentence
 from app.normalization import normalized_sentence_hash, normalized_sentence_text, similarity_ratio
@@ -84,7 +85,7 @@ def test_the_seed_loader_produces_the_same_hash_in_two_independent_runs(
             engine = sa.create_engine(dsn, poolclass=NullPool)
             try:
                 with Session(engine) as session:
-                    load_seed(session, REAL_SEED_JA, now=now)
+                    load_seed(session, REAL_SEED_JA, now=now, cfg=get_config())
                     rows = session.execute(
                         sa.select(Sentence.source_id, Sentence.normalized_hash)
                     ).all()
