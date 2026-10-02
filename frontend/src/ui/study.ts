@@ -56,8 +56,9 @@ import { renderLogoutButton } from './logout'
 import { MESSAGES, renderNotice, showToast } from './notice'
 import { renderProgress, sessionProgress } from './progress'
 import { showScreen } from './screen'
-import { renderSentence } from './segments'
+import { joinSegments, renderSentence } from './segments'
 import { renderSessionEndChoice, renderSessionFinished } from './session-end'
+import { renderSpeakButton } from './speech'
 import { renderTopBar } from './topbar'
 
 export type StudyActions = {
@@ -225,11 +226,13 @@ export function mountStudy(
 
   function showSentence(next: Presentation): void {
     presentation = next
+    const life = sentenceSignal()
     // 문장의 tappable span과 상호작용 영역은 서로 다른 슬롯에 있다. span이 눌리면 그
     // 컨트롤러의 `tapItem`으로 들어간다. 설명 시트는 화면 전체를 덮으므로 화면 요소에 붙는다.
     const handle = createInteractions(next, interactionOps(next), {
-      signal: sentenceSignal(),
+      signal: life,
       sheetContainer: screen,
+      language,
     })
     interactions = handle
     // 힌트는 어느 표현이 학습 대상인지 암시하지 않는다(03_UI_UX_SPEC.md의 `tappable span 표시`).
@@ -240,6 +243,9 @@ export function mountStudy(
       renderSentence(next.render_segments, (sentenceItemId) => {
         handle.tapItem(sentenceItemId)
       }),
+      // 영어만 문장 옆에 재생 버튼이 있다(ADR-025 결정 4). 문장 전체를 읽고, 다음 문장으로
+      // 넘어가거나 화면을 떠나면(`life`) 멈춘다. 상단바에는 두지 않는다.
+      ...(language === 'en' ? [renderSpeakButton(joinSegments(next.render_segments), life)] : []),
       hint,
     )
     interactionSlot.replaceChildren(handle.element)

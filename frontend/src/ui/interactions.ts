@@ -29,7 +29,7 @@
  *     (03_UI_UX_SPEC.md의 `화면 전환과 시트`).
  */
 
-import type { ContentFlagReason, ExplicitSignal, Explanation, Presentation } from '../types'
+import type { ContentFlagReason, ExplicitSignal, Explanation, Language, Presentation } from '../types'
 import { renderExplanationPanel } from './explanation'
 import { FLAG_SUBMITTED_TEXT, renderFlagControl } from './flag'
 import { renderProbe } from './probe'
@@ -82,6 +82,11 @@ export type InteractionsOptions = {
   signal: AbortSignal
   /** 설명 시트를 붙일 화면 요소. 화면이 떼어지면 시트도 함께 사라진다. */
   sheetContainer: HTMLElement
+  /**
+   * 이 화면의 언어. 설명 패널의 `lang` 속성과 예문 재생 버튼 유무가 이 값으로 갈린다
+   * (ADR-025 결정 1·4). 이 파일은 언어를 고르지 않고 넘겨만 준다.
+   */
+  language: Language | null
   /** 신고 뒤 안내. 없으면 학습 화면의 접수 안내다. demo는 저장되지 않는다는 안내를 넘긴다. */
   flagSubmittedText?: string
 }
@@ -182,6 +187,9 @@ export function createInteractions(
     const item = items.get(itemId)!
     return renderExplanationPanel({
       explanation: item.explanation,
+      language: options.language,
+      // 예문 재생은 이 문장을 보여주는 동안만이다. 문장이 바뀌면 멈춘다.
+      signal,
       // 문장 속 표면형. 서버가 잘라 준 segment의 text를 순서대로 이을 뿐 offset을 계산하지 않는다.
       surface: presentation.render_segments
         .filter((segment) => segment.sentence_item_id === itemId)

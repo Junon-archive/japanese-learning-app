@@ -11,10 +11,13 @@
  * -   유형 태그는 표시용 매핑이다. 모르는 값은 원문 그대로 둔다.
  * -   하단 self-report는 **선택이다.** 누르지 않아도 다음 문장으로 갈 수 있으므로 이
  *     패널에 "먼저 고르세요" 같은 요구를 적지 않는다.
- * -   MVP에 audio가 없다. 듣기 버튼을 두지 않는다(00_SCOPE.md).
+ * -   **`lang` 속성과 재생 버튼은 `options.language`가 정한다.** 호출자가 넘긴 값이며 이 파일이
+ *     언어를 고르지 않는다(ADR-025 결정 1). 예문 옆 재생 버튼은 영어에만 있고 그 예문만 읽는다
+ *     (ADR-025 결정 4). 일본어에는 재생 버튼이 없다.
  */
 
-import type { ExplicitSignal, Explanation } from '../types'
+import type { ExplicitSignal, Explanation, Language } from '../types'
+import { renderSpeakButton } from './speech'
 
 /**
  * self-report 3값의 라벨과 **표시 순서**. 서버는 self-report에 options를 주지 않으므로
@@ -43,6 +46,13 @@ export type ExplanationPanelOptions = {
   explanation: Explanation
   /** 이 item의 문장 속 표면형. 해당 `sentence_item_id` segment의 text를 이은 것이다. */
   surface: string
+  /**
+   * 이 화면의 언어. `lang` 속성과 예문 재생 버튼 유무를 정한다. 언어를 모르는 호출자는 `null`이고
+   * 그때는 `lang`을 적지 않는다(틀린 `lang`을 적는 것보다 없는 쪽이 낫다).
+   */
+  language: Language | null
+  /** 이 문장의 수명. abort되면 예문 재생이 멈춘다. */
+  signal: AbortSignal
   /** 이 화면에서 기록한 값. non-null이면 버튼을 잠근다. */
   reported: ExplicitSignal | null
   /** 서버가 이미 이 노출의 evidence를 갖고 있다(409). 재시도할 것이 없다. */
@@ -85,6 +95,8 @@ function line(className: string, text: string, lang?: string): HTMLElement {
 
 export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLElement {
   const { explanation } = options
+  /** `Language` 값이 곧 `lang` 속성 값이다(`'ja'` / `'en'`). 영어 문장에 `'ja'`를 적지 않는다. */
+  const lang = options.language ?? undefined
 
   const panel = document.createElement('section')
   panel.className = 'explain'
@@ -95,12 +107,12 @@ export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLEl
 
   const word = document.createElement('div')
   word.className = 'jp-word'
-  word.lang = 'ja'
+  if (lang !== undefined) word.lang = lang
   word.textContent = options.surface
 
   const canonical = document.createElement('div')
   canonical.className = 'canonical-form'
-  canonical.lang = 'ja'
+  if (lang !== undefined) canonical.lang = lang
   canonical.textContent = explanation.canonical_form
 
   const tag = document.createElement('span')
@@ -112,7 +124,7 @@ export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLEl
   if (explanation.reading !== null) {
     const reading = document.createElement('div')
     reading.className = 'reading'
-    reading.lang = 'ja'
+    if (lang !== undefined) reading.lang = lang
     reading.textContent = explanation.reading
     words.append(word, reading, canonical)
   } else {
@@ -126,7 +138,11 @@ export function renderExplanationPanel(options: ExplanationPanelOptions): HTMLEl
   panel.append(block(FIELD_LABELS.nuance, [line('nuance', explanation.nuance)]))
   panel.append(
     block(FIELD_LABELS.example, [
-      line('example', explanation.example_sentence, 'ja'),
+      line('example', explanation.example_sentence, lang),
+      // 영어만 재생 버튼이 있다. 읽는 것은 이 예문뿐이다(번역은 읽지 않는다).
+      ...(options.language === 'en'
+        ? [renderSpeakButton(explanation.example_sentence, options.signal)]
+        : []),
       ...(explanation.example_translation === null
         ? []
         : [line('example-translation', explanation.example_translation)]),

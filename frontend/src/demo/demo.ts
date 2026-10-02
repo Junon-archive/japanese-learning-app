@@ -27,7 +27,8 @@ import type { InteractionOps } from '../ui/interactions'
 import { createInteractions } from '../ui/interactions'
 import { MESSAGES, showToast } from '../ui/notice'
 import { showScreen } from '../ui/screen'
-import { renderSentence } from '../ui/segments'
+import { joinSegments, renderSentence } from '../ui/segments'
+import { renderSpeakButton } from '../ui/speech'
 import { renderTopBar } from '../ui/topbar'
 import './demo.css'
 import type { DemoFixture, DemoProbePick, DemoProgress, DemoView } from './progress'
@@ -241,6 +242,8 @@ export function mountDemo(ctx: PublicScreenContext, options: DemoScreenOptions):
         signal,
         sheetContainer: screen,
         flagSubmittedText: DEMO_MESSAGES.flagSubmitted,
+        // route 표가 준 언어다(ADR-025 결정 1). 이 모듈이 문자열을 스스로 정하지 않는다.
+        language: ctx.language,
       })
       // Study와 같은 문장 아래 힌트(03_UI_UX_SPEC.md의 화면 문구 표).
       const hint = document.createElement('p')
@@ -250,6 +253,10 @@ export function mountDemo(ctx: PublicScreenContext, options: DemoScreenOptions):
         renderSentence(view.sentence.presentation.render_segments, (sentenceItemId) => {
           handle.tapItem(sentenceItemId)
         }),
+        // 영어 demo만 문장 옆에 재생 버튼이 있다. Study Screen과 같은 자리·같은 모듈이다.
+        ...(ctx.language === 'en'
+          ? [renderSpeakButton(joinSegments(view.sentence.presentation.render_segments), signal)]
+          : []),
         hint,
       )
       interactionSlot.replaceChildren(handle.element)

@@ -140,6 +140,7 @@ function setup(
   const handle = createInteractions(PRESENTATION, ops, {
     signal: controller.signal,
     sheetContainer: screen as unknown as HTMLElement,
+    language: 'ja',
   })
   const box = handle.element as unknown as FakeElement
   screen.append(box)
@@ -234,7 +235,7 @@ describe('translation reveal', () => {
           return { kind: 'message', text: '실패' }
         },
       },
-      { signal: controller.signal, sheetContainer: screen as unknown as HTMLElement },
+      { signal: controller.signal, sheetContainer: screen as unknown as HTMLElement, language: 'ja' },
     )
     const box = handle.element as unknown as FakeElement
 
@@ -548,6 +549,7 @@ describe('probe', () => {
     const handle = createInteractions({ ...PRESENTATION, probe: null }, quietOps(), {
       signal: new AbortController().signal,
       sheetContainer: createFakeElement('main') as unknown as HTMLElement,
+      language: 'ja',
     })
     const element = handle.element as unknown as FakeElement
 

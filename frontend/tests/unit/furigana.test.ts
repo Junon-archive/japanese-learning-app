@@ -287,6 +287,7 @@ describe('toggling does not re-render', () => {
     const handle = createInteractions(PRESENTATION, ops, {
       signal: new AbortController().signal,
       sheetContainer: screen as unknown as HTMLElement,
+      language: 'ja',
     })
     const sentence = asFake(renderSentence(PRESENTATION.render_segments, (id) => handle.tapItem(id)))
     const toggle = asFake(renderFuriganaToggle())

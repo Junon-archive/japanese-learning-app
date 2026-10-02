@@ -48,6 +48,8 @@ export function mountDemo(modules: DemoModules): MountedDemo {
     openLogin: () => {
       logins += 1
     },
+    // route 표가 주는 값이다(ADR-025 결정 1). 이 하네스는 일본어 demo를 연다.
+    language: 'ja',
   })
   return { root, navigations, logins: () => logins }
 }
