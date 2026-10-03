@@ -276,7 +276,7 @@ describe('router', () => {
     expect(buttons(notice)).toEqual([])
     expect(buttons(byClass(root, 'topbar')[0]!).map((button) => button.textContent)).toEqual([
       'Nihongo Context',
-      '로그인',
+      '학습하러 가기',
     ])
   })
 

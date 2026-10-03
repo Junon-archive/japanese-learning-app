@@ -4,12 +4,17 @@
  * **연장 버튼 문구에 숫자가 없어야 한다.** `extra_session_minutes`는 config이고 어떤
  * 응답에도 실려 오지 않는다. `+5분 더`라고 적으면 config를 바꾼 배포에서 버튼이 거짓을
  * 말하며, 그 거짓은 화면상 아무 이상 없이 보인다.
+ *
+ * MVP-03 운영 보강(2026-10-03): **도달 전에도 세션을 끝낼 수 있다.** 이 파일은 두 조각을
+ * 각각 본다 --- 도달 전의 `renderFinishButton`(버튼 하나)과 도달 후의
+ * `renderSessionEndChoice`(안내 + 버튼 둘). 어느 쪽을 언제 그리는지는 `ui/study.ts`의 일이고
+ * `study.test.ts`가 본다(`03_UI_UX_SPEC.md`의 `도달 전과 도달 후`, 합격 기준 32).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { renderSessionEndChoice, renderSessionFinished } from '../../src/ui/session-end'
+import { renderFinishButton, renderSessionEndChoice, renderSessionFinished } from '../../src/ui/session-end'
 import type { FakeElement } from './fake-dom'
-import { fakeDocument } from './fake-dom'
+import { fakeDocument, flatText } from './fake-dom'
 
 function buttons(node: FakeElement): FakeElement[] {
   return node.children.flatMap((child) =>
@@ -68,6 +73,58 @@ describe('renderSessionEndChoice', () => {
     buttons(choice)[1]?.click()
 
     expect(finished).toEqual(['finish', 'extend'])
+  })
+})
+
+describe('renderFinishButton (도달 전)', () => {
+  function finishButton(taps: string[] = []): FakeElement {
+    return renderFinishButton(() => {
+      taps.push('finish')
+    }) as unknown as FakeElement
+  }
+
+  it('is a single secondary button and nothing else', () => {
+    const button = finishButton()
+
+    expect(button.tagName).toBe('BUTTON')
+    expect(button.type).toBe('button')
+    // 오탭을 자리와 위계로 막는다 --- `다음 문장`(primary)과 같은 위계로 그리지 않는다.
+    expect(button.className.split(' ')).toContain('secondary')
+    expect(button.className.split(' ')).not.toContain('primary')
+    expect(button.children).toEqual([])
+  })
+
+  it('uses the very same label as the reached block (한 동작에 두 이름을 두지 않는다)', () => {
+    const reached = renderSessionEndChoice({
+      onFinish: () => {},
+      onExtend: () => {},
+    }) as unknown as FakeElement
+
+    expect(finishButton().textContent).toBe(buttons(reached)[0]!.textContent)
+  })
+
+  it('puts no number in the label', () => {
+    // `default_session_minutes`·`extra_session_minutes`를 문구에 적지 않는다는 기존 규칙 그대로다.
+    expect(finishButton().textContent).not.toMatch(/\d/)
+  })
+
+  it('carries neither the reached wording nor 더 학습하기', () => {
+    // 둘 다 "도달했다"는 뜻이라 도달 전에는 거짓이다.
+    const button = finishButton()
+
+    expect(flatText(button)).not.toContain('오늘 목표한 시간을 채웠어요.')
+    expect(flatText(button)).not.toContain('더 학습하기')
+  })
+
+  it('calls back once per tap, with no confirmation step', () => {
+    const taps: string[] = []
+    const button = finishButton(taps)
+
+    button.click()
+
+    // 한 번 누르면 바로 `/finish`다. 2단계 누르기도 확인 대화상자도 없다.
+    expect(taps).toEqual(['finish'])
+    expect(button.children).toEqual([])
   })
 })
 

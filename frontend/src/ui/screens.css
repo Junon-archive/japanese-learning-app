@@ -143,6 +143,11 @@ button:disabled {
 
 /* --- 세션 종료 --------------------------------------------------------- */
 
+/* 도달 전에만 종료 버튼이 들어간다. 비어 있을 때 `.screen`의 gap을 더하지 않는다. */
+.finish-slot:empty {
+  display: none;
+}
+
 .session-end {
   padding: 16px;
   border: 1px solid var(--line);

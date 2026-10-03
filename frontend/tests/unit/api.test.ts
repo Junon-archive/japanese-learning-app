@@ -187,7 +187,9 @@ describe('failure wording', () => {
     expect(MESSAGES.loginCheckFailed).toBe(
       '지금은 로그인 상태를 확인할 수 없어요. 체험과 글자 배우기는 그대로 쓸 수 있어요.',
     )
-    expect(MESSAGES.loginAreaLoadFailed).toBe('로그인 화면을 불러오지 못했어요. 위의 로그인을 다시 눌러 주세요.')
+    expect(MESSAGES.loginAreaLoadFailed).toBe(
+      '로그인 화면을 불러오지 못했어요. 위의 학습하러 가기를 다시 눌러 주세요.',
+    )
     expect(MESSAGES.demoLoadFailed).toBe('체험용 문장을 불러오지 못했어요. 새로고침해 주세요.')
     for (const message of Object.values(MESSAGES)) {
       expect(message).not.toMatch(/서버|세션|API|요청이 거부|습니다/)

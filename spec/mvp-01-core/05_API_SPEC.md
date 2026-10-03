@@ -14,7 +14,7 @@ Browser는 OpenAI secret을 받지 않는다. normal tap은 live LLM에 의존�
 인증된 private user 전용이다. MVP-02에서 API를 쓰지 않는 화면은 **선택 홈, Public Demo, 가나 학습**
 (MVP-03에서 여섯: 언어 선택 홈, 일본어 홈, 영어 홈, 일본어 demo, 영어 demo, 가나 학습)
 셋이다. 가나 학습 endpoint, 후리가나 설정 endpoint, 방문자 진도 endpoint를 만들지 않는다.
-`GET /api/auth/me`는 계약이 그대로이고 부르는 시점만 바뀌었다 --- 상단바 `로그인`을 누를 때만
+`GET /api/auth/me`는 계약이 그대로이고 부르는 시점만 바뀌었다 --- 상단바 `학습하러 가기`를 누를 때만
 부른다(`03_UI_UX_SPEC.md`의 `상단바`).
 
 audio 관련 endpoint와 event는 MVP에 없다(`00_SCOPE.md`).

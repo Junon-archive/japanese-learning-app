@@ -6,14 +6,15 @@ mvp-03-english/12_TEST_PLAN.md의 `E2E (browser)`, MVP-03 합격 기준 20·21).
 MVP-03에서 홈이 **2단**이 되었다(ADR-025 결정 2). `#/`는 언어 선택 홈(카드 둘: 일본어·영어)이고,
 MVP-02의 체험·글자 카드는 언어별 홈(`#/ja` 둘, `#/en` 하나)으로 내려갔다.
 
--   hash 없이 열면 방문자가 무슨 앱인지 바로 안다: 앱 이름, `로그인`, 한 줄 소개, 언어 카드 2개. 카드에
-    숫자가 없다. API 요청 0건이다. 언어별 홈의 문구와 카드 수도 `화면 문구 표`와 같다.
--   `로그인`을 누를 때만 `GET /api/auth/me`가 1건 나간다. 401이면 Login, 로그인하면 Study Screen.
-    로그인 영역에는 hash가 없으므로 새로고침하면 언어 선택 홈이고, 다시 `로그인`을 누르면 곧바로
+-   hash 없이 열면 방문자가 무슨 앱인지 바로 안다: 앱 이름, `학습하러 가기`, 한 줄 소개, 언어 카드 2개.
+    카드에 숫자가 없다. API 요청 0건이다. 언어별 홈의 문구와 카드 수도 `화면 문구 표`와 같다.
+-   `학습하러 가기`를 누를 때만 `GET /api/auth/me`가 1건 나간다. 401이면 Login, 로그인하면 Study Screen.
+    로그인 영역에는 hash가 없으므로 새로고침하면 언어 선택 홈이고, 다시 `학습하러 가기`를 누르면 곧바로
     Study Screen이다. 로그아웃하면 언어 선택 홈이다.
 -   공개 화면 사이에서 뒤로 가기가 동작하고, 모르는 hash는 언어 선택 홈(`#/`)이다. `#/ja/kana`는 가나
     학습이다(카드로 들어가도, 직접 열어도). 옛 경로 `#/demo`는 `#/ja/demo`로 바뀐다. 가나 학습 자체의
     흐름은 `test_kana_browser.py`가, 영어 demo는 `test_english_demo_browser.py`가 본다.
+-   **도달 전에 세션을 끝내면 언어를 다시 고를 수 있다**(MVP-03 합격 기준 32). 시계를 옮기지 않는다.
 """
 
 from __future__ import annotations
@@ -129,7 +130,7 @@ def _expect_home(page: Page, intro: str, cards: list[Card]) -> None:
 
 
 def test_the_home_says_what_the_app_is_without_any_request(frontend: Frontend, phone: Page) -> None:
-    """hash 없이 열면 앱 이름, `로그인`, 한 줄 소개, 언어 카드 2개가 있고 요청은 0건이다."""
+    """hash 없이 열면 앱 이름, `학습하러 가기`, 한 줄 소개, 언어 카드 2개가 있고 요청은 0건이다."""
     traffic = flow.watch_traffic(
         phone, frontend_url=frontend.url, api_url=frontend.api_url, block=True
     )
@@ -245,10 +246,10 @@ def test_back_returns_home_from_the_public_screens(frontend: Frontend, phone: Pa
 def test_login_is_checked_only_from_the_topbar_and_the_login_area_has_no_hash(
     e2e_stack: E2EStack, phone: Page
 ) -> None:
-    """`로그인` -> 401 Login -> 로그인 -> 언어 선택 -> Study, 새로고침 -> 홈, `로그인` -> 곧바로 Study, 로그아웃 -> 홈.
+    """`학습하러 가기` -> 401 Login -> 로그인 -> 언어 선택 -> Study, 새로고침 -> 홈, 다시 -> 곧바로 Study, 로그아웃 -> 홈.
 
     MVP-03: 열린 study session이 없는 첫 로그인은 **언어 선택 화면**을 지난다(ADR-025 결정 2).
-    그 화면에도 hash가 없다. 두 번째 `로그인`은 열린 session이 있으므로 언어를 다시 묻지 않는다
+    그 화면에도 hash가 없다. 두 번째 `학습하러 가기`는 열린 session이 있으므로 언어를 다시 묻지 않는다
     --- 그것이 "선택 결과를 저장해 두지 않아도 다시 묻지 않는다"의 e2e 쪽 증거다(합격 기준 11).
     """
     stack = e2e_stack
@@ -307,3 +308,79 @@ def test_login_is_checked_only_from_the_topbar_and_the_login_area_has_no_hash(
     _home(phone)
     expect(phone.locator(".toast")).to_have_text(LOGGED_OUT_TOAST)
     assert _topbar_right(phone) == [flow.LOGIN_LABEL]
+
+
+@pytest.mark.integration
+def test_finishing_before_the_goal_lets_the_user_switch_language(
+    e2e_stack: E2EStack, phone: Page
+) -> None:
+    """도달 **전** 종료 -> 언어 바꾸기 경로 전체 (MVP-03 합격 기준 32, `12_TEST_PLAN.md`의 7단계).
+
+    ``` text
+    1  로그인 진입 -> 언어 선택 화면 -> 영어 -> 영어 Study Screen
+    2  문장을 하나 넘겨 도달 전 상태를 유지한다
+    3  `오늘 목표한 시간을 채웠어요.`와 `더 학습하기`가 없고 `오늘 학습 완료`가 있다
+    4  `오늘 학습 완료` -> 완료 화면 (`ended_at`이 채워진다)
+    5  상단바 앱 이름 -> 언어 선택 홈
+    6  `학습하러 가기` -> **언어 선택 화면**
+    7  일본어 -> 일본어 Study Screen (옛 세션의 언어가 아니다)
+    ```
+
+    **시계를 옮기지 않는다.** 방금 시작한 세션에서 성립해야 한다는 것이 이 테스트의 요점이다
+    --- 옛 결함은 (a) 도달 전에 끝낼 UI가 없고 (b) 언어를 다시 묻는 조건이 "이어서 할 수 있는
+    세션이 없을 때"뿐이고 (c) 학습 화면 진입만으로 resume이 idle timeout을 되돌리는 것이
+    겹쳐서, **탈출 시도가 탈출 조건을 지우는** 고리였다. 6에서 영어 Study Screen이 나오면 재발이다.
+
+    분 수를 테스트에 적지 않는다. 도달 전은 DB의 `active_seconds`와 세션의 분모로 확인한다.
+    """
+    stack = e2e_stack
+    learner = flow.seed_and_create_user(stack)
+    # 영어 콘텐츠는 이 테스트가 준비한다(일본어 seed만으로는 영어 세션에 문장이 없다).
+    flow.seed_english_items(stack, count=3)
+
+    # 1. 로그인 -> 언어 선택 -> 영어.
+    flow.sign_in(phone, stack, learner, language=flow.LANGUAGE_EN)
+    english_session = flow.study_session(stack, learner)
+    assert english_session.language.value == "en"
+
+    # 2. 문장 하나를 넘긴다. `/complete` 뒤 `GET /session`으로 진행이 갱신되는 경로도 함께 지난다.
+    assert flow.press_next(phone, stack, learner) is not None
+
+    # 3. 도달 전이다(시계를 옮기지 않았다). 안내 문구와 연장 버튼이 없고 종료 버튼이 하나 있다.
+    progressed = flow.study_session(stack, learner)
+    assert (
+        progressed.active_seconds < (progressed.target_minutes + progressed.extended_minutes) * 60
+    )
+    study = phone.locator(".screen.study")
+    assert study.locator(".session-end").count() == 0
+    assert study.get_by_text(flow.REACHED_TEXT).count() == 0
+    assert study.get_by_text(flow.EXTEND_LABEL).count() == 0
+    finish = study.locator(".finish-slot button.session-finish")
+    expect(finish).to_have_text(flow.FINISH_LABEL)
+
+    # 4. 끝낸다. 서버는 도달을 이유로 거부하지 않는다(05_API_SPEC.md).
+    finish.click()
+    phone.locator(".session-finished").wait_for(
+        state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000
+    )
+    ended = flow.study_session(stack, learner)
+    assert ended.id == english_session.id
+    assert ended.ended_at is not None
+
+    # 5. 상단바 앱 이름 -> 언어 선택 홈.
+    phone.locator(".topbar .topbar-brand").click()
+    _expect_home(phone, HOME_INTRO, HOME_CARDS)
+
+    # 6. 재발 지점. 이어서 할 세션이 없으므로 언어를 **다시 묻는다.**
+    flow.press_topbar_login(phone)
+    select = phone.locator(flow.LANGUAGE_SELECT_SCREEN)
+    select.wait_for(state="visible", timeout=flow.SETTLE_TIMEOUT_SECONDS * 1000)
+    expect(select.locator(".home-card")).to_have_text(LANGUAGE_LABELS)
+    assert phone.locator(".screen.study").count() == 0, "언어를 묻지 않고 학습 화면으로 갔다(재발)"
+
+    # 7. 일본어를 고르면 **고른 언어로** 새 세션이 시작된다.
+    select.locator(".home-card", has_text=re.compile(f"^{re.escape(flow.LANGUAGE_JA)}$")).click()
+    flow.wait_for_sentence(phone)
+    started = flow.study_session(stack, learner)
+    assert started.id != english_session.id
+    assert started.language.value == "ja"

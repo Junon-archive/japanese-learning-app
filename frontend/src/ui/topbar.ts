@@ -5,14 +5,16 @@
  * -   오른쪽은 각 영역이 만든 `actions`(학습 기록, 로그아웃, 후리가나 토글)를 순서대로 둔다.
  *     이 모듈은 로그아웃 코드를 import하지 않는다 --- 그러면 공개 화면의 import 그래프가 API에
  *     닿는다.
- * -   `onLogin`이 있으면 맨 오른쪽에 `로그인` 버튼을 만든다. **`onLogin`은 그 버튼의 `click`
+ * -   `onLogin`이 있으면 맨 오른쪽에 `학습하러 가기` 버튼을 만든다(문구는 로그인 여부가 아니라
+ *     **목적지**를 말한다 --- 공개 화면은 서버 요청 0건이라 로그인 상태를 모른다.
+ *     `Login` 화면 안의 제출 버튼은 계속 `로그인`이다). **`onLogin`은 그 버튼의 `click`
  *     리스너 안에서만 부른다**(불변식 14). 누르면 버튼을 비활성으로 두고 `확인 중`으로 적은 뒤
  *     부른다. 두 번 눌러도 한 번이다. 다시 누를 수 있는 상태는 로그인 진입이 그리는 다음 화면의
  *     새 상단바가 만든다.
  */
 
 const APP_NAME = 'Nihongo Context'
-const LOGIN_LABEL = '로그인'
+const LOGIN_LABEL = '학습하러 가기'
 const LOGIN_CHECKING_LABEL = '확인 중'
 
 export function renderTopBar(options: {

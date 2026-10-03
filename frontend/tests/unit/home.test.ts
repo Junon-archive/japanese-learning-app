@@ -4,7 +4,7 @@
  *
  * 갈리는 지점:
  *
- * -   세 화면 모두 방문자가 무슨 앱인지 바로 안다: 상단바(앱 이름·`로그인`), 한 줄 소개, 카드.
+ * -   세 화면 모두 방문자가 무슨 앱인지 바로 안다: 상단바(앱 이름·`학습하러 가기`), 한 줄 소개, 카드.
  * -   **카드에 문장 수 숫자가 없다.**
  * -   카드는 hash로만 이동하고, 만들 때 `openLogin`을 부르지 않는다(불변식 14). 요청도 0건이다.
  * -   언어별 홈의 앱 이름은 **언어 선택 홈(`#/`)**으로 간다(언어별 홈으로 돌아가지 않는다).
@@ -70,7 +70,7 @@ describe('language select home (#/)', () => {
     expect(screen.querySelector('h1')!.textContent).toBe('실제 문장 속에서 표현을 익히는 앱이에요.')
     expect(buttons(byClass(root, 'topbar')[0]!).map((button) => button.textContent)).toEqual([
       'Nihongo Context',
-      '로그인',
+      '학습하러 가기',
     ])
   })
 

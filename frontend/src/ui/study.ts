@@ -28,7 +28,8 @@
  *     보여준다 --- `이어서 하기`(그 세션의 language로 다시 시작)와 `마치고 바꾸기`(그 세션을
  *     끝내고 고른 language로 시작). `03_UI_UX_SPEC.md`의 `언어 선택 화면`,
  *     `05_API_SPEC.md`의 `세션 언어와 409`. **상단바에 언어 전환 버튼을 두지 않는다**
- *     (ADR-025 결정 2) --- 언어를 바꾸려면 세션을 끝내야 하고, 그 입구는 이 409 분기 하나다.
+ *     (ADR-025 결정 2) --- 언어를 바꾸려면 세션을 끝내야 하고, 끝내는 입구는
+ *     `오늘 학습 완료` 하나다(아래 `applySession`. 도달 전에도 보인다).
  */
 
 import type { OpenSessionConflict } from '../api'
@@ -57,7 +58,7 @@ import { MESSAGES, renderNotice, showToast } from './notice'
 import { renderProgress, sessionProgress } from './progress'
 import { showScreen } from './screen'
 import { joinSegments, renderSentence } from './segments'
-import { renderSessionEndChoice, renderSessionFinished } from './session-end'
+import { renderFinishButton, renderSessionEndChoice, renderSessionFinished } from './session-end'
 import { renderSpeakButton } from './speech'
 import { renderTopBar } from './topbar'
 
@@ -98,6 +99,12 @@ export function mountStudy(
 
   const progressSlot = document.createElement('header')
   progressSlot.className = 'progress-slot'
+
+  // 도달 전의 `오늘 학습 완료`가 들어가는 자리. 진행 표시 바로 아래, 문장 위다
+  // (03_UI_UX_SPEC.md의 `도달 전과 도달 후`). footer에 두지 않는다 --- `다음 문장`과
+  // 붙어 있으면 오탭한다.
+  const finishSlot = document.createElement('div')
+  finishSlot.className = 'finish-slot'
 
   // 상단바 메뉴. MVP-01에서 화면 안에 있던 `학습 기록`과 `로그아웃`을 옮긴 것이다(03_UI_UX_SPEC.md의
   // `상단바`). 메뉴를 늘리지 않는다. 후리가나 토글은 문서 class만 바꾸고 문장을 다시 그리지 않는다.
@@ -156,6 +163,7 @@ export function mountStudy(
     topBar,
     title,
     progressSlot,
+    finishSlot,
     noticeSlot,
     sentenceSlot,
     interactionSlot,
@@ -196,10 +204,14 @@ export function mountStudy(
 
   function applySession(next: StudySession): void {
     session = next
+    const { reached } = sessionProgress(next)
     progressSlot.replaceChildren(renderProgress(next))
+    // 도달 전에도 세션을 끝낼 수 있다(03_UI_UX_SPEC.md의 `도달 전과 도달 후`). 도달하면
+    // 이 버튼이 사라지고 아래 블록이 나타난다 --- 종료 버튼이 둘 동시에 보이지 않는다.
+    finishSlot.replaceChildren(...(reached ? [] : [renderFinishButton(handleFinish)]))
     // 도달은 세션 종료가 아니다. 선택지를 **덧붙이고** 문장은 그대로 둔다.
     endSlot.replaceChildren(
-      ...(sessionProgress(next).reached
+      ...(reached
         ? [renderSessionEndChoice({ onFinish: handleFinish, onExtend: handleExtend })]
         : []),
     )
@@ -488,6 +500,7 @@ export function mountStudy(
       session = null
       clearSentence()
       progressSlot.replaceChildren()
+      finishSlot.replaceChildren()
       endSlot.replaceChildren()
       setNotice(
         renderNotice(MESSAGES.sessionClosedElsewhere, 'info', {

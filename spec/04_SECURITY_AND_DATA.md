@@ -61,7 +61,7 @@ Private DB access  = structurally impossible
 -   세 화면의 코드는 API 모듈(`frontend/src/api.ts`, `endpoints.ts`, `env.ts`)을
     **정적 import로도 동적 import로도** transitively 가져오지 않는다. demo fixture를 동적 import로
     불러오게 되었으므로 검사는 동적 import가 닿는 모듈까지 따라간다.
--   **로그인 상태 확인은 사용자가 상단바 `로그인`을 누를 때만 한다**(불변식 14). 공개 화면을 열
+-   **로그인 상태 확인은 사용자가 상단바 `학습하러 가기`를 누를 때만 한다**(불변식 14). 공개 화면을 열
     때 `GET /api/auth/me`를 부르지 않는다. 로그인 진입이 불러오는 코드는 공개 화면의 import
     그래프 밖에 있다(`mvp-01-core/03_UI_UX_SPEC.md`의 `상단바`).
 -   가나 학습은 서버 쪽 대응물이 없다. 가나 데이터는 frontend 정적 데이터이고 DB·API에 없다.
@@ -86,17 +86,17 @@ frontend/src/ui/speech.ts            소리 재생 (MVP-03). 공개 화면과 �
 -   **불변식 14는 아래 격리 검사와 런타임 단정으로 지킨다.** `fetchMe`를 부를 수 있는 모듈은 `private.ts` 그래프
     안에만 있고, 그 그래프로 들어가는 간선은 `main.ts`의 동적 import 하나다. 공개 화면 모듈은 로그인 진입 동작
     (`openLogin`)을 `main.ts`에서 주입받는다.
--   **`openLogin` 호출은 `ui/topbar.ts`의 로그인 버튼 `click` 리스너 콜백 안 한 곳뿐이다**(AST 검사). 공개 화면
+-   **`openLogin` 호출은 `ui/topbar.ts`의 진입 버튼 `click` 리스너 콜백 안 한 곳뿐이다**(AST 검사). 공개 화면
     모듈과 `main.ts`는 그 함수를 `renderTopBar({ onHome, onLogin, actions })`의 `onLogin`으로 넘기기만 하고 부르지
     않는다. 부팅, route 적용, 타이머, 저장값 복원 같은 경로에서 불리지 않는다. 정적 그래프 검사는 "언제
     불리는가"를 보지 못하므로 이 호출 위치 검사와 부팅 런타임 단정이 그 부분을 맡는다.
 -   **`openLogin`을 값으로 넘기는 곳도 정해져 있다**(같은 AST 검사, Wave 2 보완 결정, 2026-09-13).
 
     ``` text
-    renderTopBar({ onLogin: openLogin })   상단바 로그인 버튼 (공개 화면은 ctx.openLogin)
+    renderTopBar({ onLogin: openLogin })   상단바 진입 버튼 `학습하러 가기` (공개 화면은 ctx.openLogin)
     startRouter({ openLogin })              main.ts -> routes.ts
     enterPrivate({ openLogin })             main.ts -> private.ts. 로그인 확인 실패·로그인 영역 불러오기 실패 화면의
-                                            상단바 로그인에 넘기기 위해서다
+                                            상단바 진입 버튼에 넘기기 위해서다
     routes.ts가 공개 화면 ctx를 만드는 곳   반환 객체의 openLogin
     ```
 
@@ -160,7 +160,7 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
 (f) 브라우저 e2e     API origin에 아무도 listen하지 않는 구성에서 공개 route 전부(MVP-03: '', '#/ja',
                      '#/en', '#/ja/demo', '#/en/demo', '#/ja/kana')를 열고 조작해도
                      frontend origin 밖으로 나가는 요청 0건 (API origin과 제3자 origin 모두).
-                     상단바 로그인을 누르면 GET /api/auth/me가 1건 나간다
+                     상단바 `학습하러 가기`를 누르면 GET /api/auth/me가 1건 나간다
 양성 대조군          private.ts 그래프에 endpoints.ts가 있다. (d)의 판정 함수가 합성 소스의 조합 import,
                      import.meta.glob, ?worker 지정자, 풀리지 않는 .js 지정자, api.ts 밖의 fetch,
                      innerHTML 대입을 각각 위반으로 낸다
@@ -175,7 +175,7 @@ TypeScript 컴파일러 AST(이미 devDependency인 `typescript`)로 만든 impo
 -   정적 검사와 함께 **런타임 단정**을 둔다. `main.ts`를 `''`, `'#/'`, `'#/ja'`, `'#/en'`, `'#/ja/demo'`,
     `'#/en/demo'`, `'#/ja/kana'`, `'#/ja/kana/<하위>'`, 옛 경로 `'#/demo'`·`'#/kana'`,
     모르는 hash로 부팅하고 **가짜 타이머를 충분히 진행한 뒤에도** 던지는 `fetch` 스텁이 불리지 않는다. 상단바
-    `로그인`을 누르면 정확히 1회 불린다. `fetchMe` 대기 중 화면을 떠나면 늦게 온 응답 뒤에 다음 요청이 나가지
+    `학습하러 가기`를 누르면 정확히 1회 불린다. `fetchMe` 대기 중 화면을 떠나면 늦게 온 응답 뒤에 다음 요청이 나가지
     않는다.
 
 #### HTML 삽입과 URL 값 (MVP-02 확정)

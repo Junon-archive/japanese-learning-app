@@ -7,7 +7,7 @@
  *
  * 갈리는 지점:
  *
- * -   부팅 여섯 가지 hash에서 가짜 타이머를 끝까지 진행해도 요청 0건. 상단바 `로그인`을 누르면 정확히 1건.
+ * -   부팅 여섯 가지 hash에서 가짜 타이머를 끝까지 진행해도 요청 0건. 상단바 `학습하러 가기`를 누르면 정확히 1건.
  * -   `fetchMe` 결과별 화면(200/401/403/그 밖), 로그인 영역 적재 실패.
  * -   **떠난 화면은 새 화면 진입 요청을 시작하지 않는다.** 동적 import 중에 떠나면 `fetchMe`가 없고,
  *     `fetchMe` 대기 중에 떠나면 늦은 응답이 화면도 `POST /api/study/session`도 만들지 않는다.
@@ -167,13 +167,13 @@ describe('boot', () => {
   ]
 
   for (const hash of HASHES) {
-    it(`makes no request for ${JSON.stringify(hash)} even after every timer, then exactly one on 로그인`, async () => {
+    it(`makes no request for ${JSON.stringify(hash)} even after every timer, then exactly one on 학습하러 가기`, async () => {
       vi.useFakeTimers()
       await boot(hash)
       await vi.runAllTimersAsync()
 
       expect(fetchMock).not.toHaveBeenCalled()
-      expect(topBarRight()).toContain('로그인')
+      expect(topBarRight()).toContain('학습하러 가기')
 
       answerMe(async () => json(401, { detail: 'Not authenticated' }))
       loginButton().click()
@@ -205,7 +205,7 @@ describe('boot', () => {
     expect(calls()).toEqual(['GET /api/auth/me'])
   })
 
-  it('checks once for a double tap on 로그인', async () => {
+  it('checks once for a double tap on 학습하러 가기', async () => {
     await boot('')
     answerMe(() => new Promise<Response>(() => {}))
 
@@ -323,7 +323,7 @@ describe('login entry result', () => {
     const notice = byClass(root, 'notice')[0]!
     expect(flatText(notice)).toContain(MESSAGES.originRejected)
     expect(buttons(notice)).toEqual([])
-    expect(topBarRight()).toEqual(['로그인'])
+    expect(topBarRight()).toEqual(['학습하러 가기'])
     expect(calls()).toEqual(['GET /api/auth/me'])
   })
 
@@ -341,7 +341,7 @@ describe('login entry result', () => {
     const notice = byClass(root, 'notice')[0]!
     expect(flatText(notice)).toContain(MESSAGES.loginCheckFailed)
     expect(buttons(notice).map((button) => button.textContent)).toEqual([MESSAGES.retry])
-    expect(topBarRight()).toEqual(['로그인'])
+    expect(topBarRight()).toEqual(['학습하러 가기'])
     expect(browser.replaceStateCalls).toHaveLength(1)
 
     answerMe(async () => json(200, USER))
@@ -358,7 +358,7 @@ describe('login entry result', () => {
     expect(screenClass()).toContain('study')
   })
 
-  it('restarts the whole entry from the 로그인 on a failure screen', async () => {
+  it('restarts the whole entry from the 학습하러 가기 on a failure screen', async () => {
     await boot('')
     answerMe(async () => json(403, { detail: 'Origin not allowed' }))
     loginButton().click()
@@ -374,7 +374,7 @@ describe('login entry result', () => {
     expect(screenClass()).toContain('login')
   })
 
-  it('restarts the whole entry from the 로그인 on the connection failure screen', async () => {
+  it('restarts the whole entry from the 학습하러 가기 on the connection failure screen', async () => {
     vi.useFakeTimers()
     await boot('#/ja/demo')
     answerMe(async () => json(503, { detail: 'unavailable' }))
@@ -408,7 +408,7 @@ describe('login entry result', () => {
     expect(screenClass()).toContain('login')
   })
 
-  it('retries the dynamic import from the 로그인 on the load failure screen', async () => {
+  it('retries the dynamic import from the 학습하러 가기 on the load failure screen', async () => {
     let loads = 0
     // `vi.dynamicImportSettled`는 mock factory 안의 `vi.importActual`을 기다리지 않는다. settle()만 믿으면
     // 두 번째 진입이 끝나기 전에 단정하고, 남은 enterPrivate의 fetchMe가 다음 테스트의 fetchMock에 찍힌다.
@@ -461,8 +461,8 @@ describe('login entry result', () => {
     const notice = byClass(root, 'notice')[0]!
     expect(flatText(notice)).toContain(MESSAGES.loginAreaLoadFailed)
     expect(buttons(notice)).toEqual([])
-    // 다시 시도는 상단바 로그인이다.
-    expect(topBarRight()).toEqual(['로그인'])
+    // 다시 시도는 상단바 학습하러 가기다.
+    expect(topBarRight()).toEqual(['학습하러 가기'])
     expect(loginButton().disabled).toBe(false)
   })
 

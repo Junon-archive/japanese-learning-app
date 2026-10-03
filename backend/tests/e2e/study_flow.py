@@ -47,7 +47,7 @@ from app.models import (
     UserMastery,
     UserSentenceCandidateTarget,
 )
-from app.models.enums import EventType, PresentationRole
+from app.models.enums import EventType, Language, PresentationRole
 from app.services.auth import hash_password
 from app.services.seed_loader import load_seed
 from tests import factories
@@ -72,7 +72,15 @@ UNKNOWN = "몰랐음"
 
 # 화면 문구. `spec/mvp-01-core/03_UI_UX_SPEC.md`의 `화면 문구 표`와 `frontend/src/ui/notice.ts`의
 # `MESSAGES`가 canonical이다. 사용자가 실제로 읽는 글자라서 여기 적는다.
-LOGIN_LABEL = "로그인"
+#
+# 공개 화면 상단바 오른쪽의 **진입 버튼**이다(MVP-03 운영 보강, 2026-10-03: `로그인` ->
+# `학습하러 가기`). Login 폼 **안**의 제출 버튼은 계속 `로그인`이고 다른 버튼이다
+# (`03_UI_UX_SPEC.md`의 `상단바`·`Login`, 합격 기준 33).
+LOGIN_LABEL = "학습하러 가기"
+# 도달 전·후 모두 같은 문구인 세션 종료 버튼(`Session End`의 `도달 전과 도달 후`, 합격 기준 32).
+FINISH_LABEL = "오늘 학습 완료"
+EXTEND_LABEL = "더 학습하기"
+REACHED_TEXT = "오늘 목표한 시간을 채웠어요."
 EMPTY_POOL_TEXT = "지금은 준비된 문장이 없어요."
 RECORDED_PREFIX = "기록했어요 · "
 
@@ -117,6 +125,26 @@ def seed_and_create_user(stack: E2EStack) -> Learner:
         return Learner(user_id=user.id, login_id=user.login_id)
 
 
+def seed_english_items(stack: E2EStack, *, count: int) -> None:
+    """영어 학습 item + Ready invariant를 만족하는 문장을 `count`개 적재한다.
+
+    repo의 `seed/en/`을 쓰지 않는 이유는 `SEED_DIR`과 같다 --- 실 seed가 커지거나 순서가 바뀌어도
+    이 하네스가 깨지지 않게 분리한다. 엔진은 언어를 조회 범위로만 받으므로(ADR-023) 영어 세션의
+    exploration 후보가 되는 조건은 일본어와 같다: mastery NULL, 학습 대상 아님, 최근 미노출
+    (`06_LEARNING_ENGINE.md`의 `Exploration Item 선정`).
+
+    `seed_and_create_user`와 마찬가지로 **커밋한다** --- uvicorn 스레드가 다른 커넥션에서 본다.
+    """
+    with stack.sessions() as db:
+        items = [
+            factories.make_learning_item(db, language=Language.EN, lemma=f"take it over {index}")
+            for index in range(count)
+        ]
+        for item in items:
+            factories.make_ready_sentence(db, [item], language=Language.EN, surfaces=[item.lemma])
+        db.commit()
+
+
 @contextmanager
 def read_db(stack: E2EStack) -> Iterator[Session]:
     """커밋된 상태를 읽는 짧은 세션. 캐시를 남기지 않도록 매번 새로 연다."""
@@ -129,15 +157,16 @@ def read_db(stack: E2EStack) -> Iterator[Session]:
 # --------------------------------------------------------------------------
 
 
-def sign_in(page: Page, stack: E2EStack, learner: Learner) -> None:
-    """언어 선택 홈에서 상단바 `로그인`을 눌러 로그인 화면으로 가고, 두 필드를 실제로 채워 제출한다.
+def sign_in(page: Page, stack: E2EStack, learner: Learner, language: str = LANGUAGE_JA) -> None:
+    """언어 선택 홈에서 상단바 진입 버튼을 눌러 로그인 화면으로 가고, 두 필드를 실제로 채워 제출한다.
 
-    부팅은 API를 부르지 않는다(불변식 14). `로그인`을 누르면 `GET /api/auth/me`가 401을 받아
+    부팅은 API를 부르지 않는다(불변식 14). `학습하러 가기`를 누르면 `GET /api/auth/me`가 401을 받아
     로그인 화면이 뜬다. 제출이 성공하면 학습 화면이 뜨고 그 마운트가 `POST /api/study/session`을
     부른다.
 
     **MVP-03: 열린 study session이 없으면 그 사이에 언어 선택 화면이 있다**(ADR-025 결정 2).
-    이 하네스의 테스트는 전부 일본어 seed를 쓰므로 `일본어`를 고른다. 그 화면 자체의 분기(묻는
+    기본값은 `일본어`다 --- 이 하네스의 테스트는 대부분 일본어 seed를 쓴다. 영어로 들어가는
+    테스트만 `language`를 넘긴다(그 콘텐츠는 호출부가 준비한다). 그 화면 자체의 분기(묻는
     때·안 묻는 때, 409)는 `test_home_browser.py`와 frontend unit `language-select.test.ts`가 본다.
     """
     page.goto(stack.frontend_url)
@@ -146,7 +175,7 @@ def sign_in(page: Page, stack: E2EStack, learner: Learner) -> None:
     page.locator("#login-id").fill(learner.login_id)
     page.locator("#password").fill(PASSWORD)
     page.locator(".login-form button[type=submit]").click()
-    choose_language_if_asked(page)
+    choose_language_if_asked(page, language)
     wait_for_sentence(page)
 
 
@@ -166,7 +195,7 @@ def choose_language_if_asked(page: Page, label: str = LANGUAGE_JA) -> None:
 
 
 def press_topbar_login(page: Page) -> None:
-    """공개 화면 상단바의 `로그인`. 로그인 진입(`GET /api/auth/me`)은 이것으로만 시작한다."""
+    """공개 화면 상단바의 `학습하러 가기`. 로그인 진입(`GET /api/auth/me`)은 이것으로만 시작한다."""
     page.locator(".topbar .topbar-login", has_text=LOGIN_LABEL).click()
 
 
@@ -333,10 +362,10 @@ def _empty_pool_notice(page: Page) -> bool:
 def reopen(
     page: Page, stack: E2EStack, learner: Learner, language: str = LANGUAGE_JA
 ) -> StudyPresentation | None:
-    """페이지를 다시 띄우고 상단바 `로그인`으로 학습 화면에 돌아간다.
+    """페이지를 다시 띄우고 상단바 `학습하러 가기`로 학습 화면에 돌아간다.
 
     로그인 영역에는 hash가 없으므로 새로고침하면 선택 홈이다(03_UI_UX_SPEC.md의 `화면 이동`).
-    쿠키가 유효하므로 `로그인`을 누르면 로그인 영역으로 들어간다.
+    쿠키가 유효하므로 `학습하러 가기`를 누르면 로그인 영역으로 들어간다.
 
     시계를 옮긴 뒤에 쓴다 --- **idle timeout을 넘겼으면 언어를 다시 묻는다.** 조회가
     `resumable: false`로 답하기 때문이다(05_API_SPEC.md의 `resumable`). 이어서 할 수 있는

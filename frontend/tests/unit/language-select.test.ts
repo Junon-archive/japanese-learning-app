@@ -25,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Language, Presentation, StudySession, User } from '../../src/types'
 import { MESSAGES } from '../../src/ui/notice'
+import { sessionProgress } from '../../src/ui/progress'
 import type { MemoryStorage } from './demo-harness'
 import { memoryStorage } from './demo-harness'
 import type { FakeDocument, FakeElement } from './fake-dom'
@@ -205,8 +206,15 @@ describe('열린 세션이 있을 때', () => {
     // ADR-025 결정 2가 완료 화면의 `다른 언어로`를 명시적으로 철회했다 --- `03_UI_UX_SPEC.md`의
     // `완료 화면`이 "새 세션 시작 버튼을 두지 않는다"를 이미 금지하고, 언어 전환 버튼이 정확히
     // 그 버튼이기 때문이다.
-    // 목표 시간에 도달한 세션이어야 `오늘 학습 완료` 선택지가 붙는다(`ui/progress.ts`의 reached).
-    const reached = { ...session('en'), active_seconds: 720 }
+    // 도달한 세션에서 `/finish`를 부른다. 분 수를 적지 않는다 --- 분모는 payload의
+    // `target_minutes`·`extended_minutes`에서 계산하고(`05_API_SPEC.md`의 도달 판정),
+    // 판정 자체는 `sessionProgress`로 확인한다(여기에 복사하지 않는다).
+    const open = session('en')
+    const reached = {
+      ...open,
+      active_seconds: (open.target_minutes + open.extended_minutes) * 60,
+    }
+    expect(sessionProgress(reached).reached).toBe(true)
     const finished = { ...reached, ended_at: '2026-10-01T09:12:00Z' }
     table = {
       [OPEN_SESSION]: async () => json(200, { session: reached, resumable: true }),

@@ -184,6 +184,8 @@ spec/mvp-01-core/01_USER_FLOW.md           언어 선택이 들어간 흐름 셋
 spec/mvp-01-core/02_LEARNING_POLICY.md     학습 신호가 아닌 것에 소리 재생
 spec/mvp-01-core/03_UI_UX_SPEC.md          route 표, 언어 선택 홈, 언어별 홈, 상단바, 소리 재생,
                                            Demo의 언어별 fixture, 학습 중에 언어를 바꾸는 길
+                                           (2026-10-03 보강) Session End의 도달 전과 도달 후,
+                                           상단바 진입 버튼 문구 `학습하러 가기`
 spec/mvp-01-core/04_DB_SPEC.md             language 컬럼, text 리네임, reading nullable, seed_id,
                                            prompt_versions 유일성, Seed Data, Demo Data, migration
 spec/mvp-01-core/05_API_SPEC.md            payload의 text, 세션 language와 409, reading nullable

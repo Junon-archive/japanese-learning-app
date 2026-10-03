@@ -43,6 +43,9 @@ avoid_japanese -> avoid_examples             test_jobs_generate_sentence_batch.p
 empty_japanese -> empty_text                 test_llm_validation.py
 #/demo -> #/ja/demo, #/kana -> #/ja/kana     routes.test.ts, e2e, test_home_browser.py
 nc.demo.v1 -> nc.demo.ja.v1                  local-storage-scope.test.ts, demo 테스트
+상단바 `로그인` -> `학습하러 가기`            topbar.test.ts, login-entry.test.ts,
+  (2026-10-03 문구 개정. Login 폼 안의        test_home_browser.py, 기존 e2e
+   제출 버튼 `로그인`은 바뀌지 않는다)        아래 `상단바 진입 버튼 문구`가 단언을 적는다
 ```
 
 -   **테이블별 md5 해시 비교는 `test_db_migrate.py`에 있다**(`test_migrations.py`가 아니다).
@@ -282,7 +285,59 @@ test_migrations.py   migration 자체: 빈 DB 왕복, 0004 -> 0005 행 단위 �
 -   409면 안내와 버튼 둘이 뜬다. `이어서 하기`는 열린 세션의 언어로 가고 `/finish`를 부르지
     않는다. `마치고 바꾸기`는 `/finish` 뒤 새 `POST /session`을 보낸다.
 -   **"마지막에 고른 언어"를 저장하지 않는다**(선택 후 localStorage 쓰기 0건).
--   Study Screen·완료 화면 상단바에 언어 전환 버튼이 없다.
+-   Study Screen·완료 화면 상단바에 언어 전환 버튼이 없다. 완료 화면에 **버튼이 하나도 없다**
+    (`03_UI_UX_SPEC.md`의 `완료 화면`. 2026-10-03 보강 뒤에도 그대로다).
+
+### 도달 전 세션 종료 (`03_UI_UX_SPEC.md`의 `Session End`의 `도달 전과 도달 후`)
+
+위치: 기존 `frontend/tests/unit/study.test.ts`·`session-end.test.ts`와 새
+`frontend/tests/unit/finish-before-reached.test.ts`. 합격 기준 32.
+
+**분 수는 단언과 도달 판정에 적지 않는다. fixture payload에 있는 값은 그 payload에서 계산해
+쓴다.** 세션 fixture payload의 `target_minutes: 12` 같은 리터럴은 **위반이 아니다** --- 서버
+응답을 흉내 낸 입력이고 어떤 값이든 있어야 하며, 기존 세션 fixture들(`study.test.ts`,
+`login-entry.test.ts`, `history.test.ts`, `speech.test.ts` 등)이 이미 같은 리터럴을 쓴다.
+금지하는 것은 그 숫자를 **다시 적어** 기대값이나 상태 경계를 만드는 것이다. 도달/미도달은
+payload의 `(target_minutes + extended_minutes) * 60`과 `active_seconds`의 **상대 관계**로
+구성하고(전제는 `ui/progress.ts`의 `sessionProgress`로 확인한다), 분모나 목표 시간을 테스트 쪽에서
+따로 계산해 두지 않는다. **선을 여기에 그은 이유:** 입력 리터럴은 config가 바뀌어도 거짓이 되지
+않지만, 단언이나 경계에 박힌 분 수는 `default_session_minutes`·`extra_session_minutes`가 바뀌는
+순간 조용히 틀린다.
+
+-   **도달 판정이 거짓인 세션에서 `오늘 학습 완료` 버튼이 있다.** 이것이 이 변경의 핵심 단언이고
+    **회귀 테스트**다 --- 전에는 없었고, 없으면 사용자가 그 세션에 갇힌다.
+-   같은 상태에서 `오늘 목표한 시간을 채웠어요.`와 `더 학습하기`가 **없다.**
+-   **도달 판정이 참이 되면** 안내 문구와 `더 학습하기`가 생기고 `오늘 학습 완료`는 그대로 있다
+    (버튼이 두 번 그려지거나 사라지지 않는다).
+-   도달 전 `오늘 학습 완료`를 누르면 `/finish`가 **정확히 1건** 불리고 완료 화면으로 바뀐다.
+    `/extend`는 불리지 않는다.
+-   도달 전 버튼이 **진행 표시 슬롯 바로 아래**에 있고 `다음 문장`의 footer 안에 있지 않다
+    (오탭 방지의 자리 단언). class는 `secondary`다.
+-   **`session-finish` class는 e2e가 의존하는 선택자다.** 도달 전 종료 버튼에 붙어 있고 **CSS
+    규칙이 없으며**, 유일한 소비자가 `backend/tests/e2e/test_home_browser.py`의 선택자다. "아무도
+    안 쓰는 class"로 보고 지우면 e2e가 조용히 깨진다. 지우거나 이름을 바꾸려면 **그 e2e 선택자를
+    같은 변경에서 함께 고친다.**
+-   확인 대화상자·2단계 누르기가 **없다**(한 번 누르면 바로 `/finish`).
+-   **버튼 문구에 분 수가 없다**(`extra_session_minutes`·`default_session_minutes` 하드코딩
+    금지의 기존 단언 그대로).
+
+backend 쪽은 **기존 계약의 회귀 단언 하나**다(`test_study_api.py`). 서버는 바뀌지 않는다.
+
+-   **`active_seconds`가 목표에 못 미치는 세션에도 `/finish`가 200이고 `ended_at`이 채워진다.**
+    "서버는 도달을 이유로 아무것도 거부하지 않는다"(`05_API_SPEC.md`)의 단언이다.
+
+### 상단바 진입 버튼 문구 (`03_UI_UX_SPEC.md`의 `상단바`)
+
+위치: 기존 `topbar.test.ts`, `login-entry.test.ts`, `test_home_browser.py`. 합격 기준 33.
+**새 동작 테스트가 아니라 문구 단언의 기계적 수정 + 한 가지 추가 단언이다.**
+
+-   공개 화면 여섯과 두 실패 화면의 상단바 오른쪽 버튼 문구가 `학습하러 가기`다. 기존 `로그인`
+    단언을 이 문자열로 바꾼다.
+-   누르는 중 라벨이 `확인 중`이고 버튼이 비활성이다(기존 단언 그대로).
+-   **누르기 전 `GET /api/auth/me`가 0건, 누르면 정확히 1건**이다(불변식 14의 기존 단언이
+    문구 변경으로 깨지지 않는지 본다).
+-   **`Login` 화면 안의 제출 버튼 문구는 `로그인`이다**(두 버튼이 섞이지 않았다는 추가 단언).
+-   로그인 영역 불러오기 실패 안내가 "위의 학습하러 가기를 다시 눌러 주세요."다.
 
 ### 후리가나 토글의 언어 제한
 
@@ -300,6 +355,23 @@ test_migrations.py   migration 자체: 빈 DB 왕복, 0004 -> 0005 행 단위 �
 -   `#/demo`로 열면 URL이 `#/ja/demo`가 된다.
 -   영어 demo를 끝까지 보고 새로고침해도 일본어 demo는 처음부터다(진도 분리).
 -   언어 선택 홈 → 영어 홈 → 영어 demo 경로가 동작하고 카드가 하나다.
+-   **도달 전 종료 → 언어 바꾸기 경로 전체** (합격 기준 32, `03_UI_UX_SPEC.md`의 `학습 중에
+    언어를 바꾸는 길`). 시계를 옮기지 않는다 --- **방금 시작한 세션**에서 성립해야 한다는 것이
+    이 테스트의 요점이다.
+
+    ``` text
+    1  로그인 진입 -> 언어 선택 화면 -> 영어를 고른다 -> 영어 Study Screen
+    2  문장을 한둘만 넘겨 도달 전 상태를 만든다 (분 수를 테스트에 적지 않는다)
+    3  `오늘 목표한 시간을 채웠어요.`와 `더 학습하기`가 없고 `오늘 학습 완료`가 있다
+    4  `오늘 학습 완료` -> 완료 화면
+    5  상단바 앱 이름 -> 언어 선택 홈(#/)
+    6  `학습하러 가기` -> **언어 선택 화면이 나온다**
+    7  일본어를 고른다 -> 일본어 Study Screen (옛 세션의 언어가 아니다)
+    ```
+
+    6에서 언어 선택 화면이 아니라 영어 Study Screen이 나오면 **이 결함의 재발**이다.
+    1\~7 사이에 시계 조작이 없어야 한다(있으면 다른 결함의 테스트가 된다).
+
 -   **시계를 idle timeout 뒤로 옮긴 뒤 다시 들어가면 언어를 다시 묻는다.** 공용 helper
     (`backend/tests/e2e/study_flow.py`의 `reopen`)가 돌아갈 언어를 인자로 받아, 묻는 경우와
     묻지 않는 경우를 함께 받는다(`choose_language_if_asked`). 이전 세션의 종료는 고른 뒤의

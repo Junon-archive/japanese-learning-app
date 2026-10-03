@@ -324,7 +324,7 @@ function answerChoose(item: KanaItem, correct: boolean): { feedback: string; toa
 // ---------------------------------------------------------------------------------------------
 
 describe('kana table screen', () => {
-  it('shows the title, two tabs, seven range chips, the save note and only 로그인 on the right', async () => {
+  it('shows the title, two tabs, seven range chips, the save note and only 학습하러 가기 on the right', async () => {
     await mountKana()
 
     expect(screenClass()).toContain('kana')
@@ -335,7 +335,7 @@ describe('kana table screen', () => {
     expect(pressed('kana-chips')).toEqual([RANGE_LABEL.seion])
     expect(one('kana-save-text').textContent).toBe(TEXT.saveNote)
     expect(hasButton(TEXT.reset)).toBe(true)
-    expect(topBarRight()).toEqual(['로그인'])
+    expect(topBarRight()).toEqual(['학습하러 가기'])
   })
 
   it('opens the tab named by the subpath and treats anything else as 히라가나', async () => {
@@ -500,7 +500,7 @@ describe('보고 읽기', () => {
 
       const pool = KANA_ITEMS[script][range]
       expect(title()).toBe(READ)
-      expect(topBarRight()).toEqual(['로그인'])
+      expect(topBarRight()).toEqual(['학습하러 가기'])
       const item = itemOf(pool, currentQuestion().text)
       expect(one('kana-instruction').textContent).toBe(TEXT.readInstruction)
       expect(byClass(root, 'kana-answer')).toEqual([])
@@ -562,7 +562,7 @@ describe('보고 읽기', () => {
         TEXT.again,
         TEXT.backToTable,
       ])
-      expect(topBarRight()).toEqual(['로그인'])
+      expect(topBarRight()).toEqual(['학습하러 가기'])
     })
   }
 })

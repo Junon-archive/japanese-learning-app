@@ -59,11 +59,20 @@ const COPY = {
   probePrompt: '이 표현을 알고 계세요?',
   probeOptions: ['알고 있었음', '애매함', '몰랐음', '건너뛰기'],
   furigana: '후리가나',
-  login: '로그인',
+  login: '학습하러 가기',
 } as const
 
 /** Study Screen의 시간 진행과 세션 끝(`ui/progress.ts`, `ui/session-end.ts`)에만 있는 것. demo에 없어야 한다. */
-const SESSION_ONLY_CLASSES = ['progress', 'progress-bar', 'progress-label', 'session-end', 'session-finished']
+const SESSION_ONLY_CLASSES = [
+  'progress',
+  'progress-bar',
+  'progress-label',
+  'session-end',
+  'session-finished',
+  // 도달 전 종료(MVP-03 운영 보강, 2026-10-03). demo에는 세션도 목표 시간도 없다.
+  'finish-slot',
+  'session-finish',
+]
 const SESSION_ONLY_TEXTS = ['오늘 학습 완료', '더 학습하기', '오늘 목표한 시간을 채웠어요.', '오늘 학습을 마쳤어요.']
 
 const fetchMock = vi.fn(() => {
@@ -316,7 +325,7 @@ describe('demo screen', () => {
     expect(text()).not.toContain('이제 나오지 않아요')
   })
 
-  it('ends on the completion screen with two actions and only 로그인 in the top bar', async () => {
+  it('ends on the completion screen with two actions and only 학습하러 가기 in the top bar', async () => {
     await reopen({ ...startOf(), position: TOTAL - 1, seen: TOTAL })
     expect(sentenceOnScreen(page.root)).toBe(DEMO_SENTENCES[TOTAL - 1]!.presentation.text)
     expect(progressText(page.root)).toBe(progressLabel(TOTAL, TOTAL))
@@ -381,7 +390,7 @@ describe('demo screen', () => {
     expect(byClass(page.root, 'logout')).toEqual([])
   })
 
-  it('has 후리가나 and 로그인 in the top bar and leaves only through it', () => {
+  it('has 후리가나 and 학습하러 가기 in the top bar and leaves only through it', () => {
     expect(topBarRight()).toEqual([COPY.furigana, COPY.login])
     expect(byClass(page.root, 'demo-exit')).toEqual([])
 

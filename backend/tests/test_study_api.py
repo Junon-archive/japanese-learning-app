@@ -527,6 +527,51 @@ def test_finishing_closes_the_open_presentation_over_http(
     assert exposures == 1
 
 
+def test_finish_succeeds_well_before_the_target_time(
+    api: TestClient, db_session: Session, study_clock: MutableClock
+) -> None:
+    """목표 시간에 **못 미치는** session에도 `/finish`가 200이고 `ended_at`이 채워진다.
+
+    `05_API_SPEC.md`의 `진행 상태의 갱신과 세션 종료 판정`: "서버는 도달을 이유로
+    아무것도 거부하지 않는다". 이 계약은 서버에 원래 있었는데 **화면이 쓰지 않고
+    있었다** --- 도달 전에는 `오늘 학습 완료` 버튼 자체가 없었다(2026-10-03 운영 결함,
+    MVP-03 합격 기준 32). 그 결함을 고치는 쪽은 frontend이므로 여기서 고정하는 것은
+    "서버가 전제조건을 새로 만들지 않았다"는 회귀 단언이다. 서버에 도달 검사가 생기면
+    화면의 그 버튼이 조용히 실패한다.
+
+    분 수를 테스트에 적지 않는다 --- 분모는 응답의 `target_minutes`·`extended_minutes`에서
+    읽고, 진행은 상호작용 사이의 짧은 간격으로만 만든다.
+    """
+    cfg = get_config()
+    user = _login(api, db_session)
+    _seed_ready_sentence(db_session, user)
+    session_id = _start(api)
+    presentation_id = _next(api, session_id).json()["presentation"]["presentation_id"]
+
+    # 자리를 뜬 것이 아닌 짧은 간격. `active_time_idle_gap_seconds` 이내여야 `touch()`가
+    # 실제로 누적한다(넘으면 0을 더한다). 목표 분모보다는 확실히 작게 잡는다.
+    target_seconds = cfg.learning.default_session_minutes * 60
+    step_seconds = min(cfg.session.active_time_idle_gap_seconds, target_seconds // 10)
+    assert step_seconds > 0
+    study_clock.advance(timedelta(seconds=step_seconds))
+    assert api.post(f"/api/study/presentations/{presentation_id}/complete").status_code == 200
+
+    open_session = api.get("/api/study/session").json()["session"]
+    denominator = (open_session["target_minutes"] + open_session["extended_minutes"]) * 60
+    # 전제: 정말 도달 **전**이다. 0이 아니어야 "진행이 0이라서 통과했다"가 아니게 된다.
+    assert 0 < open_session["active_seconds"] < denominator
+
+    response = api.post(f"/api/study/session/{session_id}/finish")
+
+    assert response.status_code == 200
+    assert response.json()["ended_at"] is not None
+    assert response.json()["active_seconds"] < denominator
+    db_session.expire_all()
+    row = db_session.get(StudySession, session_id)
+    assert row is not None
+    assert row.ended_at is not None
+
+
 # --------------------------------------------------------------------------
 # 오류 응답
 # --------------------------------------------------------------------------

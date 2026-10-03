@@ -4,7 +4,7 @@
  * `src/main.ts`를 실제로 부팅시킨다(`demo-route.test.ts`와 같은 방식).
  *
  * -   `#/kana`, `#/kana/<하위>`로 들어오든 선택 홈 카드로 들어오든 요청 0건이다.
- * -   상단바 오른쪽은 `로그인`뿐이다.
+ * -   상단바 오른쪽은 `학습하러 가기`뿐이다.
  * -   route의 동적 import가 실패하면 그 자리에 인라인 문구만 남는다(버튼 없음).
  * -   뒤로 가기와 앱 이름으로 선택 홈에 돌아간다.
  *
@@ -69,12 +69,12 @@ afterEach(() => {
 
 describe('entering kana learning', () => {
   for (const hash of ['#/ja/kana', '#/ja/kana/hiragana', '#/ja/kana/katakana']) {
-    it(`opens ${hash} by url with only 로그인 on the right and no request`, async () => {
+    it(`opens ${hash} by url with only 학습하러 가기 on the right and no request`, async () => {
       await boot(hash)
 
       expect(screenClass()).toContain('kana')
       expect(location.hash).toBe(hash)
-      expect(topBarRight()).toEqual(['로그인'])
+      expect(topBarRight()).toEqual(['학습하러 가기'])
     })
   }
 
@@ -97,7 +97,7 @@ describe('entering kana learning', () => {
     const notice = byClass(root, 'notice')[0]!
     expect(flatText(notice)).toContain(MESSAGES.kanaLoadFailed)
     expect(buttons(notice)).toEqual([])
-    expect(topBarRight()).toEqual(['로그인'])
+    expect(topBarRight()).toEqual(['학습하러 가기'])
   })
 })
 

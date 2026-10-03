@@ -9,7 +9,7 @@
  * -   401은 폐기할 세션이 이미 없다는 뜻이므로 로그아웃한 결과(선택 홈)가 **옳은 결과**다.
  *
  * 여기서는 `fetch`를 세워 실제 `api.ts`를 지난다 --- path와 method까지 이 테스트가 고정한다. 아래
- * `from the login area`는 `main.ts`를 부팅해 상단바 `로그인`부터 지난다.
+ * `from the login area`는 `main.ts`를 부팅해 상단바 `학습하러 가기`부터 지난다.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -143,7 +143,7 @@ describe('from the login area', () => {
     button!.click()
   }
 
-  /** 상단바 `로그인` -> 200 -> Study Screen. 학습 요청은 끝나지 않게 둔다. */
+  /** 상단바 `학습하러 가기` -> 200 -> Study Screen. 학습 요청은 끝나지 않게 둔다. */
   async function enterStudy(): Promise<void> {
     const browser = fakeBrowser('')
     vi.stubGlobal('location', browser.location)
@@ -153,7 +153,7 @@ describe('from the login area', () => {
     await import('../../src/main')
     await settle()
 
-    press('로그인')
+    press('학습하러 가기')
     await settle()
     expect(root.children[0]!.className).toContain('study')
   }
